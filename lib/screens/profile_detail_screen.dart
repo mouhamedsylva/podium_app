@@ -6,6 +6,7 @@ import '../services/auth_notifier.dart';
 import '../services/profile_service.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/bottom_navigation_bar.dart';
+import '../config/api_config.dart'; // Added import for ApiConfig
 
 /// Écran de profil utilisateur - Affiche les pays principal et favoris
 class ProfileDetailScreen extends StatefulWidget {
@@ -107,14 +108,20 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   /// Obtenir le chemin local du drapeau depuis les assets
   String _getFlagPath(String countryCode) {
     final code = countryCode.toUpperCase();
-    print('🚩 Chargement du drapeau local pour: $code');
-    
+    print('🚩 Chargement du drapeau local pour: ' + code);
     // Chemin vers les assets locaux
-    final flagPath = 'assets/img/flags/$code.PNG';
-    print('✅ Chemin du drapeau: $flagPath');
-    print('🔍 Plateforme: ${Theme.of(context).platform}');
-    
+    final flagPath = 'assets/img/flags/' + code + '.PNG';
+    print('✅ Chemin du drapeau: ' + flagPath);
+    print('🔍 Plateforme: ' + Theme.of(context).platform.toString());
     return flagPath;
+  }
+
+  /// URL du drapeau via proxy (évite les problèmes d'assets sur mobile)
+  String _getFlagUrl(String countryCode) {
+    final code = countryCode.toUpperCase();
+    final url = ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + code + '.PNG');
+    print('🌐 URL drapeau: ' + url);
+    return url;
   }
 
   @override
@@ -226,14 +233,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   // Drapeau
                   ClipRRect(
                     borderRadius: BorderRadius.circular(5),
-                    child: Image.asset(
-                      flagPath,
+                    child: Image.network(
+                      _getFlagUrl(countryCode),
                       width: isMobile ? 32 : 36,
                       height: isMobile ? 24 : 27,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        print('❌ Erreur chargement drapeau principal: $flagPath');
-                        print('❌ Erreur détail: $error');
+                        print('❌ Erreur chargement drapeau principal URL: ' + error.toString());
                         return Container(
                           width: isMobile ? 32 : 36,
                           height: isMobile ? 24 : 27,
@@ -364,14 +370,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                         // Drapeau
                         ClipRRect(
                           borderRadius: BorderRadius.circular(3),
-                          child: Image.asset(
-                            flagPath,
+                          child: Image.network(
+                            _getFlagUrl(countryCode),
                             width: isMobile ? 20 : 24,
                             height: isMobile ? 15 : 18,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
-                              print('❌ Erreur chargement drapeau favori: $flagPath');
-                              print('❌ Erreur détail: $error');
+                              print('❌ Erreur chargement drapeau favori URL: ' + error.toString());
                               return Container(
                                 width: isMobile ? 20 : 24,
                                 height: isMobile ? 15 : 18,

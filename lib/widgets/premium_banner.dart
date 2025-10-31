@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/translation_service.dart';
 
 class PremiumBanner extends StatefulWidget {
   const PremiumBanner({super.key});
@@ -190,7 +192,8 @@ class _PremiumBannerState extends State<PremiumBanner> with TickerProviderStateM
                                screenWidth < 600 ? 12 : 
                                screenWidth < 900 ? 14 : 16),
                 Text(
-                  'C\'est Cadeau !',
+                  // 100% gratuite
+                  context.read<TranslationService>().translate('BANNER_FREE_100'),
                   style: TextStyle(
                     fontSize: screenWidth < 400 ? 14 : 
                              screenWidth < 600 ? 16 : 
@@ -223,7 +226,8 @@ class _PremiumBannerState extends State<PremiumBanner> with TickerProviderStateM
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Pour vous remercier de faire partie de notre lancement, nous avons décidé de rendre la plateforme 100% gratuite.',
+                      // Intro banner
+                      context.read<TranslationService>().translate('BANNER_FREE_INTRO'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: screenWidth < 400 ? 9 : 
@@ -237,7 +241,8 @@ class _PremiumBannerState extends State<PremiumBanner> with TickerProviderStateM
                                    screenWidth < 600 ? 6 : 
                                    screenWidth < 900 ? 10 : 12),
                     Text(
-                      'Pas de formule, pas de contrainte : connectez-vous, explorez et profitez librement de tous nos services.',
+                      // Description banner
+                      context.read<TranslationService>().translate('BANNER_FREE_DESC'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: screenWidth < 400 ? 9 : 

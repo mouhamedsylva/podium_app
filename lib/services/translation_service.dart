@@ -81,6 +81,10 @@ class TranslationService extends ChangeNotifier {
       'HOME_TITLE_PART2': ' dans plusieurs pays en un clic',
       // Clés pour les boutons
       'BUTTON_LOGIN': 'Connexion',
+      // Bannière accueil
+      'BANNER_FREE_100': '100% gratuite',
+      'BANNER_FREE_DESC': 'Pas de formule, pas de contrainte : connectez-vous, explorez et profitez librement de tous nos services.',
+      'BANNER_FREE_INTRO': 'Pour vous remercier de faire partie de notre lancement, nous avons décidé de rendre la plateforme',
     },
     'en': {
       // Clés de l'API pour la page de sélection de pays
@@ -115,6 +119,10 @@ class TranslationService extends ChangeNotifier {
       'HOME_TITLE_PART2': ' in multiple countries with one click',
       // Clés pour les boutons
       'BUTTON_LOGIN': 'Login',
+      // Banner home
+      'BANNER_FREE_100': '100% free',
+      'BANNER_FREE_DESC': 'No plan, no constraint: sign in, explore, and enjoy all our services freely.',
+      'BANNER_FREE_INTRO': 'As a thank you for being part of our launch, we have decided to make the platform',
     },
     'de': {
       // Clés de l'API pour la page de sélection de pays (basées sur vos données)

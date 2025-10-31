@@ -10,115 +10,196 @@ class LocalStorageService {
   static const String _paysFavKey = 'user_pays_fav';
   static const String _currentRouteKey = 'current_route';
   static const String _selectedCountriesKey = 'selected_countries';
-  
+
   /// Sauvegarder le profil utilisateur
   static Future<void> saveProfile(Map<String, dynamic> profile) async {
     final prefs = await SharedPreferences.getInstance();
+
+    print('💾 saveProfile() - Données à sauvegarder:');
+    print('   iProfile: ${profile['iProfile']}');
+    print('   iBasket: ${profile['iBasket']}');
+    print('   sPaysLangue: ${profile['sPaysLangue']}');
+    print('   sPaysFav: ${profile['sPaysFav']}');
+    print('   sEmail: ${profile['sEmail']}');
+
+    // ✅ CORRECTION: Sauvegarder iProfile/iBasket uniquement s'ils ne sont pas vides
+    // Ne pas écraser avec des chaînes vides
+    final iProfileValue = profile['iProfile']?.toString() ?? '';
+    final iBasketValue = profile['iBasket']?.toString() ?? '';
     
-    // Sauvegarder les champs obligatoires
-    if (profile['iProfile'] != null) {
-      await prefs.setString(_profileKey, profile['iProfile']);
-    }
-    if (profile['iBasket'] != null) {
-      await prefs.setString(_basketKey, profile['iBasket']);
-    }
-    if (profile['sPaysLangue'] != null) {
-      await prefs.setString(_paysLangueKey, profile['sPaysLangue']);
-    }
-    if (profile['sPaysFav'] != null) {
-      await prefs.setString(_paysFavKey, profile['sPaysFav']);
-    }
+    print('🔍 Vérification des identifiants à sauvegarder:');
+    print('   iProfile: "$iProfileValue" (null: ${profile['iProfile'] == null}, empty: ${iProfileValue.isEmpty}, length: ${iProfileValue.length})');
+    print('   iBasket: "$iBasketValue" (null: ${profile['iBasket'] == null}, empty: ${iBasketValue.isEmpty}, length: ${iBasketValue.length})');
     
+    if (iProfileValue.isNotEmpty && !iProfileValue.startsWith('guest_')) {
+      await prefs.setString(_profileKey, iProfileValue);
+      print('✅ iProfile sauvegardé: $iProfileValue');
+    } else {
+      if (iProfileValue.isEmpty) {
+        print('⚠️ iProfile vide, non sauvegardé (conservation de la valeur existante)');
+      } else {
+        print('⚠️ iProfile invalide (guest_), non sauvegardé: $iProfileValue');
+      }
+    }
+
+    if (iBasketValue.isNotEmpty && !iBasketValue.startsWith('basket_')) {
+      await prefs.setString(_basketKey, iBasketValue);
+      print('✅ iBasket sauvegardé: $iBasketValue');
+    } else {
+      if (iBasketValue.isEmpty) {
+        print('⚠️ iBasket vide, non sauvegardé (conservation de la valeur existante)');
+      } else {
+        print('⚠️ iBasket invalide (basket_), non sauvegardé: $iBasketValue');
+      }
+    }
+
+    // Sauvegarder sPaysLangue et sPaysFav uniquement s'ils ne sont pas vides (pas de valeurs par défaut)
+    if (profile['sPaysLangue'] != null && profile['sPaysLangue'].toString().isNotEmpty) {
+      await prefs.setString(_paysLangueKey, profile['sPaysLangue'].toString());
+      print('✅ sPaysLangue sauvegardé: ${profile['sPaysLangue']}');
+    }
+
+    if (profile['sPaysFav'] != null && profile['sPaysFav'].toString().isNotEmpty) {
+      await prefs.setString(_paysFavKey, profile['sPaysFav'].toString());
+      print('✅ sPaysFav sauvegardé: ${profile['sPaysFav']}');
+    }
+
     // Sauvegarder les champs optionnels (pour la session utilisateur)
-    if (profile['sEmail'] != null) {
-      await prefs.setString('user_email', profile['sEmail']);
+    if (profile['sEmail'] != null && profile['sEmail'].toString().isNotEmpty) {
+      await prefs.setString('user_email', profile['sEmail'].toString());
+      print('✅ sEmail sauvegardé: ${profile['sEmail']}');
     }
-    if (profile['sNom'] != null) {
-      await prefs.setString('user_nom', profile['sNom']);
+
+    if (profile['sNom'] != null && profile['sNom'].toString().isNotEmpty) {
+      await prefs.setString('user_nom', profile['sNom'].toString());
+      print('✅ sNom sauvegardé: ${profile['sNom']}');
     }
-    if (profile['sPrenom'] != null) {
-      await prefs.setString('user_prenom', profile['sPrenom']);
+
+    if (profile['sPrenom'] != null && profile['sPrenom'].toString().isNotEmpty) {
+      await prefs.setString('user_prenom', profile['sPrenom'].toString());
+      print('✅ sPrenom sauvegardé: ${profile['sPrenom']}');
     }
+
     if (profile['sPhoto'] != null) {
-      await prefs.setString('user_photo', profile['sPhoto']);
+      await prefs.setString('user_photo', profile['sPhoto'].toString());
+      print('✅ sPhoto sauvegardé: ${profile['sPhoto']}');
+    }
+
+    // ✅ Vérification après sauvegarde
+    final savedIProfile = prefs.getString(_profileKey);
+    final savedIBasket = prefs.getString(_basketKey);
+    print('🔍 Vérification après sauvegarde:');
+    print('   iProfile sauvegardé: $savedIProfile (null: ${savedIProfile == null}, empty: ${savedIProfile?.isEmpty ?? true})');
+    print('   iBasket sauvegardé: $savedIBasket (null: ${savedIBasket == null}, empty: ${savedIBasket?.isEmpty ?? true})');
+    
+    // ✅ Vérifier que les identifiants attendus ont bien été sauvegardés
+    if (iProfileValue.isNotEmpty && !iProfileValue.startsWith('guest_')) {
+      if (savedIProfile != iProfileValue) {
+        print('❌ ERREUR: iProfile attendu "$iProfileValue" mais sauvegardé "$savedIProfile"');
+      } else {
+        print('✅ iProfile correctement sauvegardé');
+      }
+    }
+    
+    if (iBasketValue.isNotEmpty && !iBasketValue.startsWith('basket_')) {
+      if (savedIBasket != iBasketValue) {
+        print('❌ ERREUR: iBasket attendu "$iBasketValue" mais sauvegardé "$savedIBasket"');
+      } else {
+        print('✅ iBasket correctement sauvegardé');
+      }
     }
   }
-  
+
   /// Récupérer le profil utilisateur
   static Future<Map<String, String>?> getProfile() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     final iProfile = prefs.getString(_profileKey);
     final iBasket = prefs.getString(_basketKey);
     final sPaysLangue = prefs.getString(_paysLangueKey);
     final sPaysFav = prefs.getString(_paysFavKey);
-    
-    if (iProfile != null && iBasket != null && sPaysLangue != null) {
-      return {
+
+    print('📋 getProfile() - Valeurs récupérées depuis SharedPreferences:');
+    print('   iProfile: "$iProfile" (null: ${iProfile == null}, empty: ${iProfile?.isEmpty ?? true}, length: ${iProfile?.length ?? 0})');
+    print('   iBasket: "$iBasket" (null: ${iBasket == null}, empty: ${iBasket?.isEmpty ?? true}, length: ${iBasket?.length ?? 0})');
+    print('   sPaysLangue: "$sPaysLangue"');
+    print('   sPaysFav: "$sPaysFav"');
+
+    // ✅ CORRECTION: Vérifier seulement iProfile et iBasket (sPaysLangue peut être null)
+    // ⚠️ IMPORTANT: Retourner le profil même si iProfile/iBasket sont vides mais non null
+    // pour permettre la vérification et la mise à jour ultérieure
+    if (iProfile != null && iBasket != null) {
+      final profileResult = {
         'iProfile': iProfile,
         'iBasket': iBasket,
-        'sPaysLangue': sPaysLangue,
-        'sPaysFav': sPaysFav ?? '', // ✅ Retourner sPaysFav
+        'sPaysLangue': sPaysLangue ?? '', // ✅ Peut être null maintenant
+        'sPaysFav': sPaysFav ?? '',       // ✅ Peut être null maintenant
       };
+      
+      print('✅ getProfile() - Profil retourné: iProfile="${profileResult['iProfile']}", iBasket="${profileResult['iBasket']}"');
+      return profileResult;
     }
-    
+
+    print('❌ getProfile() - Profil incomplet (iProfile ou iBasket manquant dans SharedPreferences)');
+    print('   iProfile présent: ${iProfile != null}');
+    print('   iBasket présent: ${iBasket != null}');
     return null;
   }
-  
+
   /// Créer un profil invité par défaut (comme SNAL)
   static Future<Map<String, String>> createGuestProfile() async {
     try {
       // ✅ Initialiser via l'API SNAL pour générer les vrais identifiants
       final apiService = ApiService();
       await apiService.initialize();
-      
+
       final response = await apiService.initializeUserProfile(
-        sPaysLangue: 'FR/FR', // Valeur par défautI
-        sPaysFav: ['FR'], // Valeur par défaut
+        sPaysLangue: '', // ✅ Pas de valeur par défaut
+        sPaysFav: [], // ✅ Pas de valeur par défaut
         bGeneralConditionAgree: true,
       );
-      
+
       if (response != null && response is Map<String, dynamic>) {
-        final iProfile = response['iProfile']?.toString() ?? '0';
-        final iBasket = response['iBasket']?.toString() ?? '0';
-        final sPaysLangue = response['sPaysLangue']?.toString() ?? 'FR/FR';
-        final sPaysFav = response['sPaysFav']?.toString() ?? 'FR';
-        
+        final iProfile = response['iProfile']?.toString() ?? '';
+        final iBasket = response['iBasket']?.toString() ?? '';
+        final sPaysLangue = response['sPaysLangue']?.toString() ?? '';
+        final sPaysFav = response['sPaysFav']?.toString() ?? '';
+
         final guestProfile = {
           'iProfile': iProfile,
           'iBasket': iBasket,
-          'sPaysLangue': sPaysLangue,
-          'sPaysFav': sPaysFav,
+          // ✅ Sauvegarder sPaysLangue et sPaysFav seulement s'ils ne sont pas vides
+          if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
+          if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
         };
-        
+
         await saveProfile(guestProfile);
         print('✅ Profil invité initialisé via API SNAL: iProfile=$iProfile, iBasket=$iBasket');
-        
+
         return guestProfile;
       }
     } catch (e) {
       print('⚠️ Erreur lors de l\'initialisation via API, fallback vers profil par défaut: $e');
     }
-    
+
     // Fallback: créer un profil par défaut avec des identifiants vides
     final guestProfile = {
       'iProfile': '', // Utiliser des identifiants vides pour que SNAL les crée
       'iBasket': '',  // Utiliser des identifiants vides pour que SNAL les crée
-      'sPaysLangue': 'FR/FR', // Valeur par défaut
-      'sPaysFav': 'FR',       // Valeur par défaut
+      // ✅ Pas de valeurs par défaut pour sPaysLangue et sPaysFav
     };
-    
+
     await saveProfile(guestProfile);
-    
+
     return guestProfile;
   }
-  
+
   /// Vérifier si un profil existe
   static Future<bool> hasProfile() async {
     final profile = await getProfile();
     return profile != null;
   }
-  
+
   /// Supprimer le profil (logout)
   static Future<void> clearProfile() async {
     final prefs = await SharedPreferences.getInstance();
@@ -143,41 +224,41 @@ class LocalStorageService {
   /// Récupérer les informations complètes de l'utilisateur
   static Future<Map<String, String>?> getUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     final email = prefs.getString('user_email');
     final nom = prefs.getString('user_nom');
     final prenom = prefs.getString('user_prenom');
     final photo = prefs.getString('user_photo');
-    
+
     print('🔍 getUserInfo() - Email: $email');
     print('🔍 getUserInfo() - Nom: $nom');
     print('🔍 getUserInfo() - Prénom: $prenom');
     print('🔍 getUserInfo() - Photo: $photo');
-    
+
     if (email == null) {
       print('❌ getUserInfo() - Aucun email trouvé, utilisateur non connecté');
       return null;
     }
-    
+
     final userInfo = {
       'email': email,
       'nom': nom ?? '',
       'prenom': prenom ?? '',
       'photo': photo ?? '',
     };
-    
+
     print('✅ getUserInfo() - Informations utilisateur: $userInfo');
     return userInfo;
   }
-  
+
   /// Initialiser le profil (créer un invité si nécessaire)
   static Future<Map<String, String>> initializeProfile() async {
     final existingProfile = await getProfile();
-    
+
     if (existingProfile != null) {
       return existingProfile;
     }
-    
+
     return await createGuestProfile();
   }
 

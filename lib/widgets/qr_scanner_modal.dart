@@ -32,6 +32,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
   double _confidenceLevel = 0.0;
   bool _showTips = false;
   String _currentTip = 'Centrez le QR code dans le cadre';
+  bool _isFrontCamera = false; // État de la caméra (false = back, true = front)
   
   final List<String> _qrTips = [
     'Centrez le QR code dans le cadre',
@@ -103,6 +104,36 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
     }
     
     super.dispose();
+  }
+
+  /// Basculer entre la caméra avant et arrière
+  Future<void> _switchCamera() async {
+    try {
+      print('📷 Basculement de la caméra...');
+      
+      // Inverser l'état
+      setState(() {
+        _isFrontCamera = !_isFrontCamera;
+      });
+      
+      // Utiliser switchCamera() du contrôleur
+      await _controller.switchCamera();
+      
+      print('✅ Caméra basculée vers: ${_isFrontCamera ? "avant" : "arrière"}');
+      
+      // Feedback haptique
+      try {
+        HapticFeedback.selectionClick();
+      } catch (e) {
+        print('⚠️ Vibration non supportée: $e');
+      }
+    } catch (e) {
+      print('❌ Erreur lors du basculement de caméra: $e');
+      // En cas d'erreur, réinitialiser l'état
+      setState(() {
+        _isFrontCamera = false;
+      });
+    }
   }
 
   /// Redémarrer le scanner en cas d'erreur
@@ -478,6 +509,9 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    // Obtenir la hauteur de la barre de statut pour éviter la zone système
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    
     return Dialog(
       insetPadding: EdgeInsets.zero,
       backgroundColor: Colors.transparent,
@@ -530,17 +564,24 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
               left: 0,
               right: 0,
               child: Container(
+                padding: EdgeInsets.only(
+                  top: statusBarHeight + 8, // Padding pour éviter la zone système + espacement
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.7, 1.0],
                     colors: [
-                      Colors.black.withOpacity(0.8),
+                      Colors.black.withOpacity(0.9), // Plus opaque en haut pour bien couvrir
+                      Colors.black.withOpacity(0.7),
                       Colors.transparent,
                     ],
                   ),
                 ),
-                padding: const EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -560,7 +601,15 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(width: 48), // Espaceur pour centrer le titre
+                    IconButton(
+                      icon: Icon(
+                        _isFrontCamera ? Icons.camera_rear : Icons.camera_front,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                      tooltip: _isFrontCamera ? 'Caméra arrière' : 'Caméra avant',
+                      onPressed: _switchCamera,
+                    ),
                   ],
                 ),
               ),

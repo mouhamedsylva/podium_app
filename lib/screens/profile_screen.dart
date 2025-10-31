@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import '../services/local_storage_service.dart';
 import '../services/translation_service.dart';
 import '../services/api_service.dart';
 import '../widgets/bottom_navigation_bar.dart';
+import '../config/api_config.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -157,10 +159,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           );
           
-          // Rediriger vers home_screen après 2 secondes
-          Future.delayed(const Duration(seconds: 2), () {
+          // Rediriger vers wishlist après 2 secondes
+          Future.delayed(const Duration(seconds: 2), () async {
             if (mounted) {
-              context.go('/');
+              try {
+                await LocalStorageService.saveCurrentRoute('/wishlist');
+              } catch (_) {}
+              context.go('/wishlist');
             }
           });
         }
@@ -357,8 +362,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: CheckboxListTile(
                       secondary: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: Image.asset(
-                          _getFlagPath(country['code']!),
+                        child: Image.network(
+                          ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${country['code']!.toUpperCase()}.PNG'),
                           width: 32,
                           height: 24,
                           fit: BoxFit.cover,
@@ -1160,8 +1165,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
-                          child: Image.asset(
-                            _getFlagPath(code),
+                          child: Image.network(
+                            ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${code.toUpperCase()}.PNG'),
                             width: 20,
                             height: 15,
                             fit: BoxFit.cover,

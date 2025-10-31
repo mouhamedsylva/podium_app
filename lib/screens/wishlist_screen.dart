@@ -3112,11 +3112,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   height: isMobile ? 15 : 18,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(2),
-                    child: Image.asset(
-                      'assets/img/flags/$countryCode.PNG',
+                    child: Image.network(
+                      ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        print('❌ Erreur chargement drapeau $countryCode: $error');
+                        print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
                         return Container(
                           color: Colors.grey[300],
                           child: Icon(
@@ -3598,8 +3598,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   height: isMobile ? 15 : 18,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(2),
-                    child: Image.asset(
-                      'assets/img/flags/${pays['sPays']}.PNG',
+                    child: Image.network(
+                      ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${(pays['sPays'] ?? '').toString()}.PNG'),
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
