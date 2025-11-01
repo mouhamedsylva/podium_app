@@ -45,6 +45,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
   List<Map<String, dynamic>> _locationSuggestions = []; // Suggestions de lieux
   bool _showLocationSuggestions = false; // Afficher les suggestions
   final TextEditingController _locationSearchController = TextEditingController();
+  final TextEditingController _storeSearchController = TextEditingController();
   
   // Styles de carte
   String _currentMapStyle = 'standard'; // 'standard', 'satellite', 'carto_light', 'dark'
@@ -92,6 +93,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
   void dispose() {
     _breathingController?.dispose();
     _locationSearchController.dispose();
+    _storeSearchController.dispose();
     super.dispose();
   }
 
@@ -975,6 +977,54 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                 ),
                                               ),
                                             ],
+                                          ),
+                                          SizedBox(height: isMobile ? 8 : 12),
+                                          // Champ de recherche de magasins (nom/pays/ville)
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(color: Colors.grey[300]!),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const SizedBox(width: 8),
+                                                const Icon(Icons.search, size: 18, color: Color(0xFF6B7280)),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller: _storeSearchController,
+                                                    textInputAction: TextInputAction.search,
+                                                    decoration: InputDecoration(
+                                                      hintText: 'Rechercher un magasin (nom, pays, ville)',
+                                                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: isMobile ? 12 : 13),
+                                                      border: InputBorder.none,
+                                                      contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: isMobile ? 10 : 12),
+                                                    ),
+                                                    onChanged: (value) {
+                                                      setState(() {
+                                                        _searchQuery = value.trim();
+                                                      });
+                                                    },
+                                                    onSubmitted: (value) {
+                                                      setState(() {
+                                                        _searchQuery = value.trim();
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                                if (_searchQuery.isNotEmpty)
+                                                  IconButton(
+                                                    icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _searchQuery = '';
+                                                        _storeSearchController.clear();
+                                                      });
+                                                    },
+                                                  ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),

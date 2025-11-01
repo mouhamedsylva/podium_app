@@ -533,10 +533,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
-              ),
+              // Affichage 4 drapeaux en haut, 3 en bas, sans défilement
+              _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
             ],
           ),
         ),
@@ -545,52 +543,74 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
   }
 
   Widget _buildCountryGrid(List<Widget> selectedChips, List<Widget> unselectedChips) {
-    List<Widget> allChips = [...selectedChips, ...unselectedChips];
-    List<Widget> rows = [];
-    
-    for (int i = 0; i < allChips.length; i += 5) {
-      List<Widget> rowChips = [];
-      for (int j = i; j < (i + 5).clamp(0, allChips.length); j++) {
-        if (j < allChips.length) {
-          final chipIndex = j;
+    // Objectif d'affichage: 4 drapeaux sur la première ligne, 3 sur la seconde (pattern 4/3)
+    // Responsive sans overflow: largeur de puce contrainte par ligne via LayoutBuilder
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth;
+        const double horizontalGap = 8.0;
+        const double verticalGap = 8.0;
+
+        final List<Widget> allChips = [...selectedChips, ...unselectedChips];
+        final List<int> pattern = [4, 3];
+        int patternIndex = 0;
+        int cursor = 0;
+        final List<Widget> rows = [];
+
+        while (cursor < allChips.length) {
+          final int count = pattern[patternIndex % pattern.length];
+          final int end = (cursor + count).clamp(0, allChips.length);
           
-          // Animation en cascade pour chaque chip (wave effect)
-          rowChips.add(
-            TweenAnimationBuilder<double>(
-              duration: Duration(milliseconds: 300 + (chipIndex * 50)), // Délai progressif
-              tween: Tween<double>(begin: 0.0, end: 1.0),
-              curve: Curves.elasticOut,
-              builder: (context, value, child) {
-                return Transform.scale(
-                  scale: 0.5 + (value * 0.5), // De 0.5 à 1.0
-                  child: Opacity(
-                    opacity: value,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: allChips[j],
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
+          final List<Widget> rowChildren = [];
+          for (int j = cursor; j < end; j++) {
+            final chipIndex = j;
+            rowChildren.add(
+              Expanded(
+                child: TweenAnimationBuilder<double>(
+                  duration: Duration(milliseconds: 300 + (chipIndex * 50)),
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: 0.5 + (value * 0.5),
+                      child: Opacity(
+                        opacity: (value.clamp(0.0, 1.0) as double),
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 0),
+                              child: allChips[j],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+            if (j < end - 1) {
+              rowChildren.add(const SizedBox(width: horizontalGap));
+            }
+          }
+
+          rows.add(Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: rowChildren,
+          ));
+
+          cursor = end;
+          patternIndex++;
+          if (cursor < allChips.length) {
+            rows.add(const SizedBox(height: verticalGap));
+          }
         }
-      }
-      
-      rows.add(
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: rowChips,
-        ),
-      );
-      
-      if (i + 5 < allChips.length) {
-        rows.add(const SizedBox(height: 6));
-      }
-    }
-    
-    return Column(children: rows);
+
+        return Column(children: rows);
+      },
+    );
   }
 
   Widget _buildCountryChip(String countryCode, bool isSelected, bool isMobile) {
@@ -598,7 +618,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       onTap: () => _toggleCountry(countryCode),
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 24 : 28,
+          horizontal: isMobile ? 18 : 24,
           vertical: isMobile ? 6 : 8,
         ),
         decoration: BoxDecoration(
@@ -725,7 +745,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                     _buildNoResultsState(),
                 ] else ...[
                   // État initial - message pour commencer la recherche
-                  _buildInitialState(isMobile),
+                  _buildInitialState(isMobile, translationService),
                 ],
               ],
             ),
@@ -755,7 +775,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
         keyboardType: TextInputType.number,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
-          hintText: "Code produit (ex: 123.456.78)",
+          hintText: translationService.translate('PRODUCTSEARCH_HINT_CODE'),
           hintStyle: TextStyle(color: Colors.grey[400]),
           prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
           suffixIcon: _isLoading
@@ -838,7 +858,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     );
   }
 
-  Widget _buildInitialState(bool isMobile) {
+  Widget _buildInitialState(bool isMobile, TranslationService translationService) {
     return Container(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -850,7 +870,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'Saisissez un code article pour commencer la recherche',
+            translationService.translate('PRODUCTSEARCH_ENTER_CODE'),
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],
@@ -988,7 +1008,9 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     // Animation au clic : OpenContainer avec transition élégante
     return Opacity(
       opacity: isAvailable && isValidProduct ? 1.0 : 0.5, // Griser si indisponible
-      child: OpenContainer(
+      child: IgnorePointer(
+        ignoring: !(isAvailable && isValidProduct), // Désactiver les clics si indisponible/invalide
+        child: OpenContainer(
         transitionType: ContainerTransitionType.fadeThrough,
         transitionDuration: const Duration(milliseconds: 500),
         openBuilder: (context, action) {
@@ -1168,6 +1190,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
         ); // Ferme Container et return du closedBuilder
         }, // Ferme closedBuilder
       ), // Ferme OpenContainer
+      ),
     ); // Ferme Opacity et return de _buildProductItem
   }
 }

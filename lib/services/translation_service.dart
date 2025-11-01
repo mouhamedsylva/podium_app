@@ -85,6 +85,25 @@ class TranslationService extends ChangeNotifier {
       'BANNER_FREE_100': '100% gratuite',
       'BANNER_FREE_DESC': 'Pas de formule, pas de contrainte : connectez-vous, explorez et profitez librement de tous nos services.',
       'BANNER_FREE_INTRO': 'Pour vous remercier de faire partie de notre lancement, nous avons décidé de rendre la plateforme',
+      'BANNER_FREE_TITLE': 'C’est cadeau !.',
+      // Product search - état initial
+      'PRODUCTSEARCH_ENTER_CODE': 'Saisissez un code article pour commencer la recherche',
+      // Product search - champ de saisie
+      'PRODUCTSEARCH_HINT_CODE': 'Code produit (ex: 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Meilleur prix',
+      'CURRENT_PRICE': 'Prix actuel',
+      'PROFIT': 'Bénéfice',
+      'ADD_ITEM': 'Ajouter',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Confirmation',
+      'CONFIRM_DELETE_ITEM': 'Voulez-vous vraiment supprimer cet article ?',
+      'BUTTON_NO': 'Non',
+      'BUTTON_YES': 'Oui',
+      'SUCCESS_TITLE': 'Succès',
+      'SUCCESS_DELETE_ARTICLE': "L'article a été supprimé avec succès.",
+      'ERROR_TITLE': 'Erreur',
+      'DELETE_ERROR': 'Une erreur est survenue lors de la suppression.',
     },
     'en': {
       // Clés de l'API pour la page de sélection de pays
@@ -123,6 +142,25 @@ class TranslationService extends ChangeNotifier {
       'BANNER_FREE_100': '100% free',
       'BANNER_FREE_DESC': 'No plan, no constraint: sign in, explore, and enjoy all our services freely.',
       'BANNER_FREE_INTRO': 'As a thank you for being part of our launch, we have decided to make the platform',
+      'BANNER_FREE_TITLE': 'It’s a gift!.',
+      // Product search - initial state
+      'PRODUCTSEARCH_ENTER_CODE': 'Enter an article code to start searching',
+      // Product search - input field
+      'PRODUCTSEARCH_HINT_CODE': 'Product code (e.g. 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Best price',
+      'CURRENT_PRICE': 'Current price',
+      'PROFIT': 'Profit',
+      'ADD_ITEM': 'Add',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Confirmation',
+      'CONFIRM_DELETE_ITEM': 'Are you sure you want to delete this item?',
+      'BUTTON_NO': 'No',
+      'BUTTON_YES': 'Yes',
+      'SUCCESS_TITLE': 'Success',
+      'SUCCESS_DELETE_ARTICLE': 'The item has been deleted successfully.',
+      'ERROR_TITLE': 'Error',
+      'DELETE_ERROR': 'An error occurred while deleting.',
     },
     'de': {
       // Clés de l'API pour la page de sélection de pays (basées sur vos données)
@@ -149,6 +187,24 @@ class TranslationService extends ChangeNotifier {
       'COMPARE_Msg03': 'E-Mail-Vergleich',
       'COMPARE_TEXT_PART1': 'Senden Sie uns Ihre IKEA-Liste per E-Mail für einen personalisierten Vergleich',
       'COMPARE_Msg05': 'Per E-Mail senden',
+      // Product search - initial state
+      'PRODUCTSEARCH_ENTER_CODE': 'Geben Sie einen Artikelcode ein, um die Suche zu starten',
+      // Product search - input field
+      'PRODUCTSEARCH_HINT_CODE': 'Produktcode (z. B. 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Bester Preis',
+      'CURRENT_PRICE': 'Aktueller Preis',
+      'PROFIT': 'Gewinn',
+      'ADD_ITEM': 'Hinzufügen',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Bestätigung',
+      'CONFIRM_DELETE_ITEM': 'Möchten Sie diesen Artikel wirklich löschen?',
+      'BUTTON_NO': 'Nein',
+      'BUTTON_YES': 'Ja',
+      'SUCCESS_TITLE': 'Erfolg',
+      'SUCCESS_DELETE_ARTICLE': 'Der Artikel wurde erfolgreich gelöscht.',
+      'ERROR_TITLE': 'Fehler',
+      'DELETE_ERROR': 'Beim Löschen ist ein Fehler aufgetreten.',
     },
     'es': {
       // Clés de l'API pour la page de sélection de pays
@@ -175,6 +231,24 @@ class TranslationService extends ChangeNotifier {
       'COMPARE_Msg03': 'Comparación por email',
       'COMPARE_TEXT_PART1': 'Envíanos tu lista de IKEA por email para una comparación personalizada',
       'COMPARE_Msg05': 'Enviar por email',
+      // Product search - initial state
+      'PRODUCTSEARCH_ENTER_CODE': 'Introduce un código de artículo para iniciar la búsqueda',
+      // Product search - input field
+      'PRODUCTSEARCH_HINT_CODE': 'Código de producto (ej.: 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Mejor precio',
+      'CURRENT_PRICE': 'Precio actual',
+      'PROFIT': 'Beneficio',
+      'ADD_ITEM': 'Añadir',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Confirmación',
+      'CONFIRM_DELETE_ITEM': '¿Seguro que desea eliminar este artículo?',
+      'BUTTON_NO': 'No',
+      'BUTTON_YES': 'Sí',
+      'SUCCESS_TITLE': 'Éxito',
+      'SUCCESS_DELETE_ARTICLE': 'El artículo se ha eliminado correctamente.',
+      'ERROR_TITLE': 'Error',
+      'DELETE_ERROR': 'Se produjo un error al eliminar.',
     },
     'it': {
       // Clés de l'API pour la page de sélection de pays
@@ -201,6 +275,25 @@ class TranslationService extends ChangeNotifier {
       'COMPARE_Msg03': 'Confronto via email',
       'COMPARE_TEXT_PART1': 'Inviaci la tua lista IKEA via email per un confronto personalizzato',
       'COMPARE_Msg05': 'Invia via email',
+      // Product search - initial state
+      'PRODUCTSEARCH_ENTER_CODE': 'Inserisci un codice articolo per avviare la ricerca',
+      // Product search - input field
+      'PRODUCTSEARCH_HINT_CODE': 'Codice prodotto (es.: 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Miglior prezzo',
+      'CURRENT_PRICE': 'Prezzo attuale',
+      'PROFIT': 'Beneficio',
+      'ADD_ITEM': 'Aggiungi',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Conferma',
+      'CONFIRM_DELETE_ITEM': 'Sei sicuro di voler eliminare questo articolo?',
+      'BUTTON_NO': 'No',
+      'BUTTON_YES': 'Sì',
+      'SUCCESS_TITLE': 'Successo',
+      'SUCCESS_DELETE_ARTICLE': "L'articolo è stato eliminato con successo.",
+      'ERROR_TITLE': 'Errore',
+      'DELETE_ERROR': 
+          'Si è verificato un errore durante l\'eliminazione.',
     },
     'pt': {
       // Clés de l'API pour la page de sélection de pays
@@ -227,6 +320,24 @@ class TranslationService extends ChangeNotifier {
       'COMPARE_Msg03': 'Comparação por email',
       'COMPARE_TEXT_PART1': 'Envie-nos sua lista IKEA por email para uma comparação personalizada',
       'COMPARE_Msg05': 'Enviar por email',
+      // Product search - initial state
+      'PRODUCTSEARCH_ENTER_CODE': 'Insira um código de artigo para iniciar a pesquisa',
+      // Product search - input field
+      'PRODUCTSEARCH_HINT_CODE': 'Código do produto (ex.: 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Melhor preço',
+      'CURRENT_PRICE': 'Preço atual',
+      'PROFIT': 'Lucro',
+      'ADD_ITEM': 'Adicionar',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Confirmação',
+      'CONFIRM_DELETE_ITEM': 'Tem certeza de que deseja excluir este item?',
+      'BUTTON_NO': 'Não',
+      'BUTTON_YES': 'Sim',
+      'SUCCESS_TITLE': 'Sucesso',
+      'SUCCESS_DELETE_ARTICLE': 'O item foi excluído com sucesso.',
+      'ERROR_TITLE': 'Erro',
+      'DELETE_ERROR': 'Ocorreu um erro ao excluir.',
     },
     'nl': {
       // Clés de l'API pour la page de sélection de pays
@@ -253,6 +364,24 @@ class TranslationService extends ChangeNotifier {
       'COMPARE_Msg03': 'E-mail vergelijking',
       'COMPARE_TEXT_PART1': 'Stuur ons je IKEA-lijst per e-mail voor een gepersonaliseerde vergelijking',
       'COMPARE_Msg05': 'Verzenden per e-mail',
+      // Product search - initial state
+      'PRODUCTSEARCH_ENTER_CODE': 'Voer een artikelcode in om te beginnen met zoeken',
+      // Product search - input field
+      'PRODUCTSEARCH_HINT_CODE': 'Productcode (bijv. 123.456.78)',
+      // Wishlist labels
+      'BEST_PRICE': 'Beste prijs',
+      'CURRENT_PRICE': 'Huidige prijs',
+      'PROFIT': 'Winst',
+      'ADD_ITEM': 'Toevoegen',
+      // Wishlist - dialogs
+      'CONFIRM_TITLE': 'Bevestiging',
+      'CONFIRM_DELETE_ITEM': 'Weet u zeker dat u dit item wilt verwijderen?',
+      'BUTTON_NO': 'Nee',
+      'BUTTON_YES': 'Ja',
+      'SUCCESS_TITLE': 'Succes',
+      'SUCCESS_DELETE_ARTICLE': 'Het item is succesvol verwijderd.',
+      'ERROR_TITLE': 'Fout',
+      'DELETE_ERROR': 'Er is een fout opgetreden bij het verwijderen.',
     },
   };
 
@@ -281,6 +410,24 @@ class TranslationService extends ChangeNotifier {
       if (apiTranslations.isNotEmpty) {
         // Convertir les traductions de l'API
         _translations = Map<String, String>.from(apiTranslations);
+        // 🔎 Debug: vérifier s'il existe des clés dont la traduction vaut exactement "Trouvez Votre Produit"
+        try {
+          final matchedKeys = <String>[];
+          apiTranslations.forEach((key, value) {
+            final text = (value ?? '').toString();
+            final normalized = text.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+            if (normalized == 'trouvez votre produit') {
+              matchedKeys.add(key.toString());
+            }
+          });
+          if (matchedKeys.isNotEmpty) {
+            print('🔎 TRANSLATION SERVICE: Clés avec traduction = "Trouvez Votre Produit": $matchedKeys');
+          } else {
+            print('🔎 TRANSLATION SERVICE: Aucune clé dont la traduction est exactement "Trouvez Votre Produit"');
+          }
+        } catch (e) {
+          print('⚠️ TRANSLATION SERVICE: Debug recherche "Trouvez Votre Produit" a échoué: $e');
+        }
         
         // Notifier immédiatement après le chargement
         notifyListeners();

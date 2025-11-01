@@ -434,9 +434,13 @@ class _HomeScreenState extends State<HomeScreen>
           final index = entry.key;
           final module = entry.value;
           
+          final isLast = index == modules.length - 1;
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              padding: EdgeInsets.only(
+                left: index == 0 ? 0 : 12.0,
+                right: isLast ? 0 : 12.0,
+              ),
               child: _buildAnimatedModuleCard(
                 title: module['title'] as String,
                 icon: module['icon'] as IconData,
@@ -534,7 +538,7 @@ class _HomeScreenState extends State<HomeScreen>
             return Transform.scale(
               scale: value,
               child: Container(
-                height: isMobile ? 160 : 180,
+                height: isMobile ? 180 : 200,
                 decoration: BoxDecoration(
                   color: color,
                   borderRadius: BorderRadius.circular(20),
@@ -549,7 +553,7 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Center(
                   child: Icon(
                     icon,
-                    size: isMobile ? 110 : 130,
+                    size: isMobile ? 120 : 140,
                     color: Colors.white,
                   ),
                 ),

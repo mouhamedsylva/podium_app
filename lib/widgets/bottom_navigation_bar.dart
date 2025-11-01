@@ -68,14 +68,7 @@ class _CustomBottomNavigationBarState extends State<CustomBottomNavigationBar> {
             isSelected: widget.currentIndex == 3,
             onTap: () => _navigateTo('/wishlist', 3),
           ),
-          // Afficher l'icône utilisateur seulement si connecté
-          if (isLoggedIn)
-            _buildNavItem(
-              context: context,
-              icon: Icons.person,
-              isSelected: widget.currentIndex == 4,
-              onTap: () => _navigateTo('/profile', 4),
-            ),
+          // Icône utilisateur supprimée : on conserve uniquement 4 icônes (home, search, scanner, wishlist)
           ],
         ),
       ),

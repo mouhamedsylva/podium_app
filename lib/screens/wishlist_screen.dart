@@ -668,7 +668,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       // Afficher une confirmation (comme SNAL avec Notiflix)
       final bool? confirmed = await _showNotiflixConfirmDialog(
-        title: "Confirmation", // Pas de clé spécifique dans l'API
+        title: _translationService.translate('CONFIRM_TITLE'),
         message: _translationService.translate('CONFIRM_DELETE_ITEM') ?? "Voulez-vous vraiment supprimer cet article ?",
       );
 
@@ -718,8 +718,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         // Afficher le message de succès (sans await pour ne pas bloquer l'UI)
         _showNotiflixSuccessDialog(
-          title: "Succès", // Pas de clé spécifique dans l'API
-          message: "L'article a été supprimé avec succès.", // Pas de clé spécifique dans l'API
+          title: _translationService.translate('SUCCESS_TITLE'),
+          message: _translationService.translate('SUCCESS_DELETE_ARTICLE'),
         );
         
       } else {
@@ -729,7 +729,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         // Afficher un message d'erreur style Notiflix
         await _showNotiflixErrorDialog(
-          title: "Erreur", // Pas de clé spécifique dans l'API
+          title: _translationService.translate('ERROR_TITLE'),
           message: _translationService.translate('DELETE_ERROR') ?? "Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}",
         );
       }
@@ -738,7 +738,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       // Afficher un message d'erreur style Notiflix
       await _showNotiflixErrorDialog(
-        title: "Erreur", // Pas de clé spécifique dans l'API
+        title: _translationService.translate('ERROR_TITLE'),
         message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite lors de la suppression: $e",
       );
     }
@@ -813,7 +813,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                             elevation: 2, // Ajout d'une légère élévation
                           ),
                           child: Text(
-                            'Non', // Pas de clé spécifique dans l'API
+                            _translationService.translate('BUTTON_NO'),
                             style: TextStyle(
                               fontSize: 18, // Augmentation de la taille de police
                               fontWeight: FontWeight.w700, // Police plus grasse
@@ -838,7 +838,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                             elevation: 2, // Ajout d'une légère élévation
                           ),
                           child: Text(
-                            'Oui', // Pas de clé spécifique dans l'API
+                            _translationService.translate('BUTTON_YES'),
                             style: TextStyle(
                               fontSize: 18, // Augmentation de la taille de police
                               fontWeight: FontWeight.w700, // Police plus grasse
@@ -951,7 +951,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Ouvrir le sidebar pour sélectionner le pays d'un article (comme SNAL avec updateDisplayChoice)
-  void _openCountrySidebarForArticle(Map<String, dynamic> article) async {
+  void _openCountrySidebarForArticle(Map<String, dynamic> article, {String? defaultSelectedCountry}) async {
     if (_isCountrySidebarOpen) {
       return; // Sidebar déjà ouvert/ouvrant
     }
@@ -964,7 +964,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     print('   desc: ${article['desc']}');
     
     try {
-      final currentSelectedCountry = article['spaysSelected'] ?? article['sPaysSelected'] ?? '';
+      final currentSelectedCountry = (defaultSelectedCountry?.toString() ?? '').isNotEmpty
+          ? defaultSelectedCountry!.toString()
+          : (article['spaysSelected'] ?? article['sPaysSelected'] ?? '');
       
       // ✅ Utiliser l'endpoint get-infos-status pour récupérer tous les pays
       print('🚀 Appel de getInfosStatus() pour récupérer tous les pays...');
@@ -1314,6 +1316,22 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       print('🔄 Changement du pays pour l\'article: $currentSelected → $countryCode');
       print('🔄 Appel API updateCountrySelected (CHANGEPAYS):');
+
+      // ✅ Optimistic UI update immédiat (avant l'appel API)
+      if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
+        final pivotArray = _wishlistData!['pivotArray'] as List;
+        final articleIndex = pivotArray.indexWhere(
+          (item) => item['sCodeArticleCrypt'] == sCodeArticleCrypt
+        );
+        if (articleIndex != -1) {
+          pivotArray[articleIndex]['spaysSelected'] = countryCode;
+          if (articleNotifier != null) {
+            articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+          }
+          if (mounted) setState(() {});
+          print('⚡ UI mise à jour immédiatement (optimistic) avec pays: $countryCode');
+        }
+      }
       
       // ✅ Appeler l'API pour changer le pays (comme SNAL)
       final profileData = await LocalStorageService.getProfile();
@@ -2043,7 +2061,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               SizedBox(width: isVerySmallMobile ? 2 : (isSmallMobile ? 3 : (isMobile ? 4 : 6))),
               Flexible(
                 child: Text(
-                  'Ajouter',
+                  _translationService.translate('ADD_ITEM'),
                   style: TextStyle(
                     fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : (isMobile ? 14 : 15)), // Taille réduite pour éviter l'overflow
                     fontWeight: FontWeight.w700,
@@ -2293,6 +2311,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     final badgeColor = isOptimal ? const Color(0xFFf59e0b) : const Color(0xFF3b82f6);
     final textColor = isOptimal ? const Color(0xFFd97706) : const Color(0xFF2563eb); // Amber-600 ou Blue-600
     
+    final String displayLabel = isOptimal
+        ? _translationService.translate('BEST_PRICE')
+        : _translationService.translate('CURRENT_PRICE');
+
     final cardWidget = Container(
       constraints: BoxConstraints(
         minWidth: isMobile ? 96 : 110,
@@ -2333,7 +2355,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              label,
+              displayLabel,
               style: TextStyle(
                 color: badgeColor,
                 fontSize: isMobile ? 10 : 12,
@@ -2485,7 +2507,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Bénéfice',
+                    _translationService.translate('PROFIT'),
                     style: TextStyle(
                       fontSize: isMobile ? 12 : 13, // Taille réduite
                       fontWeight: FontWeight.w700,
@@ -3043,7 +3065,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: () => _openCountrySidebarForArticle(article),
+                    onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
                     child: Text(
                       sDescr,
                       maxLines: 1,
@@ -3075,7 +3097,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-              onTap: () => _openCountrySidebarForArticle(article),
+              onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
@@ -3133,7 +3155,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               
               // Bouton + bleu (ouvre le sidebar de sélection de pays pour cet article)
               GestureDetector(
-                onTap: () => _openCountrySidebarForArticle(article),
+                onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
                 child: Container(
                   width: 24,
                   height: 24,
@@ -3618,7 +3640,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               
               // Bouton + bleu (ouvre le sidebar de sélection de pays pour cet article)
               GestureDetector(
-                onTap: () => _openCountrySidebarForArticle(article),
+                onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
                 child: Container(
                   width: 24,
                   height: 24,
@@ -4291,7 +4313,23 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                         ],
                       ),
                     )
-                  : ListView.builder(
+                  : (() {
+                      // Déterminer le pays avec le meilleur prix parmi ceux disponibles
+                      String bestCountryCode = '';
+                      double bestPrice = double.infinity;
+                      for (final c in widget.availableCountries) {
+                        final bool isAvailable = c['isAvailable'] ?? false;
+                        if (!isAvailable) continue;
+                        final String priceStr = (c['price']?.toString() ?? '').replaceAll('€', '').replaceAll(' ', '').replaceAll(',', '.');
+                        final match = RegExp(r"\d+\.?\d*").firstMatch(priceStr);
+                        final double priceVal = match != null ? (double.tryParse(match.group(0)!) ?? 0.0) : 0.0;
+                        if (priceVal > 0 && priceVal < bestPrice) {
+                          bestPrice = priceVal;
+                          bestCountryCode = (c['code']?.toString() ?? '');
+                        }
+                      }
+
+                      return ListView.builder(
                       padding: EdgeInsets.all(isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
                       itemCount: widget.availableCountries.length,
                           itemBuilder: (context, index) {
@@ -4302,6 +4340,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                   final price = country['price']?.toString() ?? 'N/A';
                   final isAvailable = country['isAvailable'] ?? false;
                   final isSelected = code == _selectedCountry;
+                  final isBest = code == bestCountryCode;
                             
                             // ✨ Animation : Chaque pays apparaît en vague
                             return TweenAnimationBuilder<double>(
@@ -4322,12 +4361,24 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                               margin: EdgeInsets.only(bottom: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
                               child: GestureDetector(
                       onTap: (_isChanging || !isAvailable) ? null : () => _handleCountryChange(code),
+                      onDoubleTap: (_isChanging || !isAvailable)
+                          ? null
+                          : () {
+                              // Sélection immédiate + fermeture instantanée
+                              setState(() => _selectedCountry = code);
+                              _handleCountryChange(code); // ne pas await
+                              if (mounted) Navigator.of(context).pop();
+                            },
                       child: Opacity(
                         opacity: (_isChanging && !isSelected) || !isAvailable ? 0.5 : 1.0,
                                 child: Container(
                                   padding: EdgeInsets.all(isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
                                   decoration: BoxDecoration(
-                                    color: isAvailable ? Colors.white : Colors.grey[100],
+                                    color: isAvailable
+                                        ? (isSelected
+                                            ? const Color(0xFFECFDF5) // Vert très clair quand sélectionné (emerald-50)
+                                            : Colors.white)
+                                        : Colors.grey[100],
                             borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isSelected 
@@ -4553,16 +4604,50 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                       
                             // Prix ou Indisponible (pour layout normal)
                                       if (isAvailable)
-                                      Text(
-                                          price,
-                                        style: TextStyle(
-                                            fontSize: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
-                                            fontWeight: FontWeight.w700,
-                                          color: isSelected 
-                                              ? const Color(0xFF10B981) 
-                                              : const Color(0xFF374151),
-                                        ),
-                                        )
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (isBest) ...[
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8),
+                                                vertical: isVerySmallMobile ? 3 : 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFF7ED), // fond ambré très clair
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: const Color(0xFFF59E0B)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Text('🥇', style: TextStyle(fontSize: 14)),
+                                                  SizedBox(width: isVerySmallMobile ? 2 : 4),
+                                                  Text(
+                                                    Provider.of<TranslationService>(context, listen: false).translate('BEST_PRICE'),
+                                                    style: TextStyle(
+                                                      fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
+                                                      fontWeight: FontWeight.w700,
+                                                      color: const Color(0xFFD97706),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            SizedBox(width: isVerySmallMobile ? 6 : (isSmallMobile ? 8 : 10)),
+                                          ],
+                                          Text(
+                                            price,
+                                            style: TextStyle(
+                                              fontSize: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
+                                              fontWeight: FontWeight.w700,
+                                              color: isSelected
+                                                  ? const Color(0xFF10B981)
+                                                  : const Color(0xFF374151),
+                                            ),
+                                          ),
+                                        ],
+                                      )
                                       else
                                         Container(
                                           padding: EdgeInsets.symmetric(
@@ -4612,7 +4697,8 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                               ), // Ferme TweenAnimationBuilder
                             );
                           },
-                ),
+                      );
+                    })(),
               ),
               
             // Boutons en bas du modal (en colonne)
@@ -4632,31 +4718,32 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                       child: ElevatedButton(
                         onPressed: widget.onManageCountries,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF007BFF),
-                          foregroundColor: Colors.white,
+                          backgroundColor: Colors.grey[100],
+                          foregroundColor: Colors.black,
                           padding: EdgeInsets.symmetric(
                             vertical: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.grey[300]!),
                           ),
-                          elevation: 2,
+                          elevation: 0,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.swap_horiz,
-                              size: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
-                              color: Colors.white,
+                            size: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
+                            color: Colors.black,
                             ),
                             SizedBox(width: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8)),
                             Text(
                               'Ajouter/Supprimer un pays',
                               style: TextStyle(
-                                fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                              fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
                               ),
                             ),
                           ],

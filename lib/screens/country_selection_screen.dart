@@ -144,9 +144,8 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
       }
     });
     
-    // Redémarrer l'animation de la liste pour la nouvelle recherche
-    _listAnimationController.reset();
-    _listAnimationController.forward();
+    // Ne pas relancer l'animation à chaque frappe afin d'éviter les sauts visuels
+    // La liste reste stable pendant l'édition et n'anime que lors du premier affichage
   }
 
   void _selectCountry(Country country) async {

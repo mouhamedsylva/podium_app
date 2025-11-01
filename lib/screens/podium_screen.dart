@@ -450,6 +450,7 @@ class _PodiumScreenState extends State<PodiumScreen>
     showDialog(
       context: context,
       barrierColor: Colors.black87,
+      barrierDismissible: true,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return Dialog(
@@ -470,22 +471,46 @@ class _PodiumScreenState extends State<PodiumScreen>
                 
                 // Image centrée avec zoom et scroll
                 Center(
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 4.0,
-                    panEnabled: true,
-                    boundaryMargin: const EdgeInsets.all(100),
-                    child: Image.network(
-                      urls[_currentImageIndex % urls.length],
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(
-                          Icons.image_not_supported,
-                          size: 100,
-                          color: Colors.white,
-                        );
-                      },
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final media = MediaQuery.of(context);
+                      final TransformationController _tc = TransformationController();
+                      return ClipRect(
+                        child: SizedBox(
+                          width: media.size.width * 0.95,
+                          height: media.size.height * 0.85,
+                          child: InteractiveViewer(
+                            constrained: true,
+                            minScale: 1.0,
+                            maxScale: 4.0,
+                            panEnabled: true,
+                            transformationController: _tc,
+                            onInteractionUpdate: (details) {
+                              final Matrix4 m = _tc.value.clone();
+                              // Lock vertical translation (y) to 0 so we only scroll horizontally
+                              if (m.storage[13] != 0.0) {
+                                m.storage[13] = 0.0;
+                                _tc.value = m;
+                              }
+                            },
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              child: Image.network(
+                                urls[_currentImageIndex % urls.length],
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.image_not_supported,
+                                    size: 100,
+                                    color: Colors.white,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 
@@ -913,12 +938,7 @@ class _PodiumScreenState extends State<PodiumScreen>
                 horizontal: isVerySmallMobile ? 6.0 : (isSmallMobile ? 7.0 : 8.0),
                 vertical: isVerySmallMobile ? 8.0 : (isSmallMobile ? 10.0 : 12.0),
               ),
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 3.0,
-                panEnabled: true,
-                boundaryMargin: const EdgeInsets.all(20),
-                child: Container(
+              child: Container(
                 padding: EdgeInsets.all(isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -934,52 +954,100 @@ class _PodiumScreenState extends State<PodiumScreen>
                 width: double.infinity,
                 child: Column(
                   children: [
-                    // Image taille réduite
-                    SizedBox(
-                      height: isVerySmallMobile ? 180 : (isSmallMobile ? 200 : 220),
-                      child: _buildProductImage(),
-                    ),
-                    SizedBox(height: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            productName,
-                            style: TextStyle(
-                              fontSize: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
-                              fontWeight: FontWeight.bold,
+                    // En-tête compact sur mobile: image + textes côte à côte
+                    if (isMobile) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: isVerySmallMobile ? 110 : (isSmallMobile ? 120 : 130),
+                            height: isVerySmallMobile ? 110 : (isSmallMobile ? 120 : 130),
+                            child: _buildProductImage(height: isVerySmallMobile ? 110 : (isSmallMobile ? 120 : 130)),
+                          ),
+                          SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  productName,
+                                  style: TextStyle(
+                                    fontSize: isVerySmallMobile ? 15 : (isSmallMobile ? 16 : 17),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                SizedBox(height: isVerySmallMobile ? 4 : 6),
+                                Text(
+                                  productCode,
+                                  style: TextStyle(
+                                    fontSize: isVerySmallMobile ? 11 : 12,
+                                    color: Colors.grey[700],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SizedBox(height: isVerySmallMobile ? 4 : 6),
+                                Text(
+                                  productDescr,
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: isVerySmallMobile ? 12 : 13,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            textAlign: TextAlign.left,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
-                        Text(
-                          productCode,
-                          style: TextStyle(
-                            fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 13),
-                            color: Colors.grey[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: isVerySmallMobile ? 3 : 4),
-                    Text(
-                      productDescr,
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
+                        ],
                       ),
-                      textAlign: TextAlign.left,
-                    ),
+                    ] else ...[
+                      SizedBox(
+                        height: 220,
+                        child: _buildProductImage(height: 220),
+                      ),
+                      SizedBox(height: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              productName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.left,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
+                          Text(
+                            productCode,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        productDescr,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.left,
+                      ),
+                    ],
                     SizedBox(height: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
                     _buildQuantitySelector(),
                   ],
                 ),
               ),
-            ),
             ),
           ), // Ferme AnimatedBuilder
         
@@ -999,7 +1067,7 @@ class _PodiumScreenState extends State<PodiumScreen>
               child: FadeTransition(
                 opacity: _podiumController,
                 child: Container(
-                  height: isVerySmallMobile ? 380 : (isSmallMobile ? 400 : 420),
+                  height: isVerySmallMobile ? 360 : (isSmallMobile ? 380 : 420),
                   padding: EdgeInsets.symmetric(horizontal: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
                   child: _buildPodium(topThree, maxPrice, isVerySmallMobile, isSmallMobile, isMobile),
                 ),
@@ -1097,8 +1165,9 @@ class _PodiumScreenState extends State<PodiumScreen>
     );
   }
 
-  Widget _buildProductImage() {
+  Widget _buildProductImage({double? height}) {
     final imageUrl = _getCurrentImageUrl();
+    final isMobile = MediaQuery.of(context).size.width < 768;
     final hasMultipleImages = _productData?['aImageLink'] != null && 
         _productData!['aImageLink'] is List &&
         (_productData!['aImageLink'] as List).length > 1;
@@ -1110,7 +1179,7 @@ class _PodiumScreenState extends State<PodiumScreen>
           onTap: _showFullscreenImage,
           child: Container(
           width: double.infinity,
-          height: 200,
+          height: height ?? 200,
           decoration: BoxDecoration(
             color: Colors.white, // Background blanc
             borderRadius: BorderRadius.circular(12),
@@ -1140,10 +1209,10 @@ class _PodiumScreenState extends State<PodiumScreen>
         
         
         // Boutons de navigation
-        if (hasMultipleImages) ...[
+        if (hasMultipleImages && !isMobile) ...[
           Positioned(
             left: 8,
-            top: 80,
+            top: ((height ?? 200) / 2) - 20,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
             child: CircleAvatar(
@@ -1157,7 +1226,7 @@ class _PodiumScreenState extends State<PodiumScreen>
           ),
           Positioned(
             right: 8,
-            top: 80,
+            top: ((height ?? 200) / 2) - 20,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
             child: CircleAvatar(
@@ -1228,7 +1297,7 @@ class _PodiumScreenState extends State<PodiumScreen>
     ];
 
     return Container(
-      height: isVerySmallMobile ? 380 : (isSmallMobile ? 400 : 420),
+      height: isVerySmallMobile ? 360 : (isSmallMobile ? 380 : 420),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1243,12 +1312,16 @@ class _PodiumScreenState extends State<PodiumScreen>
           else realRank = 3; // Bronze à droite
 
 
+          // Largeurs augmentées et proportionnelles à l'écran pour aligner nom + drapeau
           return Container(
-            width: isVerySmallMobile 
-                ? (realRank == 1 ? 120 : 100)
-                : (isSmallMobile 
-                    ? (realRank == 1 ? 130 : 110)
-                    : (realRank == 1 ? 140 : 120)),
+            width: () {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final sidePadding = isVerySmallMobile ? 8.0 : (isSmallMobile ? 12.0 : 16.0);
+              final available = screenWidth - (sidePadding * 2);
+              final centerWidth = available * (isMobile ? 0.38 : 0.36);
+              final sideWidth = available * (isMobile ? 0.31 : 0.30);
+              return realRank == 1 ? centerWidth : sideWidth;
+            }(),
             child: Align(
               alignment: Alignment.bottomCenter,
               child: _buildPodiumCard(article, realRank, maxPrice, isVerySmallMobile, isSmallMobile, isMobile),
@@ -1297,9 +1370,9 @@ class _PodiumScreenState extends State<PodiumScreen>
           ),
           constraints: BoxConstraints(
             minHeight: isVerySmallMobile
-                ? (rank == 1 ? 250 : (rank == 2 ? 180 : 200))
+                ? (rank == 1 ? 220 : (rank == 2 ? 165 : 180))
                 : (isSmallMobile
-                    ? (rank == 1 ? 270 : (rank == 2 ? 200 : 220))
+                    ? (rank == 1 ? 240 : (rank == 2 ? 180 : 200))
                     : (rank == 1 ? 290 : (rank == 2 ? 220 : 240))),
           ),
           decoration: BoxDecoration(
@@ -1374,8 +1447,9 @@ class _PodiumScreenState extends State<PodiumScreen>
                               fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
                               fontWeight: FontWeight.w700,
                             ),
-                            overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
+                            maxLines: 2,
+                            softWrap: true,
                           ),
                           SizedBox(height: isVerySmallMobile ? 0.5 : 1),
                           Text(
@@ -1448,9 +1522,9 @@ class _PodiumScreenState extends State<PodiumScreen>
                 ),
               SizedBox(
                 height: isVerySmallMobile
-                    ? (rank == 2 ? 20 : (rank == 1 ? 25 : (rank == 3 ? 15 : 60)))
+                    ? (rank == 2 ? 18 : (rank == 1 ? 22 : (rank == 3 ? 12 : 50)))
                     : (isSmallMobile
-                        ? (rank == 2 ? 25 : (rank == 1 ? 28 : (rank == 3 ? 20 : 65)))
+                        ? (rank == 2 ? 22 : (rank == 1 ? 25 : (rank == 3 ? 18 : 55)))
                         : (rank == 2 ? 30 : (rank == 1 ? 30 : (rank == 3 ? 25 : 70)))),
               ),
               
@@ -1717,8 +1791,8 @@ class _PodiumScreenState extends State<PodiumScreen>
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                      maxLines: 2,
+                      softWrap: true,
                     ),
                     const Text(
                       'IKEA',
