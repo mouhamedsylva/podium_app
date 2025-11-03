@@ -104,6 +104,9 @@ class TranslationService extends ChangeNotifier {
       'SUCCESS_DELETE_ARTICLE': "L'article a été supprimé avec succès.",
       'ERROR_TITLE': 'Erreur',
       'DELETE_ERROR': 'Une erreur est survenue lors de la suppression.',
+      // Map - boutons
+      'BUTTON_STORES': 'Magasins',
+      'BUTTON_CLOSE': 'Fermer',
     },
     'en': {
       // Clés de l'API pour la page de sélection de pays
@@ -161,6 +164,9 @@ class TranslationService extends ChangeNotifier {
       'SUCCESS_DELETE_ARTICLE': 'The item has been deleted successfully.',
       'ERROR_TITLE': 'Error',
       'DELETE_ERROR': 'An error occurred while deleting.',
+      // Map - buttons
+      'BUTTON_STORES': 'Stores',
+      'BUTTON_CLOSE': 'Close',
     },
     'de': {
       // Clés de l'API pour la page de sélection de pays (basées sur vos données)
@@ -205,6 +211,9 @@ class TranslationService extends ChangeNotifier {
       'SUCCESS_DELETE_ARTICLE': 'Der Artikel wurde erfolgreich gelöscht.',
       'ERROR_TITLE': 'Fehler',
       'DELETE_ERROR': 'Beim Löschen ist ein Fehler aufgetreten.',
+      // Karte - Schaltflächen
+      'BUTTON_STORES': 'Geschäfte',
+      'BUTTON_CLOSE': 'Schließen',
     },
     'es': {
       // Clés de l'API pour la page de sélection de pays
@@ -249,6 +258,9 @@ class TranslationService extends ChangeNotifier {
       'SUCCESS_DELETE_ARTICLE': 'El artículo se ha eliminado correctamente.',
       'ERROR_TITLE': 'Error',
       'DELETE_ERROR': 'Se produjo un error al eliminar.',
+      // Mapa - botones
+      'BUTTON_STORES': 'Tiendas',
+      'BUTTON_CLOSE': 'Cerrar',
     },
     'it': {
       // Clés de l'API pour la page de sélection de pays
@@ -294,6 +306,9 @@ class TranslationService extends ChangeNotifier {
       'ERROR_TITLE': 'Errore',
       'DELETE_ERROR': 
           'Si è verificato un errore durante l\'eliminazione.',
+      // Mappa - pulsanti
+      'BUTTON_STORES': 'Negozi',
+      'BUTTON_CLOSE': 'Chiudi',
     },
     'pt': {
       // Clés de l'API pour la page de sélection de pays
@@ -338,6 +353,9 @@ class TranslationService extends ChangeNotifier {
       'SUCCESS_DELETE_ARTICLE': 'O item foi excluído com sucesso.',
       'ERROR_TITLE': 'Erro',
       'DELETE_ERROR': 'Ocorreu um erro ao excluir.',
+      // Mapa - botões
+      'BUTTON_STORES': 'Lojas',
+      'BUTTON_CLOSE': 'Fechar',
     },
     'nl': {
       // Clés de l'API pour la page de sélection de pays
@@ -382,6 +400,9 @@ class TranslationService extends ChangeNotifier {
       'SUCCESS_DELETE_ARTICLE': 'Het item is succesvol verwijderd.',
       'ERROR_TITLE': 'Fout',
       'DELETE_ERROR': 'Er is een fout opgetreden bij het verwijderen.',
+      // Kaart - knoppen
+      'BUTTON_STORES': 'Winkels',
+      'BUTTON_CLOSE': 'Sluiten',
     },
   };
 

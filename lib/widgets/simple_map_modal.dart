@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/translation_service.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'dart:math' as math;
@@ -1308,24 +1309,31 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                     ),
                                   ],
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      (_showStoresContainer ?? false) ? Icons.close : Icons.store,
-                                      color: Colors.white,
-                                      size: 24,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      (_showStoresContainer ?? false) ? 'Fermer' : 'Magasins',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                                child: Builder(
+                                  builder: (context) {
+                                    final translationService = Provider.of<TranslationService>(context, listen: false);
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          (_showStoresContainer ?? false) ? Icons.close : Icons.store,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          (_showStoresContainer ?? false) 
+                                              ? translationService.translate('BUTTON_CLOSE')
+                                              : translationService.translate('BUTTON_STORES'),
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                             ),
