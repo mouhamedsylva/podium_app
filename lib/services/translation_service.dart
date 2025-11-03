@@ -92,7 +92,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Code produit (ex: 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Meilleur prix',
+      'OPTIMAL': 'Optimal',
       'CURRENT_PRICE': 'Prix actuel',
+      'CURRENT': 'Actuel',
       'PROFIT': 'Bénéfice',
       'ADD_ITEM': 'Ajouter',
       // Wishlist - dialogs
@@ -107,6 +109,17 @@ class TranslationService extends ChangeNotifier {
       // Map - boutons
       'BUTTON_STORES': 'Magasins',
       'BUTTON_CLOSE': 'Fermer',
+      // Map - magasins
+      'STORES_NEARBY': 'Magasins à proximité',
+      'SORTED_BY_PROXIMITY': 'Triés par proximité',
+      'YOUR_POSITION': 'Votre position',
+      'IKEA_STORES': 'Magasins IKEA',
+      'IKEA_STORES_NEARBY': 'Magasins IKEA à proximité',
+      'SEARCH_STORE_PLACEHOLDER': 'Rechercher un magasin (nom, pays, ville)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Rechercher une ville, adresse ou code postal...',
+      // Wishlist - panier vide
+      'EMPTY_CART_TITLE': 'Panier vide',
+      'EMPTY_CART_MESSAGE': 'Aucun Article trouvé dans ce panier',
     },
     'en': {
       // Clés de l'API pour la page de sélection de pays
@@ -152,7 +165,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Product code (e.g. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Best price',
+      'OPTIMAL': 'Optimal',
       'CURRENT_PRICE': 'Current price',
+      'CURRENT': 'Current',
       'PROFIT': 'Profit',
       'ADD_ITEM': 'Add',
       // Wishlist - dialogs
@@ -167,6 +182,17 @@ class TranslationService extends ChangeNotifier {
       // Map - buttons
       'BUTTON_STORES': 'Stores',
       'BUTTON_CLOSE': 'Close',
+      // Map - stores
+      'STORES_NEARBY': 'Stores nearby',
+      'SORTED_BY_PROXIMITY': 'Sorted by proximity',
+      'YOUR_POSITION': 'Your position',
+      'IKEA_STORES': 'IKEA Stores',
+      'IKEA_STORES_NEARBY': 'IKEA Stores nearby',
+      'SEARCH_STORE_PLACEHOLDER': 'Search for a store (name, country, city)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Search for a city, address or postal code...',
+      // Wishlist - empty cart
+      'EMPTY_CART_TITLE': 'Empty cart',
+      'EMPTY_CART_MESSAGE': 'No item found in this cart',
     },
     'de': {
       // Clés de l'API pour la page de sélection de pays (basées sur vos données)
@@ -199,7 +225,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Produktcode (z. B. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Bester Preis',
+      'OPTIMAL': 'Optimal',
       'CURRENT_PRICE': 'Aktueller Preis',
+      'CURRENT': 'Aktuell',
       'PROFIT': 'Gewinn',
       'ADD_ITEM': 'Hinzufügen',
       // Wishlist - dialogs
@@ -214,6 +242,17 @@ class TranslationService extends ChangeNotifier {
       // Karte - Schaltflächen
       'BUTTON_STORES': 'Geschäfte',
       'BUTTON_CLOSE': 'Schließen',
+      // Karte - Geschäfte
+      'STORES_NEARBY': 'Geschäfte in der Nähe',
+      'SORTED_BY_PROXIMITY': 'Nach Entfernung sortiert',
+      'YOUR_POSITION': 'Ihre Position',
+      'IKEA_STORES': 'IKEA Geschäfte',
+      'IKEA_STORES_NEARBY': 'IKEA Geschäfte in der Nähe',
+      'SEARCH_STORE_PLACEHOLDER': 'Ein Geschäft suchen (Name, Land, Stadt)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Eine Stadt, Adresse oder Postleitzahl suchen...',
+      // Wunschliste - leerer Warenkorb
+      'EMPTY_CART_TITLE': 'Leerer Warenkorb',
+      'EMPTY_CART_MESSAGE': 'Kein Artikel in diesem Warenkorb gefunden',
     },
     'es': {
       // Clés de l'API pour la page de sélection de pays
@@ -246,7 +285,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Código de producto (ej.: 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Mejor precio',
+      'OPTIMAL': 'Óptimo',
       'CURRENT_PRICE': 'Precio actual',
+      'CURRENT': 'Actual',
       'PROFIT': 'Beneficio',
       'ADD_ITEM': 'Añadir',
       // Wishlist - dialogs
@@ -261,6 +302,17 @@ class TranslationService extends ChangeNotifier {
       // Mapa - botones
       'BUTTON_STORES': 'Tiendas',
       'BUTTON_CLOSE': 'Cerrar',
+      // Mapa - tiendas
+      'STORES_NEARBY': 'Tiendas cercanas',
+      'SORTED_BY_PROXIMITY': 'Ordenadas por proximidad',
+      'YOUR_POSITION': 'Su posición',
+      'IKEA_STORES': 'Tiendas IKEA',
+      'IKEA_STORES_NEARBY': 'Tiendas IKEA cercanas',
+      'SEARCH_STORE_PLACEHOLDER': 'Buscar una tienda (nombre, país, ciudad)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Buscar una ciudad, dirección o código postal...',
+      // Lista de deseos - carrito vacío
+      'EMPTY_CART_TITLE': 'Carrito vacío',
+      'EMPTY_CART_MESSAGE': 'Ningún artículo encontrado en este carrito',
     },
     'it': {
       // Clés de l'API pour la page de sélection de pays
@@ -293,7 +345,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Codice prodotto (es.: 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Miglior prezzo',
+      'OPTIMAL': 'Ottimale',
       'CURRENT_PRICE': 'Prezzo attuale',
+      'CURRENT': 'Attuale',
       'PROFIT': 'Beneficio',
       'ADD_ITEM': 'Aggiungi',
       // Wishlist - dialogs
@@ -309,6 +363,17 @@ class TranslationService extends ChangeNotifier {
       // Mappa - pulsanti
       'BUTTON_STORES': 'Negozi',
       'BUTTON_CLOSE': 'Chiudi',
+      // Mappa - negozi
+      'STORES_NEARBY': 'Negozi nelle vicinanze',
+      'SORTED_BY_PROXIMITY': 'Ordinati per vicinanza',
+      'YOUR_POSITION': 'La tua posizione',
+      'IKEA_STORES': 'Negozi IKEA',
+      'IKEA_STORES_NEARBY': 'Negozi IKEA nelle vicinanze',
+      'SEARCH_STORE_PLACEHOLDER': 'Cerca un negozio (nome, paese, città)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Cerca una città, indirizzo o codice postale...',
+      // Lista desideri - carrello vuoto
+      'EMPTY_CART_TITLE': 'Carrello vuoto',
+      'EMPTY_CART_MESSAGE': 'Nessun articolo trovato in questo carrello',
     },
     'pt': {
       // Clés de l'API pour la page de sélection de pays
@@ -341,7 +406,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Código do produto (ex.: 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Melhor preço',
+      'OPTIMAL': 'Ótimo',
       'CURRENT_PRICE': 'Preço atual',
+      'CURRENT': 'Atual',
       'PROFIT': 'Lucro',
       'ADD_ITEM': 'Adicionar',
       // Wishlist - dialogs
@@ -356,6 +423,17 @@ class TranslationService extends ChangeNotifier {
       // Mapa - botões
       'BUTTON_STORES': 'Lojas',
       'BUTTON_CLOSE': 'Fechar',
+      // Mapa - lojas
+      'STORES_NEARBY': 'Lojas próximas',
+      'SORTED_BY_PROXIMITY': 'Ordenadas por proximidade',
+      'YOUR_POSITION': 'Sua posição',
+      'IKEA_STORES': 'Lojas IKEA',
+      'IKEA_STORES_NEARBY': 'Lojas IKEA próximas',
+      'SEARCH_STORE_PLACEHOLDER': 'Pesquisar uma loja (nome, país, cidade)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Pesquisar uma cidade, endereço ou código postal...',
+      // Lista de desejos - carrinho vazio
+      'EMPTY_CART_TITLE': 'Carrinho vazio',
+      'EMPTY_CART_MESSAGE': 'Nenhum artigo encontrado neste carrinho',
     },
     'nl': {
       // Clés de l'API pour la page de sélection de pays
@@ -388,7 +466,9 @@ class TranslationService extends ChangeNotifier {
       'PRODUCTSEARCH_HINT_CODE': 'Productcode (bijv. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Beste prijs',
+      'OPTIMAL': 'Optimaal',
       'CURRENT_PRICE': 'Huidige prijs',
+      'CURRENT': 'Huidig',
       'PROFIT': 'Winst',
       'ADD_ITEM': 'Toevoegen',
       // Wishlist - dialogs
@@ -403,6 +483,17 @@ class TranslationService extends ChangeNotifier {
       // Kaart - knoppen
       'BUTTON_STORES': 'Winkels',
       'BUTTON_CLOSE': 'Sluiten',
+      // Kaart - winkels
+      'STORES_NEARBY': 'Winkels in de buurt',
+      'SORTED_BY_PROXIMITY': 'Gesorteerd op nabijheid',
+      'YOUR_POSITION': 'Uw positie',
+      'IKEA_STORES': 'IKEA Winkels',
+      'IKEA_STORES_NEARBY': 'IKEA Winkels in de buurt',
+      'SEARCH_STORE_PLACEHOLDER': 'Zoek een winkel (naam, land, stad)',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Zoek een stad, adres of postcode...',
+      // Verlanglijst - lege winkelwagen
+      'EMPTY_CART_TITLE': 'Lege winkelwagen',
+      'EMPTY_CART_MESSAGE': 'Geen artikel gevonden in deze winkelwagen',
     },
   };
 

@@ -488,9 +488,12 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                       children: [
                         // Champ de recherche géographique avec suggestions (utilise LocationSearchWidget)
                         Expanded(
-                          child: LocationSearchWidget(
-                            placeholder: 'Rechercher une ville, adresse ou code postal...',
-                            debounceDelay: 300,
+                          child: Builder(
+                            builder: (context) {
+                              final translationService = Provider.of<TranslationService>(context, listen: false);
+                              return LocationSearchWidget(
+                                placeholder: translationService.translate('SEARCH_LOCATION_PLACEHOLDER'),
+                                debounceDelay: 300,
                             minSearchLength: 3,
                             resultLimit: 5,
                             onLocationSelected: (location) {
@@ -501,6 +504,8 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                             },
                             onSearchSuccess: (query, results) {
                               print('✅ Recherche réussie: ${results.length} résultats');
+                            },
+                              );
                             },
                           ),
                         ),
@@ -794,32 +799,37 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                 ),
                                               ),
                                               SizedBox(width: isMobile ? 8 : 12),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text(
-                                                      'Magasins à proximité',
-                                                      style: TextStyle(
-                                                        fontWeight: FontWeight.bold,
-                                                        fontSize: isMobile ? 16 : 18,
-                                                        color: Colors.white,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                    SizedBox(height: 4),
-                                                    Text(
-                                                      'Triés par proximité • ${_ikeaStores.length}',
-                                                      style: TextStyle(
-                                                        fontSize: isMobile ? 12 : 14,
-                                                        color: Colors.white.withOpacity(0.8),
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  ],
+                                                Expanded(
+                                                child: Builder(
+                                                  builder: (context) {
+                                                    final translationService = Provider.of<TranslationService>(context, listen: false);
+                                                    return Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          translationService.translate('STORES_NEARBY'),
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: isMobile ? 16 : 18,
+                                                            color: Colors.white,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        SizedBox(height: 4),
+                                                        Text(
+                                                          '${translationService.translate('SORTED_BY_PROXIMITY')} • ${_ikeaStores.length}',
+                                                          style: TextStyle(
+                                                            fontSize: isMobile ? 12 : 14,
+                                                            color: Colors.white.withOpacity(0.8),
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                             ],
@@ -842,29 +852,34 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                     ),
                                                     borderRadius: BorderRadius.circular(8),
                                                   ),
-                                                  child: Row(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Icon(
-                                                        Icons.location_on,
-                                                        color: Colors.white,
-                                                        size: isMobile ? 14 : 16,
-                                                      ),
-                                                      SizedBox(width: isMobile ? 4 : 8),
-                                                      Flexible(
-                                                        child: Text(
-                                                          'Votre position',
-                                                          style: TextStyle(
+                                                  child: Builder(
+                                                    builder: (context) {
+                                                      final translationService = Provider.of<TranslationService>(context, listen: false);
+                                                      return Row(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            Icons.location_on,
                                                             color: Colors.white,
-                                                            fontWeight: FontWeight.w500,
-                                                            fontSize: isMobile ? 10 : 12,
+                                                            size: isMobile ? 14 : 16,
                                                           ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
-                                                      ),
-                                                    ],
+                                                          SizedBox(width: isMobile ? 4 : 8),
+                                                          Flexible(
+                                                            child: Text(
+                                                              translationService.translate('YOUR_POSITION'),
+                                                              style: TextStyle(
+                                                                color: Colors.white,
+                                                                fontWeight: FontWeight.w500,
+                                                                fontSize: isMobile ? 10 : 12,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      );
+                                                    },
                                                   ),
                                                 ),
                                               ),
@@ -883,29 +898,34 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                     ),
                                                     borderRadius: BorderRadius.circular(8),
                                                   ),
-                                                  child: Row(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Icon(
-                                                        Icons.store,
-                                                        color: Colors.white,
-                                                        size: isMobile ? 14 : 16,
-                                                      ),
-                                                      SizedBox(width: isMobile ? 4 : 8),
-                                                      Flexible(
-                                                        child: Text(
-                                                          'Magasins IKEA',
-                                                          style: TextStyle(
+                                                  child: Builder(
+                                                    builder: (context) {
+                                                      final translationService = Provider.of<TranslationService>(context, listen: false);
+                                                      return Row(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            Icons.store,
                                                             color: Colors.white,
-                                                            fontWeight: FontWeight.w500,
-                                                            fontSize: isMobile ? 10 : 12,
+                                                            size: isMobile ? 14 : 16,
                                                           ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
-                                                      ),
-                                                    ],
+                                                          SizedBox(width: isMobile ? 4 : 8),
+                                                          Flexible(
+                                                            child: Text(
+                                                              translationService.translate('IKEA_STORES'),
+                                                              style: TextStyle(
+                                                                color: Colors.white,
+                                                                fontWeight: FontWeight.w500,
+                                                                fontSize: isMobile ? 10 : 12,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      );
+                                                    },
                                                   ),
                                                 ),
                                               ),
@@ -925,24 +945,29 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                 const Icon(Icons.search, size: 18, color: Color(0xFF6B7280)),
                                                 const SizedBox(width: 6),
                                                 Expanded(
-                                                  child: TextField(
-                                                    controller: _storeSearchController,
-                                                    textInputAction: TextInputAction.search,
-                                                    decoration: InputDecoration(
-                                                      hintText: 'Rechercher un magasin (nom, pays, ville)',
-                                                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: isMobile ? 12 : 13),
-                                                      border: InputBorder.none,
-                                                      contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: isMobile ? 10 : 12),
-                                                    ),
-                                                    onChanged: (value) {
-                                                      setState(() {
-                                                        _searchQuery = value.trim();
-                                                      });
-                                                    },
-                                                    onSubmitted: (value) {
-                                                      setState(() {
-                                                        _searchQuery = value.trim();
-                                                      });
+                                                  child: Builder(
+                                                    builder: (context) {
+                                                      final translationService = Provider.of<TranslationService>(context, listen: false);
+                                                      return TextField(
+                                                        controller: _storeSearchController,
+                                                        textInputAction: TextInputAction.search,
+                                                        decoration: InputDecoration(
+                                                          hintText: translationService.translate('SEARCH_STORE_PLACEHOLDER'),
+                                                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: isMobile ? 12 : 13),
+                                                          border: InputBorder.none,
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: isMobile ? 10 : 12),
+                                                        ),
+                                                        onChanged: (value) {
+                                                          setState(() {
+                                                            _searchQuery = value.trim();
+                                                          });
+                                                        },
+                                                        onSubmitted: (value) {
+                                                          setState(() {
+                                                            _searchQuery = value.trim();
+                                                          });
+                                                        },
+                                                      );
                                                     },
                                                   ),
                                                 ),
@@ -1389,19 +1414,24 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                   topRight: Radius.circular(24),
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.location_on, color: Colors.grey[700], size: 24),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Magasins IKEA à proximité',
-                    style: TextStyle(
-                      color: Colors.grey[800],
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              child: Builder(
+                builder: (context) {
+                  final translationService = Provider.of<TranslationService>(context, listen: false);
+                  return Row(
+                    children: [
+                      Icon(Icons.location_on, color: Colors.grey[700], size: 24),
+                      const SizedBox(width: 12),
+                      Text(
+                        translationService.translate('IKEA_STORES_NEARBY'),
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             

@@ -2312,8 +2312,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     final textColor = isOptimal ? const Color(0xFFd97706) : const Color(0xFF2563eb); // Amber-600 ou Blue-600
     
     final String displayLabel = isOptimal
-        ? _translationService.translate('BEST_PRICE')
-        : _translationService.translate('CURRENT_PRICE');
+        ? _translationService.translate('OPTIMAL')
+        : _translationService.translate('CURRENT');
 
     final cardWidget = Container(
       constraints: BoxConstraints(
@@ -2587,7 +2587,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         // Texte "Panier vide"
         Text(
-          'Panier vide', // Pas de clé spécifique dans l'API
+          translationService.translate('EMPTY_CART_TITLE'),
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w600,
@@ -2599,7 +2599,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         // Texte secondaire
         Text(
-          'Aucun Article trouvé dans ce panier',
+          translationService.translate('EMPTY_CART_MESSAGE'),
           style: TextStyle(
             fontSize: 16,
             color: Colors.grey[600],
