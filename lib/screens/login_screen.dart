@@ -248,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         // ✅ MÊME LOGIQUE QUE SNAL : Créer un profil avec des identifiants vides
         final existingProfile = await LocalStorageService.getProfile();
         if (existingProfile == null || existingProfile['sPaysLangue'] == null || existingProfile['sPaysLangue']!.isEmpty) {
-          print('⚠️ Pas de profil valide, création d\'un profil avec identifiants vides (comme SNAL)...');
+          print('⚠️ Pas de profil valide, création d\'un profil avec identifiants vides (comme Jirig)...');
           
           // Récupérer le pays sélectionné depuis les settings
           final settingsService = SettingsService();
@@ -264,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             'sPaysLangue': sPaysLangue,
             'sPaysFav': sPaysFav,
           });
-          print('✅ Profil créé avec identifiants vides (comme SNAL): sPaysLangue: $sPaysLangue et sPaysFav: $sPaysFav');
+          print('✅ Profil créé avec identifiants vides (comme Jirig): sPaysLangue: $sPaysLangue et sPaysFav: $sPaysFav');
         }
         
         final response = await apiService.login(_emailController.text.trim());
@@ -361,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       String authUrl = 'https://jirig.be/api/auth/google';
 
       print('🌐 Redirection vers Google OAuth: $authUrl');
-      print('📝 Note: Après la connexion sur SNAL, revenez à cette application');
+      print('📝 Note: Après la connexion sur Jirig, revenez à cette application');
 
       // Ouvrir directement l'URL SNAL
       await launchUrl(
@@ -371,7 +371,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       
       // Afficher un message à l'utilisateur
       setState(() {
-        _errorMessage = 'Après la connexion sur SNAL, revenez à cette application';
+        _errorMessage = 'Après la connexion sur Jirig, revenez à cette application';
       });
       
     } catch (e) {

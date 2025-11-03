@@ -11,6 +11,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+import 'location_search_widget.dart';
 
 class SimpleMapModal extends StatefulWidget {
   final VoidCallback? onClose;
@@ -41,10 +44,6 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
   Animation<double>? _breathingAnimation;
   String _searchQuery = ''; // Recherche de magasins
   bool _showStoresContainer = false; // Contrôle l'affichage du container des magasins
-  String _locationSearchQuery = ''; // Recherche de localisation géographique
-  List<Map<String, dynamic>> _locationSuggestions = []; // Suggestions de lieux
-  bool _showLocationSuggestions = false; // Afficher les suggestions
-  final TextEditingController _locationSearchController = TextEditingController();
   final TextEditingController _storeSearchController = TextEditingController();
   
   // Styles de carte
@@ -92,7 +91,6 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
   @override
   void dispose() {
     _breathingController?.dispose();
-    _locationSearchController.dispose();
     _storeSearchController.dispose();
     super.dispose();
   }
@@ -336,6 +334,65 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
     }
   }
 
+  /// Charger les magasins pour une position donnée (recherche par nom / code postal)
+  Future<void> _loadStoresForLocation(double lat, double lon) async {
+    try {
+      print('🏪 Chargement des magasins pour: lat=$lat, lon=$lon');
+      final data = await _apiService.getIkeaStores(
+        lat: lat,
+        lng: lon,
+      );
+
+      List<dynamic> storesData = [];
+      if (data['stores'] != null && data['stores'] is List) {
+        storesData = data['stores'] as List;
+      }
+
+      // Convertir et calculer la distance depuis la position recherchée
+      final LatLng anchor = LatLng(lat, lon);
+      _ikeaStores = storesData.map((store) {
+        final sLat = (store['lat'] as num?)?.toDouble() ?? 0.0;
+        final sLng = (store['lng'] as num?)?.toDouble() ?? 0.0;
+        final name = store['name'] ?? store['sMagasinName'] ?? 'Magasin IKEA';
+
+        final distance = _calculateDistance(
+          anchor.latitude,
+          anchor.longitude,
+          sLat,
+          sLng,
+        );
+
+        return {
+          'id': store['id'] ?? store['iMagasin'],
+          'name': name,
+          'address': store['address'] ?? store['sFullAddress'] ?? 'Adresse non disponible',
+          'lat': sLat,
+          'lng': sLng,
+          'country': store['country'] ?? store['sPays'] ?? '',
+          'flag': store['flag'] ?? '/img/flags/FR.PNG',
+          'url': store['url'] ?? store['sUrl'] ?? '',
+          'phone': store['phone'] ?? '',
+          'hours': store['hours'] ?? '10h00 - 21h00',
+          'type': store['type'] ?? 'SHOP',
+          'distance': distance,
+          'travelTime': (distance * 1.5).round(),
+        };
+      }).toList();
+
+      _sortedStores = List.from(_ikeaStores);
+      _sortedStores.sort((a, b) {
+        final distanceA = (a['distance'] as num?)?.toDouble() ?? 0.0;
+        final distanceB = (b['distance'] as num?)?.toDouble() ?? 0.0;
+        return distanceA.compareTo(distanceB);
+      });
+
+      setState(() {});
+      print('✅ ${_ikeaStores.length} magasins chargés pour la recherche');
+    } catch (e) {
+      print('❌ Erreur _loadStoresForLocation: $e');
+    }
+  }
+
   /// Données factices en fallback (si API échoue)
   List<Map<String, dynamic>> _getFallbackStores() {
     if (_userLocation == null) return [];
@@ -428,147 +485,22 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                     ),
                     child: Row(
                       children: [
-                        // Champ de recherche géographique avec suggestions
+                        // Champ de recherche géographique avec suggestions (utilise LocationSearchWidget)
                         Expanded(
-                          child: Stack(
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.grey[300]!),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _locationSearchController,
-                                        decoration: InputDecoration(
-                                          hintText: 'Rechercher une ville, adresse...',
-                                          hintStyle: TextStyle(color: Colors.grey[400]),
-                                          border: InputBorder.none,
-                                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                        ),
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _locationSearchQuery = value;
-                                          });
-                                          _searchLocations(value);
-                                        },
-                                      ),
-                                    ),
-                                    // Icône X dans le champ de recherche
-                                    if (_locationSearchQuery.isNotEmpty)
-                                      IconButton(
-                                        icon: Icon(Icons.close, size: 18, color: Colors.black),
-                                        onPressed: _clearLocationSearch,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              // Suggestions de lieux (style SNAL)
-                              if (_showLocationSuggestions && _locationSuggestions.isNotEmpty)
-                                Positioned(
-                                  top: 50,
-                                  left: 0,
-                                  right: 0,
-                                  child: Material(
-                                    elevation: 8,
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Color(0xFFE5E7EB)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.15),
-                                          blurRadius: 25,
-                                          offset: Offset(0, 10),
-                                        ),
-                                      ],
-                                    ),
-                                    constraints: BoxConstraints(maxHeight: 300),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: ListView.separated(
-                                        shrinkWrap: true,
-                                        padding: EdgeInsets.zero,
-                                        itemCount: _locationSuggestions.length,
-                                        separatorBuilder: (context, index) => Divider(
-                                          height: 1,
-                                          thickness: 1,
-                                          color: Color(0xFFF3F4F6),
-                                        ),
-                                        itemBuilder: (context, index) {
-                                          final suggestion = _locationSuggestions[index];
-                                          final isLast = index == _locationSuggestions.length - 1;
-                                          
-                                          return InkWell(
-                                            onTap: () => _selectLocationSuggestion(suggestion),
-                                            hoverColor: Color(0xFFF8F9FA),
-                                            child: Container(
-                                              padding: EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                border: isLast ? null : Border(
-                                                  bottom: BorderSide(
-                                                    color: Color(0xFFF3F4F6),
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  // Icône de localisation (style SNAL)
-                                                  Container(
-                                                    margin: EdgeInsets.only(right: 12, top: 2),
-                                                    child: Icon(
-                                                      Icons.location_on,
-                                                      color: Color(0xFF3B82F6),
-                                                      size: 16,
-                                                    ),
-                                                  ),
-                                                  // Détails de la suggestion
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        // Nom du lieu
-                                                        Text(
-                                                          suggestion['display_name'] ?? '',
-                                                          style: TextStyle(
-                                                            fontSize: 14,
-                                                            fontWeight: FontWeight.w500,
-                                                            color: Color(0xFF1F2937),
-                                                            height: 1.3,
-                                                          ),
-                                                          maxLines: 2,
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
-                                                        SizedBox(height: 4),
-                                                        // Type de lieu (capitalize comme SNAL)
-                                                        Text(
-                                                          _capitalizeType(suggestion['type'] ?? ''),
-                                                          style: TextStyle(
-                                                            fontSize: 12,
-                                                            color: Color(0xFF6B7280),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  ),
-                                ),
-                            ],
+                          child: LocationSearchWidget(
+                            placeholder: 'Rechercher une ville, adresse ou code postal...',
+                            debounceDelay: 300,
+                            minSearchLength: 3,
+                            resultLimit: 5,
+                            onLocationSelected: (location) {
+                              _selectLocationSuggestion(location);
+                            },
+                            onSearchError: (query, error) {
+                              print('❌ Erreur de recherche: $error');
+                            },
+                            onSearchSuccess: (query, results) {
+                              print('✅ Recherche réussie: ${results.length} résultats');
+                            },
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -2059,96 +1991,17 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
     }
   }
 
-  /// Rechercher des lieux géographiques avec l'API Nominatim Flutter
-  Future<void> _searchLocations(String query) async {
-    if (query.trim().length < 3) {
-      setState(() {
-        _locationSuggestions = [];
-        _showLocationSuggestions = false;
-      });
-      return;
-    }
-
-    try {
-      print('🔍 Recherche de lieu: $query');
-      final encodedQuery = Uri.encodeComponent(query);
-      
-      // Appeler directement l'API Nominatim d'OpenStreetMap
-      final url = 'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=5&addressdetails=1';
-      
-      final uri = Uri.parse(url);
-      final httpResponse = await http.get(
-        uri,
-        headers: {
-          'User-Agent': 'JIRIG-Flutter-App/1.0', // Nominatim requiert un User-Agent
-        },
-      );
-      
-      print('📡 Status code: ${httpResponse.statusCode}');
-      
-      if (httpResponse.statusCode == 200) {
-        final List<dynamic> data = json.decode(httpResponse.body);
-        print('📊 Données reçues: ${data.length} résultats');
-        
-        setState(() {
-          _locationSuggestions = data.map((item) {
-            return {
-              'display_name': item['display_name'] ?? '',
-              'lat': double.tryParse(item['lat']?.toString() ?? '0') ?? 0.0,
-              'lon': double.tryParse(item['lon']?.toString() ?? '0') ?? 0.0,
-              'type': item['type'] ?? '',
-              'address': item['address'] ?? {},
-            };
-          }).toList();
-          _showLocationSuggestions = _locationSuggestions.isNotEmpty;
-          print('🎯 setState appelé - _showLocationSuggestions: $_showLocationSuggestions');
-          print('🎯 setState appelé - _locationSuggestions.length: ${_locationSuggestions.length}');
-        });
-        print('✅ ${_locationSuggestions.length} suggestions trouvées');
-        print('✅ _showLocationSuggestions: $_showLocationSuggestions');
-      } else {
-        print('❌ Erreur HTTP: ${httpResponse.statusCode}');
-        print('📄 Body: ${httpResponse.body}');
-      }
-    } catch (e) {
-      print('❌ Erreur lors de la recherche de lieu: $e');
-      setState(() {
-        _locationSuggestions = [];
-        _showLocationSuggestions = false;
-      });
-    }
-  }
-
-  /// Sélectionner une suggestion de lieu
+  /// Sélectionner une suggestion de lieu (appelé par LocationSearchWidget)
   void _selectLocationSuggestion(Map<String, dynamic> suggestion) {
     final lat = suggestion['lat'] as double;
     final lon = suggestion['lon'] as double;
     
-    setState(() {
-      _locationSearchQuery = suggestion['display_name'] ?? '';
-      _showLocationSuggestions = false;
-      _locationSuggestions = [];
-    });
-    
     // Centrer la carte sur le lieu sélectionné
     _mapController.move(LatLng(lat, lon), 13.0);
     print('📍 Carte centrée sur: ${suggestion['display_name']}');
-  }
 
-  /// Effacer la recherche de localisation
-  void _clearLocationSearch() {
-    _locationSearchController.clear();
-    setState(() {
-      _locationSearchQuery = '';
-      _locationSuggestions = [];
-      _showLocationSuggestions = false;
-    });
-  }
-
-  /// Capitaliser le type de lieu (comme SNAL)
-  String _capitalizeType(String type) {
-    if (type.isEmpty) return '';
-    return type[0].toUpperCase() + type.substring(1).toLowerCase();
+    // Charger les magasins autour de ce lieu
+    _loadStoresForLocation(lat, lon);
   }
 
   /// Changer le style de carte
