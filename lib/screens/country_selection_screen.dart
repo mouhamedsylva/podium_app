@@ -259,6 +259,53 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
   }
 
   void _showTermsDialog({required TranslationService translationService}) {
+    // Chercher le contenu des conditions d'utilisation dans les traductions
+    // Essayer différentes clés possibles basées sur SNAL-Project
+    String termsContent = '';
+    
+    // Essayer les clés possibles pour le contenu complet des conditions
+    final possibleKeys = [
+      'ONBOARDING_Msg10', // Possible clé pour le contenu complet
+      'TERMS_OF_USE_CONTENT',
+      'TERMS_CONTENT',
+      'CONDITIONS_D_UTILISATION_CONTENT',
+      'ONBOARDING_TERMS_CONTENT',
+      'PROJET_TERMS_CONTENT',
+    ];
+    
+    for (final key in possibleKeys) {
+      final content = translationService.translate(key);
+      if (content != key) {
+        // Si la traduction existe (ne retourne pas la clé elle-même)
+        termsContent = content;
+        break;
+      }
+    }
+    
+    // Si aucune clé n'est trouvée, utiliser le fallback
+    if (termsContent.isEmpty) {
+      termsContent = 'En utilisant Jirig, vous acceptez nos conditions d\'utilisation...\n\n'
+          'Pour plus d\'informations, consultez notre politique.';
+    }
+    
+    // Titre traduit - utiliser ONBOARDING_Msg06 qui correspond à "Voir les conditions" dans SNAL
+    String termsTitle = translationService.translate('ONBOARDING_Msg06');
+    if (termsTitle == 'ONBOARDING_Msg06') {
+      termsTitle = translationService.translate('SELECT_COUNTRY_VIEW_TERMS');
+      if (termsTitle == 'SELECT_COUNTRY_VIEW_TERMS') {
+        termsTitle = 'Conditions d\'utilisation'; // Fallback
+      }
+    }
+    
+    // Bouton fermer traduit - utiliser ONBOARDING_Msg07 qui correspond au bouton de fermeture dans SNAL
+    String closeButton = translationService.translate('ONBOARDING_Msg07');
+    if (closeButton == 'ONBOARDING_Msg07') {
+      closeButton = translationService.translate('CLOSE');
+      if (closeButton == 'CLOSE') {
+        closeButton = 'Fermer'; // Fallback
+      }
+    }
+    
     showModal(
       context: context,
       configuration: const FadeScaleTransitionConfiguration(
@@ -269,18 +316,17 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text(
-          'Voir les conditions',
-          style: TextStyle(
+        title: Text(
+          termsTitle,
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Text(
-            'En utilisant Jirig, vous acceptez nos conditions d\'utilisation...\n\n'
-            'Pour plus d\'informations, consultez notre politique.',
-            style: TextStyle(
+            termsContent,
+            style: const TextStyle(
               height: 1.5,
               fontSize: 14,
             ),
@@ -297,9 +343,9 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            child: const Text(
-              'Fermer',
-              style: TextStyle(
+            child: Text(
+              closeButton,
+              style: const TextStyle(
                 fontWeight: FontWeight.w600,
               ),
             ),

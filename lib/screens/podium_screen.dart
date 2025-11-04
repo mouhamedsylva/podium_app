@@ -2026,6 +2026,18 @@ class _PodiumScreenState extends State<PodiumScreen>
 
       print('📥 Résultat complet de addToWishlist: $result');
       
+      // 🔍 Vérifier si l'API retourne Ui_Result == 'GIVE_EMAIL' (connexion requise après 5 articles)
+      if (result != null && result['Ui_Result'] == 'GIVE_EMAIL') {
+        print('🔒 ERREUR: Ui_Result == GIVE_EMAIL - Connexion requise après 5 articles !');
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Vous avez atteint la limite de 5 articles. Veuillez vous connecter pour ajouter plus d\'articles à votre panier.';
+          });
+        }
+        return;
+      }
+      
       if (result != null && result['success'] == true) {
         // ⚠️ Vérifier s'il y a une erreur SQL même si success=true (comme dans vos logs)
         if (result['data'] != null && result['data'] is List && result['data'].isNotEmpty) {
@@ -2039,6 +2051,26 @@ class _PodiumScreenState extends State<PodiumScreen>
             // Vérifier si c'est une erreur
             if (jsonStr != null && jsonStr.toString().contains('sError')) {
               print('❌ ERREUR SQL détectée même avec success=true !');
+              
+              // 🔍 Vérifier si l'erreur demande la connexion (après 5 articles)
+              final jsonStrLower = jsonStr.toString().toLowerCase();
+              if (jsonStrLower.contains('connect') || 
+                  jsonStrLower.contains('connexion') || 
+                  jsonStrLower.contains('login') ||
+                  jsonStrLower.contains('email') ||
+                  jsonStrLower.contains('give_email') ||
+                  jsonStrLower.contains('limite') ||
+                  jsonStrLower.contains('limit')) {
+                print('🔒 ERREUR: Connexion requise après 5 articles !');
+                if (mounted) {
+                  setState(() {
+                    _isLoading = false;
+                    _errorMessage = 'Vous avez atteint la limite de 5 articles. Veuillez vous connecter pour ajouter plus d\'articles à votre panier.';
+                  });
+                }
+                return;
+              }
+              
               _showSnackBar('Erreur SQL lors de l\'ajout au panier');
               return;
             }
@@ -2081,7 +2113,21 @@ class _PodiumScreenState extends State<PodiumScreen>
         }
       } else if (result != null && result['error'] != null) {
         print('❌ Erreur addToWishlist: ${result['error']}');
-        _showSnackBar('Erreur: ${result['error']}');
+        
+        // 🔍 Vérifier si l'erreur demande la connexion
+        final errorStr = result['error'].toString().toLowerCase();
+        if (errorStr.contains('connect') || 
+            errorStr.contains('connexion') || 
+            errorStr.contains('login') ||
+            errorStr.contains('email') ||
+            errorStr.contains('give_email') ||
+            errorStr.contains('limite') ||
+            errorStr.contains('limit')) {
+          print('🔒 ERREUR: Connexion requise après 5 articles !');
+          _showSnackBar('Veuillez vous connecter pour ajouter plus de 5 articles au panier');
+        } else {
+          _showSnackBar('Erreur: ${result['error']}');
+        }
       } else {
         print('❌ Réponse invalide de addToWishlist: $result');
         _showSnackBar('Erreur lors de l\'ajout au panier');
@@ -2179,6 +2225,18 @@ class _PodiumScreenState extends State<PodiumScreen>
 
       print('📥 Résultat complet de addToWishlist: $result');
       
+      // 🔍 Vérifier si l'API retourne Ui_Result == 'GIVE_EMAIL' (connexion requise après 5 articles)
+      if (result != null && result['Ui_Result'] == 'GIVE_EMAIL') {
+        print('🔒 ERREUR: Ui_Result == GIVE_EMAIL - Connexion requise après 5 articles !');
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'Vous avez atteint la limite de 5 articles. Veuillez vous connecter pour ajouter plus d\'articles à votre panier.';
+          });
+        }
+        return;
+      }
+      
       if (result != null && result['success'] == true) {
         // ⚠️ Vérifier s'il y a une erreur SQL même si success=true (comme dans vos logs)
         if (result['data'] != null && result['data'] is List && result['data'].isNotEmpty) {
@@ -2192,6 +2250,26 @@ class _PodiumScreenState extends State<PodiumScreen>
             // Vérifier si c'est une erreur
             if (jsonStr != null && jsonStr.toString().contains('sError')) {
               print('❌ ERREUR SQL détectée même avec success=true !');
+              
+              // 🔍 Vérifier si l'erreur demande la connexion (après 5 articles)
+              final jsonStrLower = jsonStr.toString().toLowerCase();
+              if (jsonStrLower.contains('connect') || 
+                  jsonStrLower.contains('connexion') || 
+                  jsonStrLower.contains('login') ||
+                  jsonStrLower.contains('email') ||
+                  jsonStrLower.contains('give_email') ||
+                  jsonStrLower.contains('limite') ||
+                  jsonStrLower.contains('limit')) {
+                print('🔒 ERREUR: Connexion requise après 5 articles !');
+                if (mounted) {
+                  setState(() {
+                    _isLoading = false;
+                    _errorMessage = 'Vous avez atteint la limite de 5 articles. Veuillez vous connecter pour ajouter plus d\'articles à votre panier.';
+                  });
+                }
+                return;
+              }
+              
               _showSnackBar('Erreur SQL lors de l\'ajout à la wishlist');
               return;
             }
@@ -2234,7 +2312,21 @@ class _PodiumScreenState extends State<PodiumScreen>
         }
       } else if (result != null && result['error'] != null) {
         print('❌ Erreur addToWishlist: ${result['error']}');
-        _showSnackBar('Erreur: ${result['error']}');
+        
+        // 🔍 Vérifier si l'erreur demande la connexion
+        final errorStr = result['error'].toString().toLowerCase();
+        if (errorStr.contains('connect') || 
+            errorStr.contains('connexion') || 
+            errorStr.contains('login') ||
+            errorStr.contains('email') ||
+            errorStr.contains('give_email') ||
+            errorStr.contains('limite') ||
+            errorStr.contains('limit')) {
+          print('🔒 ERREUR: Connexion requise après 5 articles !');
+          _showSnackBar('Veuillez vous connecter pour ajouter plus de 5 articles au panier');
+        } else {
+          _showSnackBar('Erreur: ${result['error']}');
+        }
       } else {
         print('❌ Réponse invalide de addToWishlist: $result');
         _showSnackBar('Erreur lors de l\'ajout à la wishlist');
