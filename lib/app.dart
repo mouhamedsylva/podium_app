@@ -159,12 +159,16 @@ class _JirigAppState extends State<JirigApp> {
           GoRoute(
             path: '/login',
             pageBuilder: (context, state) {
-              // Récupérer le callBackUrl depuis les query parameters
+              // Récupérer le callBackUrl et fromAuthError depuis les query parameters
               final callBackUrl = state.uri.queryParameters['callBackUrl'];
+              final fromAuthError = state.uri.queryParameters['fromAuthError'] == 'true';
               return _buildPageWithTransition(
                 context,
                 state,
-                LoginScreen(callBackUrl: callBackUrl),
+                LoginScreen(
+                  callBackUrl: callBackUrl,
+                  fromAuthError: fromAuthError,
+                ),
               );
             },
           ),

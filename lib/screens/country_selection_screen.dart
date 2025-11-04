@@ -7,6 +7,7 @@ import '../services/country_service.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../config/api_config.dart';
+import '../widgets/terms_of_use_modal.dart';
 
 /// Écran de sélection de pays - Design exact de l'image de référence
 class CountrySelectionScreen extends StatefulWidget {
@@ -259,102 +260,127 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
   }
 
   void _showTermsDialog({required TranslationService translationService}) {
-    // Chercher le contenu des conditions d'utilisation dans les traductions
-    // Essayer différentes clés possibles basées sur SNAL-Project
-    String termsContent = '';
+    TermsOfUseModal.show(context, translationService: translationService);
+  }
+
+
+  /// Construit le contenu formaté des conditions d'utilisation (ancienne méthode - conservée pour référence)
+  Widget _buildFormattedTermsContent(String content) {
+    // Diviser le contenu en paragraphes
+    final paragraphs = content.split('\n\n').where((p) => p.trim().isNotEmpty).toList();
     
-    // Essayer les clés possibles pour le contenu complet des conditions
-    final possibleKeys = [
-      'ONBOARDING_Msg10', // Possible clé pour le contenu complet
-      'TERMS_OF_USE_CONTENT',
-      'TERMS_CONTENT',
-      'CONDITIONS_D_UTILISATION_CONTENT',
-      'ONBOARDING_TERMS_CONTENT',
-      'PROJET_TERMS_CONTENT',
+    // Mots-clés pour identifier les grands titres (sections principales)
+    final mainTitleKeywords = [
+      'CONDITIONS GÉNÉRALES',
+      'DÉFINITIONS',
+      'SERVICES',
+      'CRÉATION',
+      'OBLIGATIONS',
+      'PROPRIÉTÉ',
+      'RESPONSABILITÉ',
+      'RÉCLAMATIONS',
+      'DONNÉES',
+      'ABONNEMENT',
+      'ACCEPTATION',
+      'PRIX',
+      'DURÉE',
     ];
     
-    for (final key in possibleKeys) {
-      final content = translationService.translate(key);
-      if (content != key) {
-        // Si la traduction existe (ne retourne pas la clé elle-même)
-        termsContent = content;
-        break;
-      }
-    }
-    
-    // Si aucune clé n'est trouvée, utiliser le fallback
-    if (termsContent.isEmpty) {
-      termsContent = 'En utilisant Jirig, vous acceptez nos conditions d\'utilisation...\n\n'
-          'Pour plus d\'informations, consultez notre politique.';
-    }
-    
-    // Titre traduit - utiliser ONBOARDING_Msg06 qui correspond à "Voir les conditions" dans SNAL
-    String termsTitle = translationService.translate('ONBOARDING_Msg06');
-    if (termsTitle == 'ONBOARDING_Msg06') {
-      termsTitle = translationService.translate('SELECT_COUNTRY_VIEW_TERMS');
-      if (termsTitle == 'SELECT_COUNTRY_VIEW_TERMS') {
-        termsTitle = 'Conditions d\'utilisation'; // Fallback
-      }
-    }
-    
-    // Bouton fermer traduit - utiliser ONBOARDING_Msg07 qui correspond au bouton de fermeture dans SNAL
-    String closeButton = translationService.translate('ONBOARDING_Msg07');
-    if (closeButton == 'ONBOARDING_Msg07') {
-      closeButton = translationService.translate('CLOSE');
-      if (closeButton == 'CLOSE') {
-        closeButton = 'Fermer'; // Fallback
-      }
-    }
-    
-    showModal(
-      context: context,
-      configuration: const FadeScaleTransitionConfiguration(
-        transitionDuration: Duration(milliseconds: 300),
-        reverseTransitionDuration: Duration(milliseconds: 250),
-      ),
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Text(
-          termsTitle,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            termsContent,
-            style: const TextStyle(
-              height: 1.5,
-              fontSize: 14,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              backgroundColor: const Color(0xFF2196F3),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: paragraphs.map((paragraph) {
+        final trimmed = paragraph.trim();
+        
+        // Détecter les grands titres (sections principales)
+        final isMainTitle = (trimmed.toUpperCase() == trimmed && trimmed.length < 100 && 
+            trimmed.length > 10 && !trimmed.contains(',')) ||
+            mainTitleKeywords.any((keyword) => trimmed.toUpperCase().contains(keyword)) ||
+            RegExp(r'^[A-Z][A-Z\sÉÈÀ]{10,}$').hasMatch(trimmed);
+        
+        // Détecter les titres de niveau 2 (h2 dans HTML ou texte court en majuscules)
+        final isTitle = trimmed.toUpperCase() == trimmed && trimmed.length < 100 && 
+            trimmed.length > 5 && !isMainTitle;
+        
+        // Détecter les sous-titres (commençant par un numéro ou "Article")
+        final isSubtitle = RegExp(r'^(\d+\.|Article|Chapitre|Section|h3)').hasMatch(trimmed) ||
+            trimmed.startsWith('•') ||
+            trimmed.startsWith('-');
+        
+        if (isMainTitle) {
+          // Grand titre (H1) - 16px, normal, noir, espacement généreux
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 40),
+              Text(
+                trimmed,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.normal,
+                  color: Color(0xFF1A1A1A),
+                  height: 1.4,
+                  letterSpacing: 0.1,
+                ),
               ),
-            ),
+              const SizedBox(height: 20),
+            ],
+          );
+        } else if (isTitle) {
+          // Titre de niveau 2 (H2) - 15px, normal, noir
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 32),
+              Text(
+                trimmed,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.normal,
+                  color: Color(0xFF1A1A1A),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          );
+        } else if (isSubtitle) {
+          // Sous-titre (H3) - 14px, normal, noir
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              Text(
+                trimmed,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.black87,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          );
+        } else {
+          // Paragraphe normal (Body) - 13px, normal, noir, espacement confortable
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              closeButton,
+              trimmed,
               style: const TextStyle(
-                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                fontWeight: FontWeight.normal,
+                color: Color(0xFF2D2D2D),
+                height: 1.7,
+                letterSpacing: 0.05,
               ),
             ),
-          ),
-        ],
-        actionsPadding: const EdgeInsets.all(16),
-      ),
+          );
+        }
+      }).toList(),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

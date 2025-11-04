@@ -5,6 +5,9 @@ import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
 import '../services/auth_notifier.dart';
+import '../services/translation_service.dart';
+import '../widgets/terms_of_use_modal.dart';
+import '../widgets/privacy_policy_modal.dart';
 // OAuthHandler supprimé - utilisation directe des URLs SNAL
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
@@ -16,8 +19,9 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? callBackUrl;
+  final bool? fromAuthError; // Paramètre pour indiquer qu'on vient d'une erreur d'authentification
 
-  const LoginScreen({Key? key, this.callBackUrl}) : super(key: key);
+  const LoginScreen({Key? key, this.callBackUrl, this.fromAuthError}) : super(key: key);
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -35,7 +39,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   String _emailValidationMessage = '';
   bool _showEmailError = false;
   final FocusNode _emailFocusNode = FocusNode();
-  
   // ✨ ANIMATIONS - Style "Elegant Entry" (6ème style de l'app)
   late AnimationController _logoController;
   late AnimationController _formController;
@@ -1348,16 +1351,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                     spacing: 4,
                                     runSpacing: 4,
                                     children: [
-                                      GestureDetector(
-                                                onTap: () {},
-                                        child: Text(
-                                          'Conditions d\'utilisation',
-                                          style: TextStyle(
-                                            fontSize: isMobile ? 10 : 12,
-                                            color: Color(0xFF0051BA),
-                                            decoration: TextDecoration.underline,
-                                          ),
-                                        ),
+                                      Consumer<TranslationService>(
+                                        builder: (context, translationService, child) {
+                                          return GestureDetector(
+                                            onTap: () {
+                                              TermsOfUseModal.show(context, translationService: translationService);
+                                            },
+                                            child: Text(
+                                              'Conditions d\'utilisation',
+                                              style: TextStyle(
+                                                fontSize: isMobile ? 10 : 12,
+                                                color: Color(0xFF0051BA),
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
                                       Text(
                                         'et notre',
@@ -1366,16 +1375,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           color: Colors.grey[600],
                                         ),
                                       ),
-                                      GestureDetector(
-                                                onTap: () {},
-                                        child: Text(
-                                          'Politique de confidentialité',
-                                          style: TextStyle(
-                                            fontSize: isMobile ? 10 : 12,
-                                            color: Color(0xFF0051BA),
-                                            decoration: TextDecoration.underline,
-                                          ),
-                                        ),
+                                      Consumer<TranslationService>(
+                                        builder: (context, translationService, child) {
+                                          return GestureDetector(
+                                            onTap: () {
+                                              PrivacyPolicyModal.show(context, translationService: translationService);
+                                            },
+                                            child: Text(
+                                              'Politique de confidentialité',
+                                              style: TextStyle(
+                                                fontSize: isMobile ? 10 : 12,
+                                                color: Color(0xFF0051BA),
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),
@@ -1400,16 +1415,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           spacing: 4,
                                           runSpacing: 4,
                                           children: [
-                                            GestureDetector(
-                                              onTap: () {},
-                                              child: Text(
-                                                'Conditions d\'utilisation',
-                                                style: TextStyle(
-                                                  fontSize: isMobile ? 10 : 12,
-                                                  color: Color(0xFF0051BA),
-                                                  decoration: TextDecoration.underline,
-                                                ),
-                                              ),
+                                            Consumer<TranslationService>(
+                                              builder: (context, translationService, child) {
+                                                return GestureDetector(
+                                                  onTap: () {
+                                                    TermsOfUseModal.show(context, translationService: translationService);
+                                                  },
+                                                  child: Text(
+                                                    'Conditions d\'utilisation',
+                                                    style: TextStyle(
+                                                      fontSize: isMobile ? 10 : 12,
+                                                      color: Color(0xFF0051BA),
+                                                      decoration: TextDecoration.underline,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                             ),
                                             Text(
                                               'et notre',
@@ -1418,17 +1439,23 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                                 color: Colors.grey[600],
                                               ),
                                             ),
-                                            GestureDetector(
-                                              onTap: () {},
-                                              child: Text(
-                                                'Politique de confidentialité',
-                                                style: TextStyle(
-                                                  fontSize: isMobile ? 10 : 12,
-                                                  color: Color(0xFF0051BA),
-                                                  decoration: TextDecoration.underline,
-                                                ),
-                              ),
-                            ),
+                                            Consumer<TranslationService>(
+                                              builder: (context, translationService, child) {
+                                                return GestureDetector(
+                                                  onTap: () {
+                                                    PrivacyPolicyModal.show(context, translationService: translationService);
+                                                  },
+                                                  child: Text(
+                                                    'Politique de confidentialité',
+                                                    style: TextStyle(
+                                                      fontSize: isMobile ? 10 : 12,
+                                                      color: Color(0xFF0051BA),
+                                                      decoration: TextDecoration.underline,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
                           ],
                         ),
                                       ],
@@ -1441,8 +1468,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                       ),
                     ),
                   ),
-                    ],
-                  );
+                  ],
+                );
                 },
               ),
             ),
@@ -1616,4 +1643,5 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       },
     );
   }
+  
 }

@@ -13,6 +13,7 @@ import '../widgets/custom_app_bar.dart';
 import '../widgets/search_modal.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'dart:math' as math;
+import 'dart:async';
 
 class PodiumScreen extends StatefulWidget {
   final String productCode;
@@ -37,6 +38,9 @@ class _PodiumScreenState extends State<PodiumScreen>
   int _currentImageIndex = 0;
   String? _userCountryCode; // Code du pays de l'utilisateur
   bool _hasInitiallyLoaded = false; // Suivre si les données ont été chargées initialement
+  bool _isAuthError = false; // Indique si c'est une erreur d'authentification
+  int _countdownSeconds = 3; // Compteur pour la redirection
+  Timer? _countdownTimer; // Timer pour le compteur
   
   // Controllers d'animation (style "Explosion & Reveal" - différent des autres pages)
   late AnimationController _productController;
@@ -161,10 +165,47 @@ class _PodiumScreenState extends State<PodiumScreen>
       _productController.dispose();
       _podiumController.dispose();
       _otherCountriesController.dispose();
+      _countdownTimer?.cancel();
     } catch (e) {
       print('⚠️ Erreur dispose controllers podium: $e');
     }
     super.dispose();
+  }
+  
+  /// Démarre le compteur de 3 secondes avant la redirection vers le login
+  void _startCountdown() {
+    // Annuler le timer précédent s'il existe
+    _countdownTimer?.cancel();
+    
+    // Réinitialiser le compteur
+    _countdownSeconds = 3;
+    
+    // Créer un nouveau timer qui se déclenche toutes les secondes
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      setState(() {
+        _countdownSeconds--;
+      });
+      
+      // Quand le compteur arrive à 0, rediriger vers le login
+      if (_countdownSeconds <= 0) {
+        timer.cancel();
+        _redirectToLogin();
+      }
+    });
+  }
+  
+  /// Redirige vers la page de login
+  void _redirectToLogin() {
+    if (!mounted) return;
+    
+    // Sauvegarder l'URL actuelle pour y revenir après la connexion
+    final currentPath = ModalRoute.of(context)?.settings.name ?? '/podium/${widget.productCode}';
+    context.go('/login?callBackUrl=$currentPath&fromAuthError=true');
   }
 
 
@@ -245,6 +286,7 @@ class _PodiumScreenState extends State<PodiumScreen>
           if (mounted) {
             setState(() {
               _isLoading = false;
+              _isAuthError = false;
               _errorMessage = 'Erreur API: ${response['message'] ?? 'Erreur inconnue'}';
             });
           }
@@ -253,22 +295,28 @@ class _PodiumScreenState extends State<PodiumScreen>
           if (mounted) {
             setState(() {
               _isLoading = false;
+              _isAuthError = false;
               _errorMessage = 'ARTICLE_NOT_FOUND';
             });
           }
         } else if (response['Ui_Result'] == 'GIVE_EMAIL') {
-          // Afficher le message d'erreur normal pour la recherche par code
+          // Afficher le message d'erreur d'authentification avec compteur
           if (mounted) {
             setState(() {
               _isLoading = false;
+              _isAuthError = true;
               _errorMessage = 'Erreur d\'authentification - Veuillez vous connecter ou vérifier votre profil';
+              _countdownSeconds = 3;
             });
+            // Démarrer le compteur de 3 secondes
+            _startCountdown();
           }
         } else if (response['Ui_Result'] == 'GET_ABONNEMENT') {
           // Afficher le message d'erreur normal pour la recherche par code
           if (mounted) {
             setState(() {
               _isLoading = false;
+              _isAuthError = false;
               _errorMessage = 'GET_ABONNEMENT';
             });
           }
@@ -277,6 +325,7 @@ class _PodiumScreenState extends State<PodiumScreen>
           if (mounted) {
             setState(() {
               _isLoading = false;
+              _isAuthError = false;
               _errorMessage = 'Aucun article trouvé dans la réponse';
             });
           }
@@ -786,12 +835,43 @@ class _PodiumScreenState extends State<PodiumScreen>
               style: TextStyle(fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16)),
               textAlign: TextAlign.center,
             ),
+            // Afficher le compteur si c'est une erreur d'authentification
+            if (_isAuthError) ...[
+              SizedBox(height: isVerySmallMobile ? 16 : (isSmallMobile ? 20 : 24)),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isVerySmallMobile ? 16 : (isSmallMobile ? 20 : 24),
+                  vertical: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12),
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Text(
+                  'Redirection vers la page de connexion dans $_countdownSeconds seconde${_countdownSeconds > 1 ? 's' : ''}...',
+                  style: TextStyle(
+                    fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : 14),
+                    color: Colors.blue[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  _showSearchModal();
+                  if (_isAuthError) {
+                    // Si c'est une erreur d'authentification, rediriger directement vers le login
+                    _countdownTimer?.cancel();
+                    _redirectToLogin();
+                  } else {
+                    // Sinon, afficher le modal de recherche
+                    _showSearchModal();
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0D6EFD),
@@ -801,7 +881,7 @@ class _PodiumScreenState extends State<PodiumScreen>
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: Text(podiumMsg01),
+                child: Text(_isAuthError ? 'Se connecter maintenant' : podiumMsg01),
               ),
             ),
           ],
