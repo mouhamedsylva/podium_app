@@ -896,7 +896,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
               child: GestureDetector(
                 onTap: () => setState(() => _termsAccepted = !_termsAccepted),
                 child: Text(
-                  translationService.translate('SELECT_COUNTRY_ACCEPT_TERMS'),
+                  translationService.translate('SELECT_COUNTRY_ACCEPT_TERMS').replaceAll('\t', ' ').trim(),
                   style: const TextStyle(
                     fontSize: 12,
                     color: Colors.black87,
@@ -1010,7 +1010,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
           ),
           children: [
             TextSpan(
-              text: translationService.translate('SELECT_COUNTRY_FOOTER_TEXT'),
+              text: translationService.translate('SELECT_COUNTRY_FOOTER_TEXT').replaceAll('\t', ' ').trim(),
             ),
             WidgetSpan(
               alignment: PlaceholderAlignment.baseline,

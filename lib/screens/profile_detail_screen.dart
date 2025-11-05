@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../services/local_storage_service.dart';
 import '../services/auth_notifier.dart';
 import '../services/profile_service.dart';
+import '../services/translation_service.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../config/api_config.dart'; // Added import for ApiConfig
@@ -28,36 +29,55 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     super.initState();
     _loadProfileData();
   }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ Recharger les données quand l'écran devient visible (pour voir les mises à jour après sauvegarde)
+    // Utiliser une vérification pour éviter les rechargements inutiles
+    if (!_isLoading) {
+      _loadProfileData();
+    }
+  }
 
   /// Charger les données du profil depuis les cookies
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
     
     try {
-      // Synchroniser ProfileService avec les cookies
-      await _profileService.syncWithCookies();
+      // ✅ CORRECTION: Charger TOUJOURS depuis LocalStorageService en priorité
+      // pour garantir que les données modifiées dans profile_screen sont affichées
+      print('📱 Chargement depuis LocalStorageService (source de vérité)...');
+      final profile = await LocalStorageService.getProfile();
       
-      // Récupérer les données depuis ProfileService
-      _sPaysLangue = _profileService.sPaysLangue ?? '';
-      _sPaysFav = _profileService.sPaysFav ?? '';
-      
-      print('✅ Profil chargé depuis ProfileService:');
-      print('   sPaysLangue: $_sPaysLangue');
-      print('   sPaysFav: $_sPaysFav');
-      
-      // Si les données sont vides, essayer de charger depuis LocalStorageService
-      if (_sPaysLangue.isEmpty || _sPaysFav.isEmpty) {
-        print('⚠️ Données vides dans ProfileService, tentative avec LocalStorageService');
-        final profile = await LocalStorageService.getProfile();
-        if (profile != null) {
-          _sPaysLangue = profile['sPaysLangue'] ?? '';
-          _sPaysFav = profile['sPaysFav'] ?? '';
-          print('   sPaysLangue (LocalStorage): $_sPaysLangue');
-          print('   sPaysFav (LocalStorage): $_sPaysFav');
+      if (profile != null) {
+        _sPaysLangue = profile['sPaysLangue']?.toString() ?? '';
+        _sPaysFav = profile['sPaysFav']?.toString() ?? '';
+        
+        print('✅ Profil chargé depuis LocalStorageService:');
+        print('   sPaysLangue: $_sPaysLangue');
+        print('   sPaysFav: $_sPaysFav');
+        
+        // Si les données sont vides, essayer ProfileService comme fallback
+        if (_sPaysLangue.isEmpty || _sPaysFav.isEmpty) {
+          print('⚠️ Données vides dans LocalStorage, tentative avec ProfileService');
+          await _profileService.syncWithCookies();
+          _sPaysLangue = _profileService.sPaysLangue ?? _sPaysLangue;
+          _sPaysFav = _profileService.sPaysFav ?? _sPaysFav;
+          print('   sPaysLangue (ProfileService): $_sPaysLangue');
+          print('   sPaysFav (ProfileService): $_sPaysFav');
         }
+      } else {
+        // Fallback vers ProfileService si LocalStorageService ne retourne rien
+        print('⚠️ LocalStorageService vide, tentative avec ProfileService');
+        await _profileService.syncWithCookies();
+        _sPaysLangue = _profileService.sPaysLangue ?? '';
+        _sPaysFav = _profileService.sPaysFav ?? '';
+        print('   sPaysLangue (ProfileService): $_sPaysLangue');
+        print('   sPaysFav (ProfileService): $_sPaysFav');
       }
     } catch (e) {
-      print('❌ Erreur chargement profil depuis cookies: $e');
+      print('❌ Erreur chargement profil: $e');
       _sPaysLangue = '';
       _sPaysFav = '';
     } finally {
@@ -150,13 +170,17 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                             context.go('/profile');
                           },
                           icon: Icon(Icons.edit, color: Colors.white),
-                          label: Text(
-                            'Modifier mon profil',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isMobile ? 16 : 18,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          label: Consumer<TranslationService>(
+                            builder: (context, translationService, child) {
+                              return Text(
+                                translationService.translate('PROFILE_EDIT_BUTTON'),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isMobile ? 16 : 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              );
+                            },
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Color(0xFF0051BA),
@@ -206,7 +230,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     print('   countryCode: $countryCode');
     print('   countryName: $countryName');
 
-    return Card(
+    return Consumer<TranslationService>(
+      builder: (context, translationService, child) {
+        return Card(
       elevation: 0,
       color: Colors.white,
       shape: RoundedRectangleBorder(
@@ -219,7 +245,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Pays principal',
+              translationService.translate('PROFILE_MAIN_COUNTRY'),
               style: TextStyle(
                 fontSize: isMobile ? 20 : 24,
                 fontWeight: FontWeight.bold,
@@ -275,7 +301,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   border: Border.all(color: Colors.grey[300]!),
                 ),
                 child: Text(
-                  'Non sélectionné',
+                  translationService.translate('PROFILE_NOT_SELECTED'),
                   style: TextStyle(
                     fontSize: isMobile ? 16 : 18,
                     color: Colors.grey[600],
@@ -286,6 +312,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           ],
         ),
       ),
+        );
+      },
     );
   }
 
@@ -305,7 +333,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     print('   favoriteCountries: $favoriteCountries');
     print('   cleanFavoriteCountries (sans AT/CH): $cleanFavoriteCountries');
 
-    return Card(
+    return Consumer<TranslationService>(
+      builder: (context, translationService, child) {
+        return Card(
       elevation: 0,
       color: Colors.white,
       shape: RoundedRectangleBorder(
@@ -318,7 +348,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Pays favoris',
+              translationService.translate('PROFILE_FAVORITE_COUNTRIES'),
               style: TextStyle(
                 fontSize: isMobile ? 20 : 24,
                 fontWeight: FontWeight.bold,
@@ -336,7 +366,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   border: Border.all(color: Colors.grey[300]!),
                 ),
                 child: Text(
-                  'Aucun pays favori sélectionné',
+                  translationService.translate('PROFILE_NO_FAVORITE_COUNTRIES'),
                   style: TextStyle(
                     fontSize: isMobile ? 16 : 18,
                     color: Colors.grey[600],
@@ -408,6 +438,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           ],
         ),
       ),
+        );
+      },
     );
   }
 }

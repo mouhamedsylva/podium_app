@@ -89,7 +89,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - état initial
       'PRODUCTSEARCH_ENTER_CODE': 'Saisissez un code article pour commencer la recherche',
       // Product search - champ de saisie
-      'PRODUCTSEARCH_HINT_CODE': 'Code produit (ex: 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'Référence IKEA (ex: 123.456.78)',
+      // Product search - erreurs backend
+      'HTML_SEARCH_BADREFERENCE': 'La référence ne semble pas être correcte.\nUne référence est une suite de 8 chiffres séparée par 2 points (ex. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Meilleur prix',
       'OPTIMAL': 'Optimal',
@@ -117,9 +119,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'Magasins IKEA à proximité',
       'SEARCH_STORE_PLACEHOLDER': 'Rechercher un magasin (nom, pays, ville)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Rechercher une ville, adresse ou code postal...',
+      // Search modal - titre
+      'FRONTPAGE_Msg05': 'Rechercher un article',
+      // Search modal - sélection pays
+      'FRONTPAGE_Msg04': 'Choisissez les pays à comparer:',
+      // Search modal - bouton scanner
+      'FRONTPAGE_Msg08': 'Scanner un produit',
       // Wishlist - panier vide
       'EMPTY_CART_TITLE': 'Panier vide',
       'EMPTY_CART_MESSAGE': 'Aucun Article trouvé dans ce panier',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Modifier mon profil',
+      'PROFILE_MAIN_COUNTRY': 'Pays principal',
+      'PROFILE_NOT_SELECTED': 'Non sélectionné',
+      'PROFILE_FAVORITE_COUNTRIES': 'Pays favoris',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'Aucun pays favori sélectionné',
     },
     'en': {
       // Clés de l'API pour la page de sélection de pays
@@ -162,7 +176,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - initial state
       'PRODUCTSEARCH_ENTER_CODE': 'Enter an article code to start searching',
       // Product search - input field
-      'PRODUCTSEARCH_HINT_CODE': 'Product code (e.g. 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'IKEA Reference (e.g. 123.456.78)',
+      // Product search - backend errors
+      'HTML_SEARCH_BADREFERENCE': 'The reference does not seem to be correct.\nA reference is a sequence of 8 digits separated by 2 dots (e.g. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Best price',
       'OPTIMAL': 'Optimal',
@@ -190,9 +206,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'IKEA Stores nearby',
       'SEARCH_STORE_PLACEHOLDER': 'Search for a store (name, country, city)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Search for a city, address or postal code...',
+      // Search modal - title
+      'FRONTPAGE_Msg05': 'Search for an article',
+      // Search modal - country selection
+      'FRONTPAGE_Msg04': 'Choose countries to compare:',
+      // Search modal - scanner button
+      'FRONTPAGE_Msg08': 'Scan a product',
       // Wishlist - empty cart
       'EMPTY_CART_TITLE': 'Empty cart',
       'EMPTY_CART_MESSAGE': 'No item found in this cart',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Edit my profile',
+      'PROFILE_MAIN_COUNTRY': 'Main country',
+      'PROFILE_NOT_SELECTED': 'Not selected',
+      'PROFILE_FAVORITE_COUNTRIES': 'Favorite countries',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'No favorite countries selected',
     },
     'de': {
       // Clés de l'API pour la page de sélection de pays (basées sur vos données)
@@ -222,7 +250,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - initial state
       'PRODUCTSEARCH_ENTER_CODE': 'Geben Sie einen Artikelcode ein, um die Suche zu starten',
       // Product search - input field
-      'PRODUCTSEARCH_HINT_CODE': 'Produktcode (z. B. 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'IKEA-Referenz (z. B. 123.456.78)',
+      // Product search - backend errors
+      'HTML_SEARCH_BADREFERENCE': 'Die Referenz scheint nicht korrekt zu sein.\nEine Referenz ist eine Folge von 8 Ziffern, getrennt durch 2 Punkte (z.B. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Bester Preis',
       'OPTIMAL': 'Optimal',
@@ -250,9 +280,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'IKEA Geschäfte in der Nähe',
       'SEARCH_STORE_PLACEHOLDER': 'Ein Geschäft suchen (Name, Land, Stadt)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Eine Stadt, Adresse oder Postleitzahl suchen...',
+      // Suchmodal - Titel
+      'FRONTPAGE_Msg05': 'Einen Artikel suchen',
+      // Suchmodal - Länderauswahl
+      'FRONTPAGE_Msg04': 'Länder zum Vergleichen auswählen:',
+      // Suchmodal - Scanner-Button
+      'FRONTPAGE_Msg08': 'Ein Produkt scannen',
       // Wunschliste - leerer Warenkorb
       'EMPTY_CART_TITLE': 'Leerer Warenkorb',
       'EMPTY_CART_MESSAGE': 'Kein Artikel in diesem Warenkorb gefunden',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Mein Profil bearbeiten',
+      'PROFILE_MAIN_COUNTRY': 'Hauptland',
+      'PROFILE_NOT_SELECTED': 'Nicht ausgewählt',
+      'PROFILE_FAVORITE_COUNTRIES': 'Lieblingsländer',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'Keine Lieblingsländer ausgewählt',
     },
     'es': {
       // Clés de l'API pour la page de sélection de pays
@@ -282,7 +324,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - initial state
       'PRODUCTSEARCH_ENTER_CODE': 'Introduce un código de artículo para iniciar la búsqueda',
       // Product search - input field
-      'PRODUCTSEARCH_HINT_CODE': 'Código de producto (ej.: 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'Referencia IKEA (ej.: 123.456.78)',
+      // Product search - backend errors
+      'HTML_SEARCH_BADREFERENCE': 'La referencia no parece ser correcta.\nUna referencia es una secuencia de 8 dígitos separados por 2 puntos (ej. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Mejor precio',
       'OPTIMAL': 'Óptimo',
@@ -310,9 +354,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'Tiendas IKEA cercanas',
       'SEARCH_STORE_PLACEHOLDER': 'Buscar una tienda (nombre, país, ciudad)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Buscar una ciudad, dirección o código postal...',
+      // Modal de búsqueda - título
+      'FRONTPAGE_Msg05': 'Buscar un artículo',
+      // Modal de búsqueda - selección de países
+      'FRONTPAGE_Msg04': 'Elige los países a comparar:',
+      // Modal de búsqueda - botón escáner
+      'FRONTPAGE_Msg08': 'Escanear un producto',
       // Lista de deseos - carrito vacío
       'EMPTY_CART_TITLE': 'Carrito vacío',
       'EMPTY_CART_MESSAGE': 'Ningún artículo encontrado en este carrito',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Editar mi perfil',
+      'PROFILE_MAIN_COUNTRY': 'País principal',
+      'PROFILE_NOT_SELECTED': 'No seleccionado',
+      'PROFILE_FAVORITE_COUNTRIES': 'Países favoritos',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'No se han seleccionado países favoritos',
     },
     'it': {
       // Clés de l'API pour la page de sélection de pays
@@ -342,7 +398,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - initial state
       'PRODUCTSEARCH_ENTER_CODE': 'Inserisci un codice articolo per avviare la ricerca',
       // Product search - input field
-      'PRODUCTSEARCH_HINT_CODE': 'Codice prodotto (es.: 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'Riferimento IKEA (es.: 123.456.78)',
+      // Product search - backend errors
+      'HTML_SEARCH_BADREFERENCE': 'Il riferimento non sembra essere corretto.\nUn riferimento è una sequenza di 8 cifre separate da 2 punti (es. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Miglior prezzo',
       'OPTIMAL': 'Ottimale',
@@ -371,9 +429,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'Negozi IKEA nelle vicinanze',
       'SEARCH_STORE_PLACEHOLDER': 'Cerca un negozio (nome, paese, città)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Cerca una città, indirizzo o codice postale...',
+      // Modale di ricerca - titolo
+      'FRONTPAGE_Msg05': 'Cerca un articolo',
+      // Modale di ricerca - selezione paesi
+      'FRONTPAGE_Msg04': 'Scegli i paesi da confrontare:',
+      // Modale di ricerca - pulsante scanner
+      'FRONTPAGE_Msg08': 'Scansiona un prodotto',
       // Lista desideri - carrello vuoto
       'EMPTY_CART_TITLE': 'Carrello vuoto',
       'EMPTY_CART_MESSAGE': 'Nessun articolo trovato in questo carrello',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Modifica il mio profilo',
+      'PROFILE_MAIN_COUNTRY': 'Paese principale',
+      'PROFILE_NOT_SELECTED': 'Non selezionato',
+      'PROFILE_FAVORITE_COUNTRIES': 'Paesi preferiti',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'Nessun paese preferito selezionato',
     },
     'pt': {
       // Clés de l'API pour la page de sélection de pays
@@ -403,7 +473,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - initial state
       'PRODUCTSEARCH_ENTER_CODE': 'Insira um código de artigo para iniciar a pesquisa',
       // Product search - input field
-      'PRODUCTSEARCH_HINT_CODE': 'Código do produto (ex.: 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'Referência IKEA (ex.: 123.456.78)',
+      // Product search - backend errors
+      'HTML_SEARCH_BADREFERENCE': 'A referência não parece estar correta.\nUma referência é uma sequência de 8 dígitos separados por 2 pontos (ex. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Melhor preço',
       'OPTIMAL': 'Ótimo',
@@ -431,9 +503,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'Lojas IKEA próximas',
       'SEARCH_STORE_PLACEHOLDER': 'Pesquisar uma loja (nome, país, cidade)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Pesquisar uma cidade, endereço ou código postal...',
+      // Modal de pesquisa - título
+      'FRONTPAGE_Msg05': 'Pesquisar um artigo',
+      // Modal de pesquisa - seleção de países
+      'FRONTPAGE_Msg04': 'Escolha os países para comparar:',
+      // Modal de pesquisa - botão scanner
+      'FRONTPAGE_Msg08': 'Escanear um produto',
       // Lista de desejos - carrinho vazio
       'EMPTY_CART_TITLE': 'Carrinho vazio',
       'EMPTY_CART_MESSAGE': 'Nenhum artigo encontrado neste carrinho',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Editar meu perfil',
+      'PROFILE_MAIN_COUNTRY': 'País principal',
+      'PROFILE_NOT_SELECTED': 'Não selecionado',
+      'PROFILE_FAVORITE_COUNTRIES': 'Países favoritos',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'Nenhum país favorito selecionado',
     },
     'nl': {
       // Clés de l'API pour la page de sélection de pays
@@ -463,7 +547,9 @@ class TranslationService extends ChangeNotifier {
       // Product search - initial state
       'PRODUCTSEARCH_ENTER_CODE': 'Voer een artikelcode in om te beginnen met zoeken',
       // Product search - input field
-      'PRODUCTSEARCH_HINT_CODE': 'Productcode (bijv. 123.456.78)',
+      'PRODUCTSEARCH_HINT_CODE': 'IKEA-referentie (bijv. 123.456.78)',
+      // Product search - backend errors
+      'HTML_SEARCH_BADREFERENCE': 'De referentie lijkt niet correct te zijn.\nEen referentie is een reeks van 8 cijfers gescheiden door 2 punten (bijv. 123.456.78)',
       // Wishlist labels
       'BEST_PRICE': 'Beste prijs',
       'OPTIMAL': 'Optimaal',
@@ -491,9 +577,21 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES_NEARBY': 'IKEA Winkels in de buurt',
       'SEARCH_STORE_PLACEHOLDER': 'Zoek een winkel (naam, land, stad)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Zoek een stad, adres of postcode...',
+      // Zoekmodaal - titel
+      'FRONTPAGE_Msg05': 'Zoek een artikel',
+      // Zoekmodaal - landselectie
+      'FRONTPAGE_Msg04': 'Kies landen om te vergelijken:',
+      // Zoekmodaal - scanner knop
+      'FRONTPAGE_Msg08': 'Scan een product',
       // Verlanglijst - lege winkelwagen
       'EMPTY_CART_TITLE': 'Lege winkelwagen',
       'EMPTY_CART_MESSAGE': 'Geen artikel gevonden in deze winkelwagen',
+      // Profile detail
+      'PROFILE_EDIT_BUTTON': 'Mijn profiel bewerken',
+      'PROFILE_MAIN_COUNTRY': 'Hoofdland',
+      'PROFILE_NOT_SELECTED': 'Niet geselecteerd',
+      'PROFILE_FAVORITE_COUNTRIES': 'Favoriete landen',
+      'PROFILE_NO_FAVORITE_COUNTRIES': 'Geen favoriete landen geselecteerd',
     },
   };
 

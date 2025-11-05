@@ -22,6 +22,11 @@ class AuthNotifier extends ChangeNotifier {
     if (_isLoggedIn) {
       print('🔐 Session trouvée dans localStorage, vérification avec l\'API...');
       await _syncWithApi();
+    } else {
+      // ✅ CORRECTION: Même si user_email n'existe pas dans localStorage,
+      // vérifier l'API au cas où les cookies seraient valides
+      print('🔐 Aucune session dans localStorage, vérification de l\'API...');
+      await _syncWithApi();
     }
     
     notifyListeners();
@@ -39,8 +44,12 @@ class AuthNotifier extends ChangeNotifier {
       print('👤 Nom dans le profil: ${profile['sNom']}');
       print('👤 Prénom dans le profil: ${profile['sPrenom']}');
       
-      if (profile.isNotEmpty) {
-        print('✅ Session valide, mise à jour du profil depuis l\'API');
+      // ✅ CORRECTION: Vérifier si le profil contient un email (utilisateur connecté)
+      // Un profil vide ou sans email signifie utilisateur guest
+      final hasEmail = profile['sEmail'] != null && profile['sEmail'].toString().isNotEmpty;
+      
+      if (profile.isNotEmpty && hasEmail) {
+        print('✅ Session valide, utilisateur connecté - mise à jour du profil depuis l\'API');
         
         // Sauvegarder le profil complet dans SharedPreferences
         await LocalStorageService.saveProfile({
@@ -60,14 +69,24 @@ class AuthNotifier extends ChangeNotifier {
         _isLoggedIn = true;
         _userInfo = await LocalStorageService.getUserInfo();
         print('👤 UserInfo après sync: $_userInfo');
+      } else if (profile.isNotEmpty && !hasEmail) {
+        // Profil existe mais pas d'email = utilisateur guest
+        print('ℹ️ Profil guest détecté - pas d\'email dans le profil');
+        _isLoggedIn = false;
+        _userInfo = null;
       } else {
         print('⚠️ Session expirée ou invalide, déconnexion');
-        await onLogout();
+        _isLoggedIn = false;
+        _userInfo = null;
       }
     } catch (e) {
       print('❌ Erreur lors de la synchronisation avec l\'API: $e');
       print('❌ Stack trace: ${StackTrace.current}');
-      // En cas d'erreur réseau, garder la session locale
+      // En cas d'erreur réseau, garder la session locale si elle existe
+      if (!_isLoggedIn) {
+        _isLoggedIn = false;
+        _userInfo = null;
+      }
     }
   }
 

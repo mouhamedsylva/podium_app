@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
 import '../services/local_storage_service.dart';
 import '../services/translation_service.dart';
 import '../services/api_service.dart';
@@ -54,57 +55,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       print('🔄 Chargement du profil utilisateur...');
       
-      // 1. D'abord essayer de récupérer depuis l'API (comme SNAL)
-      final apiService = Provider.of<ApiService>(context, listen: false);
-      try {
-        print('📡 Appel API pour récupérer les données utilisateur...');
-        final apiProfile = await apiService.getUserInfo();
-        
-        if (apiProfile != null && apiProfile.isNotEmpty) {
-          print('✅ Données récupérées depuis l\'API: $apiProfile');
-          
-          // Sauvegarder les données API dans le localStorage
-          await LocalStorageService.saveProfile(apiProfile);
-          
-          if (mounted) {
-            setState(() {
-              _profile = apiProfile;
-              _isLoading = false;
-              
-              // Initialiser les controllers avec les données du profil
-              _prenomController.text = apiProfile['sPrenom'] ?? '';
-              _nomController.text = apiProfile['sNom'] ?? '';
-              _emailController.text = apiProfile['sEmail'] ?? '';
-              _telController.text = apiProfile['sTel'] ?? '';
-              _rueController.text = apiProfile['sRue'] ?? '';
-              _zipController.text = apiProfile['sZip'] ?? '';
-              _cityController.text = apiProfile['sCity'] ?? '';
-            });
-          }
-          return;
-        }
-      } catch (apiError) {
-        print('⚠️ Erreur API, fallback vers localStorage: $apiError');
-      }
-      
-      // 2. Fallback vers localStorage si l'API échoue
+      // ✅ CORRECTION: Charger D'ABORD depuis localStorage pour afficher immédiatement les modifications récentes
       final profile = await LocalStorageService.getProfile();
       print('📱 Données depuis localStorage: $profile');
       
-      if (mounted) {
+      if (profile != null && mounted) {
         setState(() {
           _profile = profile;
           _isLoading = false;
           
           // Initialiser les controllers avec les données du profil
-          _prenomController.text = profile?['sPrenom'] ?? '';
-          _nomController.text = profile?['sNom'] ?? '';
-          _emailController.text = profile?['sEmail'] ?? '';
-          _telController.text = profile?['sTel'] ?? '';
-          _rueController.text = profile?['sRue'] ?? '';
-          _zipController.text = profile?['sZip'] ?? '';
-          _cityController.text = profile?['sCity'] ?? '';
+          _prenomController.text = profile['sPrenom'] ?? '';
+          _nomController.text = profile['sNom'] ?? '';
+          _emailController.text = profile['sEmail'] ?? '';
+          _telController.text = profile['sTel'] ?? '';
+          _rueController.text = profile['sRue'] ?? '';
+          _zipController.text = profile['sZip'] ?? '';
+          _cityController.text = profile['sCity'] ?? '';
         });
+      }
+      
+      // ✅ Synchroniser avec l'API en arrière-plan (sans écraser les données locales immédiatement)
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final isLoggedIn = await LocalStorageService.isLoggedIn();
+      
+      if (isLoggedIn) {
+        // Synchroniser en arrière-plan sans bloquer l'UI
+        _syncProfileWithAPI();
       }
     } catch (e) {
       print('❌ Erreur lors du chargement du profil: $e');
@@ -113,6 +90,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+  
+  /// Synchroniser le profil avec l'API en arrière-plan
+  Future<void> _syncProfileWithAPI() async {
+    try {
+      print('📡 Synchronisation du profil avec l\'API en arrière-plan...');
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      
+      // Récupérer le profil depuis l'API
+      final apiProfile = await apiService.getProfile();
+      
+      if (apiProfile.isNotEmpty) {
+        print('✅ Données récupérées depuis l\'API: $apiProfile');
+        
+        // ✅ CORRECTION: Les données locales ont TOUJOURS priorité sur les données API
+        // Ne jamais écraser les modifications locales avec les données API
+        final currentProfile = await LocalStorageService.getProfile();
+        if (currentProfile != null) {
+          // Fusionner: garder TOUTES les données locales, ne mettre à jour que les identifiants critiques
+          final mergedProfile = Map<String, dynamic>.from(currentProfile);
+          
+          // ✅ Toujours mettre à jour iProfile et iBasket depuis l'API (identifiants critiques)
+          mergedProfile['iProfile'] = apiProfile['iProfile']?.toString() ?? mergedProfile['iProfile'] ?? '';
+          mergedProfile['iBasket'] = apiProfile['iBasket']?.toString() ?? mergedProfile['iBasket'] ?? '';
+          
+          // ✅ NE PAS modifier sPaysFav et sPaysLangue - les données locales ont priorité absolue
+          // Ces champs sont modifiés par l'utilisateur et doivent être conservés
+          
+          // ✅ Mettre à jour uniquement les champs qui sont vides dans le localStorage
+          // Si un champ a une valeur locale (même vide mais défini), on le garde
+          if ((mergedProfile['sEmail']?.toString().isEmpty ?? true) && 
+              (apiProfile['sEmail']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sEmail'] = apiProfile['sEmail']?.toString() ?? '';
+          }
+          if ((mergedProfile['sNom']?.toString().isEmpty ?? true) && 
+              (apiProfile['sNom']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sNom'] = apiProfile['sNom']?.toString() ?? '';
+          }
+          if ((mergedProfile['sPrenom']?.toString().isEmpty ?? true) && 
+              (apiProfile['sPrenom']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sPrenom'] = apiProfile['sPrenom']?.toString() ?? '';
+          }
+          if ((mergedProfile['sTel']?.toString().isEmpty ?? true) && 
+              (apiProfile['sTel']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sTel'] = apiProfile['sTel']?.toString() ?? '';
+          }
+          if ((mergedProfile['sRue']?.toString().isEmpty ?? true) && 
+              (apiProfile['sRue']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sRue'] = apiProfile['sRue']?.toString() ?? '';
+          }
+          if ((mergedProfile['sZip']?.toString().isEmpty ?? true) && 
+              (apiProfile['sZip']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sZip'] = apiProfile['sZip']?.toString() ?? '';
+          }
+          if ((mergedProfile['sCity']?.toString().isEmpty ?? true) && 
+              (apiProfile['sCity']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sCity'] = apiProfile['sCity']?.toString() ?? '';
+          }
+          if ((mergedProfile['sPhoto']?.toString().isEmpty ?? true) && 
+              (apiProfile['sPhoto']?.toString().isNotEmpty ?? false)) {
+            mergedProfile['sPhoto'] = apiProfile['sPhoto']?.toString() ?? '';
+          }
+          
+          // ✅ Sauvegarder le profil fusionné (les données locales sont préservées)
+          await LocalStorageService.saveProfile(mergedProfile);
+          
+          print('✅ Profil synchronisé avec l\'API (données locales préservées)');
+          print('   sPaysFav local: ${mergedProfile['sPaysFav']}');
+          print('   sPaysLangue local: ${mergedProfile['sPaysLangue']}');
+        } else {
+          // Si pas de profil local, sauvegarder directement depuis l'API
+          await LocalStorageService.saveProfile({
+            'iProfile': apiProfile['iProfile']?.toString() ?? '',
+            'iBasket': apiProfile['iBasket']?.toString() ?? '',
+            'sPaysFav': apiProfile['sPaysFav']?.toString() ?? '',
+            'sPaysLangue': apiProfile['sPaysLangue']?.toString() ?? '',
+            'sEmail': apiProfile['sEmail']?.toString() ?? '',
+            'sNom': apiProfile['sNom']?.toString() ?? '',
+            'sPrenom': apiProfile['sPrenom']?.toString() ?? '',
+            'sPhoto': apiProfile['sPhoto']?.toString() ?? '',
+            'sTel': apiProfile['sTel']?.toString() ?? '',
+            'sRue': apiProfile['sRue']?.toString() ?? '',
+            'sZip': apiProfile['sZip']?.toString() ?? '',
+            'sCity': apiProfile['sCity']?.toString() ?? '',
+          });
+        }
+      }
+    } catch (apiError) {
+      // ✅ En cas d'erreur API, on garde les données locales (déjà affichées)
+      print('⚠️ Erreur lors de la synchronisation avec l\'API (données locales conservées): $apiError');
     }
   }
   
@@ -125,9 +193,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     
     try {
       final apiService = Provider.of<ApiService>(context, listen: false);
-      final profile = await LocalStorageService.getProfile();
-      final token = profile?['token'] ?? '';
       
+      // ✅ CORRECTION: Récupérer TOUTES les valeurs actuelles depuis le localStorage
+      // pour garantir qu'on ne perd aucune donnée existante
+      final currentProfile = await LocalStorageService.getProfile();
+      final token = currentProfile?['token'] ?? '';
+      
+      // ✅ CORRECTION: Sauvegarder TOUTES les données du profil, y compris pays favoris et pays principal
       final updateData = {
         'Prenom': _prenomController.text,
         'Nom': _nomController.text,
@@ -139,45 +211,148 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'token': token,
       };
       
+      // ✅ CORRECTION: Partir de TOUTES les valeurs actuelles du localStorage
+      // pour garantir qu'on ne perd aucune donnée existante (même si elle n'est pas dans _profile)
+      final updatedLocalProfile = Map<String, dynamic>.from(currentProfile ?? {});
+      
+      // ✅ Mettre à jour uniquement les champs modifiés dans le formulaire
+      // Les autres champs conservent leurs valeurs actuelles depuis le localStorage
+      updatedLocalProfile['sPrenom'] = _prenomController.text;
+      updatedLocalProfile['sNom'] = _nomController.text;
+      updatedLocalProfile['sEmail'] = _emailController.text;
+      updatedLocalProfile['sTel'] = _telController.text;
+      updatedLocalProfile['sRue'] = _rueController.text;
+      updatedLocalProfile['sZip'] = _zipController.text;
+      updatedLocalProfile['sCity'] = _cityController.text;
+      
+      // ✅ Conserver les pays favoris et le pays principal depuis le localStorage actuel
+      // (ils ne sont pas modifiés dans le formulaire mais doivent être conservés)
+      // Si ces valeurs ne sont pas dans currentProfile, elles seront conservées depuis _profile
+      if (!updatedLocalProfile.containsKey('sPaysFav') || updatedLocalProfile['sPaysFav'] == null) {
+        updatedLocalProfile['sPaysFav'] = _profile?['sPaysFav'] ?? '';
+      }
+      if (!updatedLocalProfile.containsKey('sPaysLangue') || updatedLocalProfile['sPaysLangue'] == null) {
+        updatedLocalProfile['sPaysLangue'] = _profile?['sPaysLangue'] ?? '';
+      }
+      
+      await LocalStorageService.saveProfile(updatedLocalProfile);
+      
+      // ✅ Mettre à jour via l'API (qui utilisera les pays favoris et pays principal depuis localStorage)
       final response = await apiService.updateProfile(updateData);
       
-      if (response['success'] == true && mounted) {
-        // Mettre à jour le profil local
-        await _loadProfile();
+      if (mounted) {
+        setState(() => _isSaving = false);
         
-        setState(() {
-          _isEditing = false;
-          _isSaving = false;
-        });
+        // Vérifier si la réponse indique un succès
+        // L'API peut retourner un objet avec success: true ou simplement un statut 200
+        final isSuccess = response['success'] == true || 
+                         response['status'] == 'OK' ||
+                         (response is Map && response.isNotEmpty);
         
-        if (mounted) {
+        if (isSuccess) {
+          // ✅ CORRECTION: Sauvegarder explicitement les nouvelles données dans localStorage APRÈS le succès API
+          // pour s'assurer que les données modifiées sont bien persistées et ÉCRASENT les anciennes
+          // Utiliser les valeurs des controllers (nouvelles modifications) comme source de vérité
+          final finalProfile = Map<String, dynamic>.from(updatedLocalProfile);
+          
+          // ✅ FORCER l'écrasement de TOUTES les données modifiées, même si elles sont vides
+          // Cela garantit que les anciennes données sont remplacées par les nouvelles
+          finalProfile['sPrenom'] = _prenomController.text;
+          finalProfile['sNom'] = _nomController.text;
+          finalProfile['sEmail'] = _emailController.text;
+          finalProfile['sTel'] = _telController.text; // ✅ Écraser même si vide
+          finalProfile['sRue'] = _rueController.text; // ✅ Écraser même si vide
+          finalProfile['sZip'] = _zipController.text; // ✅ Écraser même si vide
+          finalProfile['sCity'] = _cityController.text; // ✅ Écraser même si vide
+          
+          // ✅ Sauvegarder dans localStorage avec les nouvelles données
+          // Cela ÉCRASE les anciennes données dans le localStorage
+          await LocalStorageService.saveProfile(finalProfile);
+          
+          print('✅ Profil sauvegardé dans localStorage:');
+          print('   sPrenom: ${finalProfile['sPrenom']}');
+          print('   sNom: ${finalProfile['sNom']}');
+          print('   sEmail: ${finalProfile['sEmail']}');
+          print('   sTel: ${finalProfile['sTel']}');
+          print('   sRue: ${finalProfile['sRue']}');
+          print('   sZip: ${finalProfile['sZip']}');
+          print('   sCity: ${finalProfile['sCity']}');
+          print('   sPaysFav: ${finalProfile['sPaysFav']}');
+          print('   sPaysLangue: ${finalProfile['sPaysLangue']}');
+          
+          // ✅ Mettre à jour le state local avec les nouvelles données
+          setState(() {
+            _profile = finalProfile;
+            _isEditing = false;
+          });
+          
+          // ✅ Ne PAS recharger depuis l'API immédiatement car cela pourrait écraser les nouvelles données
+          // Les données locales sont déjà sauvegardées et sont la source de vérité
+          // Le rechargement depuis l'API se fera lors du prochain chargement de l'écran
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profil mis à jour avec succès'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            
+            // ✅ Rediriger vers profile_detail_screen après 1 seconde pour voir les mises à jour
+            Future.delayed(const Duration(seconds: 1), () async {
+              if (mounted) {
+                try {
+                  await LocalStorageService.saveCurrentRoute('/profil');
+                } catch (_) {}
+                context.go('/profil');
+              }
+            });
+          }
+        } else {
+          // Afficher un message d'erreur si la réponse n'indique pas un succès
+          final errorMessage = response['message'] ?? 
+                              response['error'] ?? 
+                              'Erreur lors de la mise à jour du profil';
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profil mis à jour avec succès'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
             ),
           );
-          
-          // Rediriger vers wishlist après 2 secondes
-          Future.delayed(const Duration(seconds: 2), () async {
-            if (mounted) {
-              try {
-                await LocalStorageService.saveCurrentRoute('/wishlist');
-              } catch (_) {}
-              context.go('/wishlist');
-            }
-          });
         }
       }
     } catch (e) {
       print('Erreur lors de la sauvegarde du profil: $e');
       if (mounted) {
         setState(() => _isSaving = false);
+        
+        // Extraire un message d'erreur plus clair
+        String errorMessage = 'Erreur lors de la mise à jour du profil';
+        
+        if (e is DioException) {
+          if (e.response != null) {
+            final responseData = e.response?.data;
+            if (responseData is Map) {
+              errorMessage = responseData['message'] ?? 
+                           responseData['error'] ?? 
+                           'Erreur serveur (${e.response?.statusCode})';
+            } else {
+              errorMessage = 'Erreur serveur (${e.response?.statusCode})';
+            }
+          } else {
+            errorMessage = 'Erreur de connexion. Vérifiez votre connexion internet.';
+          }
+        } else {
+          errorMessage = e.toString();
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de la mise à jour: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -424,15 +599,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Mettre à jour le pays principal
   Future<void> _updateMainCountry(String newCountryLangue) async {
     try {
-      // Mettre à jour le profil local
-      final updatedProfile = Map<String, dynamic>.from(_profile ?? {});
+      // ✅ CORRECTION: Récupérer le profil COMPLET depuis localStorage avant de modifier
+      final currentProfile = await LocalStorageService.getProfile();
+      if (currentProfile == null) {
+        print('❌ Impossible de récupérer le profil depuis localStorage');
+        return;
+      }
+      
+      // Mettre à jour le profil local avec TOUTES les données existantes
+      final updatedProfile = Map<String, dynamic>.from(currentProfile);
       updatedProfile['sPaysLangue'] = newCountryLangue;
       
+      // ✅ Sauvegarder immédiatement dans localStorage
       await LocalStorageService.saveProfile(updatedProfile);
       
       setState(() {
         _profile = updatedProfile;
       });
+      
+      // ✅ CORRECTION: Synchroniser avec l'API si l'utilisateur est connecté
+      final isLoggedIn = await LocalStorageService.isLoggedIn();
+      if (isLoggedIn) {
+        // Synchroniser avec l'API en arrière-plan (sans bloquer l'UI)
+        _syncMainCountryWithAPI(newCountryLangue);
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -454,25 +644,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
+  
+  /// Synchroniser le pays principal avec l'API en arrière-plan
+  Future<void> _syncMainCountryWithAPI(String newCountryLangue) async {
+    try {
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      // ✅ CORRECTION: Récupérer le profil depuis localStorage (qui contient les nouvelles données)
+      final currentProfile = await LocalStorageService.getProfile();
+      if (currentProfile == null) {
+        print('❌ Impossible de récupérer le profil depuis localStorage pour la synchronisation');
+        return;
+      }
+      
+      // ✅ CORRECTION: Utiliser les données du localStorage (qui contient les dernières modifications)
+      // plutôt que _profile qui peut être obsolète
+      final updateData = {
+        'Prenom': currentProfile['sPrenom']?.toString() ?? '',
+        'Nom': currentProfile['sNom']?.toString() ?? '',
+        'email': currentProfile['sEmail']?.toString() ?? '',
+        'tel': currentProfile['sTel']?.toString() ?? '',
+        'rue': currentProfile['sRue']?.toString() ?? '',
+        'zip': currentProfile['sZip']?.toString() ?? '',
+        'city': currentProfile['sCity']?.toString() ?? '',
+        'token': currentProfile['token']?.toString() ?? '',
+      };
+      
+      print('📤 Synchronisation pays principal avec l\'API:');
+      print('   sPaysLangue depuis localStorage: ${currentProfile['sPaysLangue']}');
+      print('   sPaysFav depuis localStorage: ${currentProfile['sPaysFav']}');
+      
+      // Mettre à jour via l'API (qui utilisera sPaysLangue et sPaysFav depuis localStorage)
+      final response = await apiService.updateProfile(updateData);
+      
+      if (response['success'] == true || response['status'] == 'OK' || response.isNotEmpty) {
+        print('✅ Pays principal synchronisé avec l\'API');
+        // ✅ Ne PAS recharger le profil depuis l'API pour éviter d'écraser les modifications locales
+        // Les modifications locales sont déjà sauvegardées dans localStorage
+      } else {
+        print('⚠️ La mise à jour locale a été conservée, mais la synchronisation avec l\'API a échoué');
+      }
+    } catch (e) {
+      // ✅ En cas d'erreur API, on garde la mise à jour locale
+      print('⚠️ Erreur lors de la synchronisation du pays principal avec l\'API (mise à jour locale conservée): $e');
+    }
+  }
 
   /// Mettre à jour les pays favoris
   Future<void> _updateFavoriteCountries(String newFavorites) async {
     try {
-      // Mettre à jour le profil local
-      final updatedProfile = Map<String, dynamic>.from(_profile ?? {});
+      // ✅ CORRECTION: Récupérer le profil COMPLET depuis localStorage avant de modifier
+      final currentProfile = await LocalStorageService.getProfile();
+      if (currentProfile == null) {
+        print('❌ Impossible de récupérer le profil depuis localStorage');
+        return;
+      }
+      
+      // Mettre à jour le profil local avec TOUTES les données existantes
+      final updatedProfile = Map<String, dynamic>.from(currentProfile);
       updatedProfile['sPaysFav'] = newFavorites;
       
+      // ✅ Sauvegarder immédiatement dans localStorage
       await LocalStorageService.saveProfile(updatedProfile);
       
       setState(() {
         _profile = updatedProfile;
       });
       
+      // Vérifier si l'utilisateur est connecté pour synchroniser avec l'API
+      final isLoggedIn = await LocalStorageService.isLoggedIn();
+      
+      if (isLoggedIn) {
+        // ✅ Synchroniser avec l'API en arrière-plan (sans bloquer l'UI)
+        _syncFavoriteCountriesWithAPI(newFavorites);
+      }
+      
+      // ✅ Afficher le message de succès immédiatement
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pays favoris mis à jour'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -483,17 +735,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SnackBar(
             content: Text('Erreur: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
+    }
+  }
+  
+  /// Synchroniser les pays favoris avec l'API en arrière-plan
+  Future<void> _syncFavoriteCountriesWithAPI(String newFavorites) async {
+    try {
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      // ✅ CORRECTION: Récupérer le profil depuis localStorage (qui contient les nouvelles données)
+      final currentProfile = await LocalStorageService.getProfile();
+      if (currentProfile == null) {
+        print('❌ Impossible de récupérer le profil depuis localStorage pour la synchronisation');
+        return;
+      }
+      
+      // ✅ CORRECTION: Utiliser les données du localStorage (qui contient les dernières modifications)
+      // plutôt que _profile qui peut être obsolète
+      final updateData = {
+        'Prenom': currentProfile['sPrenom']?.toString() ?? '',
+        'Nom': currentProfile['sNom']?.toString() ?? '',
+        'email': currentProfile['sEmail']?.toString() ?? '',
+        'tel': currentProfile['sTel']?.toString() ?? '',
+        'rue': currentProfile['sRue']?.toString() ?? '',
+        'zip': currentProfile['sZip']?.toString() ?? '',
+        'city': currentProfile['sCity']?.toString() ?? '',
+        'token': currentProfile['token']?.toString() ?? '',
+      };
+      
+      print('📤 Synchronisation pays favoris avec l\'API:');
+      print('   sPaysFav depuis localStorage: ${currentProfile['sPaysFav']}');
+      print('   sPaysLangue depuis localStorage: ${currentProfile['sPaysLangue']}');
+      
+      // Mettre à jour via l'API (qui utilisera sPaysFav et sPaysLangue depuis localStorage)
+      final response = await apiService.updateProfile(updateData);
+      
+      if (response['success'] == true || response['status'] == 'OK' || response.isNotEmpty) {
+        print('✅ Pays favoris synchronisés avec l\'API');
+        // ✅ CORRECTION: Ne PAS recharger le profil depuis l'API pour éviter d'écraser les modifications locales
+        // Les modifications locales sont déjà sauvegardées dans localStorage
+        // On peut juste mettre à jour le profil local avec la réponse de l'API si nécessaire
+        final updatedProfile = await LocalStorageService.getProfile();
+        if (updatedProfile != null && mounted) {
+          setState(() {
+            _profile = updatedProfile;
+          });
+        }
+      } else {
+        print('⚠️ La mise à jour locale a été conservée, mais la synchronisation avec l\'API a échoué');
+      }
+    } catch (e) {
+      // ✅ En cas d'erreur API, on garde la mise à jour locale
+      // L'utilisateur a déjà vu le message de succès, donc on ne montre pas d'erreur
+      print('⚠️ Erreur lors de la synchronisation avec l\'API (mise à jour locale conservée): $e');
+      // La mise à jour locale reste active, l'utilisateur peut continuer à utiliser l'app
     }
   }
 
   /// Basculer un pays favori (ajouter ou retirer)
   Future<void> _toggleFavoriteCountry(String countryCode) async {
     try {
+      // ✅ CORRECTION: Récupérer le profil COMPLET depuis localStorage
+      final currentProfile = await LocalStorageService.getProfile();
+      if (currentProfile == null) {
+        print('❌ Impossible de récupérer le profil depuis localStorage');
+        return;
+      }
+      
       final currentFavorites = <String>{};
-      final sPaysFav = _profile?['sPaysFav'] ?? '';
+      final sPaysFav = currentProfile['sPaysFav']?.toString() ?? '';
       if (sPaysFav.isNotEmpty) {
         final countries = sPaysFav.split(',');
         for (final country in countries) {
@@ -1258,11 +1571,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () {
-                // Essayer de pop, sinon aller à l'accueil
+                // Si on est en mode édition, annuler les modifications
+                if (_isEditing) {
+                  // Recharger les données originales depuis le profil
+                  setState(() {
+                    _prenomController.text = _profile?['sPrenom'] ?? '';
+                    _nomController.text = _profile?['sNom'] ?? '';
+                    _emailController.text = _profile?['sEmail'] ?? '';
+                    _telController.text = _profile?['sTel'] ?? '';
+                    _rueController.text = _profile?['sRue'] ?? '';
+                    _zipController.text = _profile?['sZip'] ?? '';
+                    _cityController.text = _profile?['sCity'] ?? '';
+                    _isEditing = false;
+                  });
+                }
+                
+                // Retourner à la page précédente
                 if (context.canPop()) {
                   context.pop();
                 } else {
-                  context.go('/');
+                  // Si on ne peut pas pop, rediriger vers wishlist (page par défaut)
+                  context.go('/wishlist');
                 }
               },
               style: OutlinedButton.styleFrom(

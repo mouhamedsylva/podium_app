@@ -227,6 +227,36 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           _resultsController.forward();
         }
       });
+    } on SearchArticleException catch (e) {
+      // ✅ Gérer les erreurs spécifiques du backend avec success, error, message
+      final translationService = Provider.of<TranslationService>(context, listen: false);
+      
+      // ✅ Utiliser la traduction pour le code d'erreur ou le message du backend
+      String errorDisplayMessage;
+      if (e.errorCode.isNotEmpty) {
+        // Essayer de traduire le code d'erreur (ex: HTML_SEARCH_BADREFERENCE)
+        final translatedError = translationService.translate(e.errorCode);
+        // Si la traduction existe (pas le même texte que la clé), l'utiliser
+        errorDisplayMessage = (translatedError != e.errorCode) 
+            ? translatedError 
+            : (e.message.isNotEmpty ? e.message : e.errorCode);
+      } else {
+        errorDisplayMessage = e.message.isNotEmpty ? e.message : 'Erreur de recherche';
+      }
+      
+      // ✅ Convertir les balises HTML <br> en sauts de ligne \n
+      errorDisplayMessage = errorDisplayMessage.replaceAll('<br>', '\n').replaceAll('<br/>', '\n').replaceAll('<br />', '\n');
+      
+      print('⚠️ Erreur backend détectée:');
+      print('   errorCode: ${e.errorCode}');
+      print('   message: ${e.message}');
+      print('   message affiché: $errorDisplayMessage');
+      
+      setState(() {
+        _isLoading = false;
+        _filteredProducts = [];
+        _errorMessage = errorDisplayMessage;
+      });
     } catch (e) {
       print('❌ Erreur de recherche: $e');
       setState(() {
@@ -846,10 +876,20 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           ),
           const SizedBox(height: 16),
           Text(
+            'Erreur de recherche',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue[700],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
             _errorMessage,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.red[700],
+              color: Colors.blue[600],
             ),
             textAlign: TextAlign.center,
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
@@ -298,7 +299,25 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           code: _codeController.text.trim(),
         );
 
-        print('✅ Connexion réussie');
+        // ✅ VÉRIFIER LA RÉPONSE DE L'API AVANT DE REDIRIGER
+        // Vérifier si la réponse indique un succès (status == 'OK' ou success == true)
+        final isSuccess = response != null && 
+                         (response['status'] == 'OK' || response['success'] == true);
+        
+        if (!isSuccess) {
+          // Le code est invalide ou la connexion a échoué
+          setState(() {
+            _isLoading = false;
+            _errorMessage = response?['message'] ?? 
+                           response?['error'] ?? 
+                           'Code invalide. Veuillez vérifier le code reçu par email et réessayer.';
+          });
+          print('❌ Code invalide ou connexion échouée: ${response?['message'] ?? response?['error']}');
+          print('❌ Réponse complète: $response');
+          return;
+        }
+
+        print('✅ Connexion réussie - Code validé');
 
         // Rediriger vers la page callback ou la page d'accueil (comme SNAL)
         if (mounted) {
@@ -342,8 +361,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       print('❌ Erreur de connexion: $e');
+      String errorMsg = 'Erreur lors de la connexion. Veuillez réessayer.';
+      
+      // ✅ Extraire le message d'erreur de la réponse si disponible
+      if (e is DioException && e.response != null) {
+        final errorData = e.response?.data;
+        if (errorData is Map) {
+          errorMsg = errorData['message'] ?? 
+                    errorData['error'] ?? 
+                    'Code invalide ou erreur de connexion. Veuillez vérifier le code et réessayer.';
+        }
+      }
+      
       setState(() {
-        _errorMessage = 'Erreur lors de la connexion. Veuillez réessayer.';
+        _errorMessage = errorMsg;
       });
     } finally {
       setState(() {

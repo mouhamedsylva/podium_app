@@ -401,10 +401,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       // Effacer les informations de l'utilisateur via AuthNotifier
       await authNotifier.onLogout();
       
-      // Rediriger vers la page d'accueil
-      if (context.mounted) {
-        context.go('/');
-      }
+      // ✅ Ne pas rediriger - rester sur la page actuelle
+      // L'utilisateur reste sur la page où il se trouve après la déconnexion
     }
   }
 

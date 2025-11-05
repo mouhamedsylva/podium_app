@@ -12,6 +12,23 @@ import '../config/api_config.dart';
 import 'profile_service.dart';
 import 'local_storage_service.dart';
 
+/// Exception pour les erreurs de recherche d'articles
+/// Utilise les clés envoyées par le backend: success, error, message
+class SearchArticleException implements Exception {
+  final bool success;
+  final String errorCode;
+  final String message;
+
+  SearchArticleException({
+    required this.success,
+    required this.errorCode,
+    required this.message,
+  });
+
+  @override
+  String toString() => message.isNotEmpty ? message : errorCode;
+}
+
 /// Service API pour se connecter au backend SNAL-Project
 /// Mobile-First: Gestion automatique des cookies sur mobile, proxy sur web
 class ApiService {
@@ -24,6 +41,12 @@ class ApiService {
   final ProfileService _profileService = ProfileService();
   bool _isInitializing = false;
   bool _isInitialized = false;
+
+  /// Helper pour récupérer le profil avec le bon type explicite
+  /// Évite l'inférence de type problématique dans les intercepteurs
+  Future<Map<String, dynamic>?> _getProfileForInterceptor() async {
+    return await LocalStorageService.getProfile();
+  }
 
   Future<void> initialize() async {
     // Si déjà complètement initialisé
@@ -122,7 +145,14 @@ class ApiService {
     _dio!.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         // Récupérer le profil local
-        final profile = await LocalStorageService.getProfile();
+        // ✅ CORRECTION: Utiliser une méthode helper de la classe pour éviter l'inférence de type problématique
+        Map<String, dynamic>? profile;
+        try {
+          profile = await _getProfileForInterceptor();
+        } catch (e) {
+          print('⚠️ Erreur lors de la récupération du profil dans l\'intercepteur: $e');
+          profile = null;
+        }
 
         // ✅ RÉCUPÉRER LES VRAIES VALEURS DEPUIS LES COOKIES
         // SNAL gère les identifiants côté serveur via les cookies
@@ -237,16 +267,26 @@ class ApiService {
         'type': RegExp(r'^\d+$').hasMatch(cleanQuery) ? 'code' : 'description',
       });
 
-      // Gestion de la réponse conforme à SNAL-Project
-      if (response.data is List) {
-        // L'API retourne directement un tableau de résultats
-        return _filterSearchResults(response.data, cleanQuery);
-      } else if (response.data is Map) {
-        final data = response.data;
-
-        // Vérifier si c'est une erreur
+      // ✅ CORRECTION: Gérer les erreurs du backend avec success: false, error, message
+      if (response.data is Map) {
+        final data = response.data as Map<String, dynamic>;
+        
+        // Vérifier si c'est une erreur du backend
         if (data['success'] == false) {
-          return []; // Retourner une liste vide quand aucun résultat (normal)
+          final errorCode = data['error']?.toString() ?? '';
+          final errorMessage = data['message']?.toString() ?? '';
+          
+          print('⚠️ Erreur backend détectée:');
+          print('   success: ${data['success']}');
+          print('   error: $errorCode');
+          print('   message: $errorMessage');
+          
+          // ✅ Lancer une exception avec les détails de l'erreur pour que les écrans puissent les gérer
+          throw SearchArticleException(
+            errorCode: errorCode,
+            message: errorMessage,
+            success: false,
+          );
         }
 
         // Vérifier si c'est un objet unique avec STATUS ERROR
@@ -255,9 +295,32 @@ class ApiService {
         }
       }
 
+      // Gestion de la réponse conforme à SNAL-Project
+      if (response.data is List) {
+        // L'API retourne directement un tableau de résultats
+        return _filterSearchResults(response.data, cleanQuery);
+      }
+
       return [];
+    } on SearchArticleException {
+      // ✅ Re-lancer l'exception pour que les écrans puissent la gérer
+      rethrow;
     } catch (e) {
-      return []; // Retourner une liste vide en cas d'erreur
+      print('❌ Erreur lors de la recherche: $e');
+      // ✅ Si c'est une DioException avec une réponse, vérifier si c'est une erreur backend
+      if (e is DioException && e.response?.data is Map) {
+        final responseData = e.response!.data as Map<String, dynamic>;
+        if (responseData['success'] == false) {
+          final errorCode = responseData['error']?.toString() ?? '';
+          final errorMessage = responseData['message']?.toString() ?? '';
+          throw SearchArticleException(
+            errorCode: errorCode,
+            message: errorMessage,
+            success: false,
+          );
+        }
+      }
+      return []; // Retourner une liste vide en cas d'erreur générique
     }
   }
 
@@ -1669,9 +1732,10 @@ class ApiService {
       print('   Code postal: ' + (profileData['zip']?.toString() ?? ''));
       print('   Ville: ' + (profileData['city']?.toString() ?? ''));
 
-      // Récupérer iProfile et préférences depuis le stockage local
+      // Récupérer iProfile, iBasket et préférences depuis le stockage local
       final gp = await LocalStorageService.getProfile();
       final iProfile = gp?['iProfile']?.toString();
+      final iBasket = gp?['iBasket']?.toString() ?? '';
       final sPaysFav = gp?['sPaysFav']?.toString() ?? '';
       final sPaysLangue = gp?['sPaysLangue']?.toString() ?? '';
 
@@ -1697,11 +1761,24 @@ class ApiService {
       };
 
       print('📤 Données mappées SNAL: ' + snalProfileData.toString());
+      print('📤 iProfile: $iProfile');
+      print('📤 iBasket: $iBasket');
+      print('📤 sPaysFav envoyé: $sPaysFav');
+      print('📤 sPaysLangue envoyé: $sPaysLangue');
 
+      // ✅ CORRECTION: Ajouter explicitement les headers X-IProfile et X-IBasket
       // Appel direct SNAL (PUT) – l'intercepteur ajoutera GuestProfile aux headers/cookies
       final response = await _dio!.put(
         '/update-info-profil/' + iProfile,
         data: snalProfileData,
+        options: Options(
+          headers: {
+            'X-IProfile': iProfile,
+            'X-IBasket': iBasket.isNotEmpty ? iBasket : '0',
+            'X-Pays-Langue': sPaysLangue.isNotEmpty ? sPaysLangue : '',
+            'X-Pays-Fav': sPaysFav.isNotEmpty ? sPaysFav : '',
+          },
+        ),
       );
 
       print('\n📥 Réponse API:');

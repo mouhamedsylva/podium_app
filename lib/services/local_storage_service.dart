@@ -53,36 +53,59 @@ class LocalStorageService {
       }
     }
 
-    // Sauvegarder sPaysLangue et sPaysFav uniquement s'ils ne sont pas vides (pas de valeurs par défaut)
-    if (profile['sPaysLangue'] != null && profile['sPaysLangue'].toString().isNotEmpty) {
+    // ✅ CORRECTION: Sauvegarder TOUJOURS sPaysLangue et sPaysFav, même s'ils sont vides
+    // Cela garantit que les modifications (y compris les suppressions) écrasent les anciennes valeurs
+    if (profile['sPaysLangue'] != null) {
       await prefs.setString(_paysLangueKey, profile['sPaysLangue'].toString());
-      print('✅ sPaysLangue sauvegardé: ${profile['sPaysLangue']}');
+      print('✅ sPaysLangue sauvegardé (écrasement): "${profile['sPaysLangue']}"');
     }
 
-    if (profile['sPaysFav'] != null && profile['sPaysFav'].toString().isNotEmpty) {
+    if (profile['sPaysFav'] != null) {
       await prefs.setString(_paysFavKey, profile['sPaysFav'].toString());
-      print('✅ sPaysFav sauvegardé: ${profile['sPaysFav']}');
+      print('✅ sPaysFav sauvegardé (écrasement): "${profile['sPaysFav']}"');
     }
 
-    // Sauvegarder les champs optionnels (pour la session utilisateur)
-    if (profile['sEmail'] != null && profile['sEmail'].toString().isNotEmpty) {
+    // ✅ CORRECTION: Sauvegarder TOUS les champs du profil
+    // ÉCRASER les anciennes valeurs même si les nouvelles sont vides pour garantir la mise à jour
+    if (profile['sEmail'] != null) {
       await prefs.setString('user_email', profile['sEmail'].toString());
-      print('✅ sEmail sauvegardé: ${profile['sEmail']}');
+      print('✅ sEmail sauvegardé (écrasement): "${profile['sEmail']}"');
     }
 
-    if (profile['sNom'] != null && profile['sNom'].toString().isNotEmpty) {
+    if (profile['sNom'] != null) {
       await prefs.setString('user_nom', profile['sNom'].toString());
-      print('✅ sNom sauvegardé: ${profile['sNom']}');
+      print('✅ sNom sauvegardé (écrasement): "${profile['sNom']}"');
     }
 
-    if (profile['sPrenom'] != null && profile['sPrenom'].toString().isNotEmpty) {
+    if (profile['sPrenom'] != null) {
       await prefs.setString('user_prenom', profile['sPrenom'].toString());
-      print('✅ sPrenom sauvegardé: ${profile['sPrenom']}');
+      print('✅ sPrenom sauvegardé (écrasement): "${profile['sPrenom']}"');
     }
 
     if (profile['sPhoto'] != null) {
       await prefs.setString('user_photo', profile['sPhoto'].toString());
-      print('✅ sPhoto sauvegardé: ${profile['sPhoto']}');
+      print('✅ sPhoto sauvegardé (écrasement): "${profile['sPhoto']}"');
+    }
+
+    // ✅ Sauvegarder les autres champs (sTel, sRue, sZip, sCity)
+    if (profile['sTel'] != null) {
+      await prefs.setString('user_tel', profile['sTel'].toString());
+      print('✅ sTel sauvegardé (écrasement): "${profile['sTel']}"');
+    }
+
+    if (profile['sRue'] != null) {
+      await prefs.setString('user_rue', profile['sRue'].toString());
+      print('✅ sRue sauvegardé (écrasement): "${profile['sRue']}"');
+    }
+
+    if (profile['sZip'] != null) {
+      await prefs.setString('user_zip', profile['sZip'].toString());
+      print('✅ sZip sauvegardé (écrasement): "${profile['sZip']}"');
+    }
+
+    if (profile['sCity'] != null) {
+      await prefs.setString('user_city', profile['sCity'].toString());
+      print('✅ sCity sauvegardé (écrasement): "${profile['sCity']}"');
     }
 
     // ✅ Vérification après sauvegarde
@@ -111,7 +134,7 @@ class LocalStorageService {
   }
 
   /// Récupérer le profil utilisateur
-  static Future<Map<String, String>?> getProfile() async {
+  static Future<Map<String, dynamic>?> getProfile() async {
     final prefs = await SharedPreferences.getInstance();
 
     final iProfile = prefs.getString(_profileKey);
@@ -129,14 +152,30 @@ class LocalStorageService {
     // ⚠️ IMPORTANT: Retourner le profil même si iProfile/iBasket sont vides mais non null
     // pour permettre la vérification et la mise à jour ultérieure
     if (iProfile != null && iBasket != null) {
-      final profileResult = {
+      // ✅ CORRECTION: Récupérer TOUS les champs du profil depuis SharedPreferences
+      final profileResult = <String, dynamic>{
         'iProfile': iProfile,
         'iBasket': iBasket,
         'sPaysLangue': sPaysLangue ?? '', // ✅ Peut être null maintenant
         'sPaysFav': sPaysFav ?? '',       // ✅ Peut être null maintenant
+        'sEmail': prefs.getString('user_email') ?? '',
+        'sNom': prefs.getString('user_nom') ?? '',
+        'sPrenom': prefs.getString('user_prenom') ?? '',
+        'sPhoto': prefs.getString('user_photo') ?? '',
+        'sTel': prefs.getString('user_tel') ?? '',
+        'sRue': prefs.getString('user_rue') ?? '',
+        'sZip': prefs.getString('user_zip') ?? '',
+        'sCity': prefs.getString('user_city') ?? '',
       };
       
       print('✅ getProfile() - Profil retourné: iProfile="${profileResult['iProfile']}", iBasket="${profileResult['iBasket']}"');
+      print('   sPrenom: "${profileResult['sPrenom']}"');
+      print('   sNom: "${profileResult['sNom']}"');
+      print('   sEmail: "${profileResult['sEmail']}"');
+      print('   sTel: "${profileResult['sTel']}"');
+      print('   sRue: "${profileResult['sRue']}"');
+      print('   sZip: "${profileResult['sZip']}"');
+      print('   sCity: "${profileResult['sCity']}"');
       return profileResult;
     }
 
@@ -147,7 +186,7 @@ class LocalStorageService {
   }
 
   /// Créer un profil invité par défaut (comme SNAL)
-  static Future<Map<String, String>> createGuestProfile() async {
+  static Future<Map<String, dynamic>> createGuestProfile() async {
     try {
       // ✅ Initialiser via l'API SNAL pour générer les vrais identifiants
       final apiService = ApiService();
@@ -200,17 +239,24 @@ class LocalStorageService {
     return profile != null;
   }
 
-  /// Supprimer le profil (logout)
+  /// Supprimer le profil (logout) - Conserve iProfile et iBasket
   static Future<void> clearProfile() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_profileKey);
-    await prefs.remove(_basketKey);
-    await prefs.remove(_paysLangueKey);
-    await prefs.remove(_paysFavKey);
+    // ✅ Ne pas supprimer iProfile et iBasket - ils doivent persister après déconnexion
+    // await prefs.remove(_profileKey);
+    // await prefs.remove(_basketKey);
+    
+    // ✅ Conserver sPaysLangue et sPaysFav aussi
+    // await prefs.remove(_paysLangueKey);
+    // await prefs.remove(_paysFavKey);
+    
+    // ✅ Supprimer uniquement les informations de l'utilisateur connecté
     await prefs.remove('user_email');
     await prefs.remove('user_nom');
     await prefs.remove('user_prenom');
     await prefs.remove('user_photo');
+    
+    print('✅ Déconnexion: iProfile et iBasket conservés, informations utilisateur supprimées');
   }
 
   /// Vérifier si l'utilisateur est connecté (a un email sauvegardé)
@@ -252,7 +298,7 @@ class LocalStorageService {
   }
 
   /// Initialiser le profil (créer un invité si nécessaire)
-  static Future<Map<String, String>> initializeProfile() async {
+  static Future<Map<String, dynamic>> initializeProfile() async {
     final existingProfile = await getProfile();
 
     if (existingProfile != null) {

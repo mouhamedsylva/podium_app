@@ -50,12 +50,22 @@ class SearchService {
         // Utiliser le token fourni ou le profil utilisateur stocké (mobile-first)
         final validToken = token ?? _userProfile ?? '';
         
-             final results = await _apiService.searchArticle(query, token: validToken, limit: limit);
-             
-             if (!_searchController.isClosed) {
-               _searchController.add(results);
-             }
+        final results = await _apiService.searchArticle(query, token: validToken, limit: limit);
+        
+        if (!_searchController.isClosed) {
+          _searchController.add(results);
+        }
+      } on SearchArticleException catch (e) {
+        // ✅ Gérer les erreurs spécifiques du backend
+        print('⚠️ Erreur backend dans searchWithDebounce:');
+        print('   errorCode: ${e.errorCode}');
+        print('   message: ${e.message}');
+        // Retourner une liste vide en cas d'erreur backend
+        if (!_searchController.isClosed) {
+          _searchController.add([]);
+        }
       } catch (e) {
+        print('❌ Erreur générique dans searchWithDebounce: $e');
         if (!_searchController.isClosed) {
           _searchController.add([]);
         }
@@ -70,7 +80,14 @@ class SearchService {
       final validToken = token ?? _userProfile ?? '';
       
       return await _apiService.searchArticle(query, token: validToken, limit: limit);
+    } on SearchArticleException catch (e) {
+      // ✅ Gérer les erreurs spécifiques du backend
+      print('⚠️ Erreur backend dans searchImmediate:');
+      print('   errorCode: ${e.errorCode}');
+      print('   message: ${e.message}');
+      return [];
     } catch (e) {
+      print('❌ Erreur générique dans searchImmediate: $e');
       return [];
     }
   }

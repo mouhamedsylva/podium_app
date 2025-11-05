@@ -27,7 +27,7 @@ class _SearchModalState extends State<SearchModal>
   late Animation<double> _fadeAnimation;
   
   final TextEditingController _searchController = TextEditingController();
-  final List<String> _selectedCountries = ['BE']; // Par défaut Belgique
+  List<String> _selectedCountries = ['BE']; // Par défaut Belgique (sans final pour pouvoir modifier)
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
   String _errorMessage = '';
@@ -188,10 +188,16 @@ class _SearchModalState extends State<SearchModal>
 
   void _toggleCountry(String country) {
     setState(() {
+      // ✅ Nettoyer les doublons avant de basculer (garder unique)
+      _selectedCountries = _selectedCountries.toSet().toList();
+      
       if (_selectedCountries.contains(country)) {
         _selectedCountries.remove(country);
       } else {
-        _selectedCountries.add(country);
+        // ✅ S'assurer qu'on n'ajoute pas de doublon
+        if (!_selectedCountries.contains(country)) {
+          _selectedCountries.add(country);
+        }
       }
     });
   }
@@ -278,6 +284,36 @@ class _SearchModalState extends State<SearchModal>
           print('📝 sCodeArticle: "${firstResult['sCodeArticle']}"');
         }
       });
+    } on SearchArticleException catch (e) {
+      // ✅ Gérer les erreurs spécifiques du backend avec success, error, message
+      final translationService = Provider.of<TranslationService>(context, listen: false);
+      
+      // ✅ Utiliser la traduction pour le code d'erreur ou le message du backend
+      String errorDisplayMessage;
+      if (e.errorCode.isNotEmpty) {
+        // Essayer de traduire le code d'erreur (ex: HTML_SEARCH_BADREFERENCE)
+        final translatedError = translationService.translate(e.errorCode);
+        // Si la traduction existe (pas le même texte que la clé), l'utiliser
+        errorDisplayMessage = (translatedError != e.errorCode) 
+            ? translatedError 
+            : (e.message.isNotEmpty ? e.message : e.errorCode);
+      } else {
+        errorDisplayMessage = e.message.isNotEmpty ? e.message : 'Erreur de recherche';
+      }
+      
+      // ✅ Convertir les balises HTML <br> en sauts de ligne \n
+      errorDisplayMessage = errorDisplayMessage.replaceAll('<br>', '\n').replaceAll('<br/>', '\n').replaceAll('<br />', '\n');
+      
+      setState(() {
+        _isSearching = false;
+        _searchResults = [];
+        _errorMessage = errorDisplayMessage;
+      });
+      
+      print('⚠️ Erreur backend détectée:');
+      print('   errorCode: ${e.errorCode}');
+      print('   message: ${e.message}');
+      print('   message affiché: $errorDisplayMessage');
     } catch (e) {
       setState(() {
         _isSearching = false;
@@ -336,7 +372,7 @@ class _SearchModalState extends State<SearchModal>
                               maxHeight: screenHeight * 0.92,
                             ),
                             decoration: const BoxDecoration(
-                              color: Colors.white,
+                              color: Color(0xFFFFF8DC), // ✅ Jaune clair moutarde
                               borderRadius: BorderRadius.only(
                                 topLeft: Radius.circular(24),
                                 topRight: Radius.circular(24),
@@ -361,11 +397,11 @@ class _SearchModalState extends State<SearchModal>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Drag handle
+        // Drag handle (réduit)
         Container(
           margin: EdgeInsets.only(
-            top: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12),
-            bottom: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8),
+            top: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 6),
+            bottom: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 6),
           ),
           width: isVerySmallMobile ? 35 : 40,
           height: isVerySmallMobile ? 3 : 4,
@@ -375,96 +411,58 @@ class _SearchModalState extends State<SearchModal>
           ),
         ),
         
-        // En-tête avec fermeture
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
-            isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8),
-            isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
-            isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
-          ),
-          child: Consumer<TranslationService>(
-            builder: (context, translationService, child) {
-              return Row(
-                children: [
-                  Text(
-                    translationService.translate('FRONTPAGE_Msg05'),
-                    style: TextStyle(
-                      fontSize: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22),
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
-                      letterSpacing: -0.5,
-                    ),
+        // Positionner le bouton de fermeture en overlay sur la section jaune
+        Expanded(
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ✅ Section des pays en haut avec formes en pillules (pleine largeur)
+                    _buildCountrySection(isVerySmallMobile, isSmallMobile, isMobile),
+                
+                // Padding pour le reste du contenu
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
+                    isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
+                    isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
+                    0,
                   ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: _closeModal,
-                    child: Container(
-                      width: isVerySmallMobile ? 32 : (isSmallMobile ? 34 : 36),
-                      height: isVerySmallMobile ? 32 : (isSmallMobile ? 34 : 36),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.close,
-                        color: Color(0xFF666666),
-                        size: isVerySmallMobile ? 18 : (isSmallMobile ? 19 : 20),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-        
-        Flexible(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
-                0,
-                isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
-                isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Bouton Scanner
-                  _buildScanButton(isVerySmallMobile, isSmallMobile, isMobile),
-                  
-                  SizedBox(height: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20)),
-                  
-                  // Divider avec texte
-                  Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: Divider(color: Colors.grey[300])),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
-                        child: Text(
-                          'ou',
+                  
+                  // Titre "Rechercher un article" (centré et bleu)
+                  SizedBox(
+                    width: double.infinity, // ✅ Prend toute la largeur pour centrer
+                    child: Consumer<TranslationService>(
+                      builder: (context, translationService, child) {
+                        return Text(
+                          translationService.translate('FRONTPAGE_Msg05'),
+                          textAlign: TextAlign.center, // ✅ Centré
                           style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : 14),
-                            fontWeight: FontWeight.w500,
+                            fontSize: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22),
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1D4ED8), // ✅ Bleu plus sombre
+                            letterSpacing: -0.5,
                           ),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Colors.grey[300])),
-                    ],
+                        );
+                      },
+                    ),
                   ),
                   
                   SizedBox(height: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20)),
                   
-                  // Champ de recherche moderne
-                  _buildSearchField(isVerySmallMobile, isSmallMobile, isMobile),
+                  // Bouton Scanner (placé juste après le titre)
+                  _buildScanButton(isVerySmallMobile, isSmallMobile, isMobile),
                   
                   SizedBox(height: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24)),
                   
-                  // Section des pays
-                  _buildCountrySection(isVerySmallMobile, isSmallMobile, isMobile),
+                  // Champ de recherche moderne
+                  _buildSearchField(isVerySmallMobile, isSmallMobile, isMobile),
                   
                   SizedBox(height: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24)),
                   
@@ -496,9 +494,34 @@ class _SearchModalState extends State<SearchModal>
                           )
                         : _buildSearchResults(),
                   ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+              ],
             ),
+          ),
+              // Bouton de fermeture en overlay en haut à droite
+              Positioned(
+                top: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12),
+                right: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
+                child: GestureDetector(
+                  onTap: _closeModal,
+                  child: Container(
+                    width: isVerySmallMobile ? 32 : (isSmallMobile ? 34 : 36),
+                    height: isVerySmallMobile ? 32 : (isSmallMobile ? 34 : 36),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.close,
+                      color: Color(0xFF666666),
+                      size: isVerySmallMobile ? 18 : (isSmallMobile ? 19 : 20),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -574,33 +597,35 @@ class _SearchModalState extends State<SearchModal>
   }
 
   Widget _buildSearchField(bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _searchController.text.isNotEmpty 
-              ? const Color(0xFF2563EB) 
-              : Colors.grey[200]!,
-          width: 1.5,
-        ),
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onInputCode,
-        keyboardType: TextInputType.number,
-        style: TextStyle(
-          fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF1A1A1A),
-        ),
-        decoration: InputDecoration(
-          hintText: 'Ex: 123.456.789',
-          hintStyle: TextStyle(
-            color: Colors.grey[400],
-            fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-            fontWeight: FontWeight.normal,
+    return Consumer<TranslationService>(
+      builder: (context, translationService, child) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white, // ✅ Fond blanc
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _searchController.text.isNotEmpty 
+                  ? const Color(0xFF2563EB) 
+                  : Colors.grey[200]!,
+              width: 1.5,
+            ),
           ),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onInputCode,
+            keyboardType: TextInputType.number,
+            style: TextStyle(
+              fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF1A1A1A),
+            ),
+            decoration: InputDecoration(
+              hintText: translationService.translate('PRODUCTSEARCH_HINT_CODE'), // ✅ Utilise la clé de traduction
+              hintStyle: TextStyle(
+                color: Colors.grey[400],
+                fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
+                fontWeight: FontWeight.normal,
+              ),
           prefixIcon: Icon(
             Icons.search,
             color: _searchController.text.isNotEmpty 
@@ -642,149 +667,216 @@ class _SearchModalState extends State<SearchModal>
                       },
                     )
                   : null,
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(
-            vertical: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
-            horizontal: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                vertical: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
+                horizontal: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _buildCountrySection(bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
     final translationService = Provider.of<TranslationService>(context, listen: false);
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          translationService.translate('FRONTPAGE_Msg04'),
-          style: TextStyle(
-            fontSize: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 15),
-            fontWeight: FontWeight.w600,
-            color: Colors.grey[700],
-          ),
+    // ✅ Nettoyer les doublons dans _selectedCountries (garder unique)
+    _selectedCountries = _selectedCountries.toSet().toList();
+    
+    // ✅ Créer un Set pour éviter les doublons dans les codes de pays affichés
+    Set<String> processedCountryCodes = {};
+    
+    // Séparer les pays sélectionnés et non sélectionnés
+    List<Widget> selectedCountryChips = [];
+    List<Widget> unselectedCountryChips = [];
+    
+    if (_availableCountries.length == 0) {
+      // Utiliser la liste par défaut
+      for (var code in ['BE', 'DE', 'ES', 'FR', 'IT', 'NL', 'PT']) {
+        // ✅ Éviter les doublons dans l'affichage
+        if (processedCountryCodes.contains(code)) continue;
+        processedCountryCodes.add(code);
+        
+        final isSelected = _selectedCountries.contains(code);
+        if (isSelected) {
+          selectedCountryChips.add(_buildCountryChip(code, true, isVerySmallMobile, isSmallMobile, isMobile));
+        } else {
+          unselectedCountryChips.add(_buildCountryChip(code, false, isVerySmallMobile, isSmallMobile, isMobile));
+        }
+      }
+    } else {
+      // Utiliser les pays chargés depuis l'API
+      for (var country in _availableCountries) {
+        final countryCode = country.sPays.toUpperCase();
+        
+        // ✅ Éviter les doublons dans l'affichage
+        if (processedCountryCodes.contains(countryCode)) continue;
+        processedCountryCodes.add(countryCode);
+        
+        final isSelected = _selectedCountries.contains(countryCode);
+        if (isSelected) {
+          selectedCountryChips.add(_buildCountryChip(countryCode, true, isVerySmallMobile, isSmallMobile, isMobile));
+        } else {
+          unselectedCountryChips.add(_buildCountryChip(countryCode, false, isVerySmallMobile, isSmallMobile, isMobile));
+        }
+      }
+    }
+    
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFD43B), // ✅ Même couleur de fond que product_search_screen
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
+          right: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
+          top: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12), // ✅ Réduit le padding en haut
+          bottom: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
         ),
-        SizedBox(height: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12)),
-        _isLoadingCountries
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: LoadingAnimationWidget.progressiveDots(
-                    color: Colors.blue,
-                    size: 30,
-                  ),
-                ),
+        child: Column(
+          children: [
+            Text(
+              translationService.translate('FRONTPAGE_Msg04'),
+              style: TextStyle(
+                fontSize: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
               ),
-            )
-          : _buildCountryChips(),
-      ],
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _isLoadingCountries
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: LoadingAnimationWidget.progressiveDots(
+                        color: Colors.blue,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                )
+              : _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildCountryChips() {
-    // Si pas de pays chargés, utiliser une liste par défaut
-    // Vérification robuste pour éviter les erreurs en Web
-    if (_availableCountries.length == 0) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 10,
-        children: ['BE', 'DE', 'ES', 'FR', 'IT', 'NL', 'PT'].map((code) {
-          final isSelected = _selectedCountries.contains(code);
+  /// Créer un chip de pays avec le style de product_search_screen (allongé)
+  Widget _buildCountryChip(String countryCode, bool isSelected, bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
+    // ✅ Allonger les pillules de manière responsive (valeur augmentée)
+    // Pour très petit mobile: horizontal 24, vertical 6
+    // Pour petit mobile: horizontal 26, vertical 7
+    // Pour mobile: horizontal 28, vertical 8
+    // Pour desktop: horizontal 32, vertical 8
+    final double horizontalPadding = isVerySmallMobile ? 24.0 : (isSmallMobile ? 26.0 : (isMobile ? 28.0 : 32.0));
+    final double verticalPadding = isVerySmallMobile ? 6.0 : (isSmallMobile ? 7.0 : 8.0);
+    
+    return GestureDetector(
+      onTap: () => _toggleCountry(countryCode),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white, // ✅ Même couleur que product_search_screen
+          borderRadius: BorderRadius.circular(15), // ✅ Même borderRadius
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08), // ✅ Même ombre
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _countryFlags[countryCode] ?? '🏳️',
+              style: TextStyle(fontSize: isMobile ? 16 : 18), // ✅ Même taille que product_search_screen
+            ),
+            SizedBox(width: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 18)), // ✅ Plus d'espace entre drapeau et symbole
+            Text(
+              isSelected ? '✓' : '+', // ✅ Même symbole que product_search_screen
+              style: TextStyle(
+                fontSize: isMobile ? 14 : 16, // ✅ Même taille que product_search_screen
+                color: isSelected ? const Color(0xFF0D6EFD) : Colors.grey[500], // ✅ Même couleur
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Grille avec 4 pays en haut et 3 en bas (comme product_search_screen)
+  Widget _buildCountryGrid(List<Widget> selectedChips, List<Widget> unselectedChips) {
+    // Objectif d'affichage: 4 drapeaux sur la première ligne, 3 sur la seconde (pattern 4/3)
+    // Responsive sans overflow: largeur de puce contrainte par ligne via LayoutBuilder
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth;
+        const double horizontalGap = 8.0;
+        const double verticalGap = 8.0;
+
+        final List<Widget> allChips = [...selectedChips, ...unselectedChips];
+        const List<int> pattern = [4, 3]; // 4 en haut, 3 en bas
+        int patternIndex = 0;
+        int cursor = 0;
+        final List<Widget> rows = [];
+
+        while (cursor < allChips.length) {
+          final int count = pattern[patternIndex % pattern.length];
+          final int end = (cursor + count).clamp(0, allChips.length);
           
-          return GestureDetector(
-            onTap: () => _toggleCountry(code),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF2563EB) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isSelected ? const Color(0xFF2563EB) : Colors.grey[300]!,
-                  width: 1.5,
-                ),
-                boxShadow: isSelected ? [
-                  BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ] : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _countryFlags[code] ?? '🏳️',
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  const SizedBox(width: 6),
-                  if (isSelected)
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.white,
-                      size: 16,
+          final List<Widget> rowChildren = [];
+          for (int j = cursor; j < end; j++) {
+            final chipIndex = j;
+            rowChildren.add(
+              Expanded(
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 0),
+                      child: allChips[j],
                     ),
-                ],
+                  ),
+                ),
               ),
+            );
+            if (j < end - 1) {
+              rowChildren.add(const SizedBox(width: horizontalGap));
+            }
+          }
+
+          rows.add(
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: rowChildren,
             ),
           );
-        }).toList(),
-      );
-    }
 
-    // Utiliser les pays chargés depuis l'API
-    return Wrap(
-      spacing: 8,
-      runSpacing: 10,
-      children: _availableCountries.map((country) {
-        final countryCode = country.sPays.toUpperCase();
-        final isSelected = _selectedCountries.contains(countryCode);
-        
-        return GestureDetector(
-          onTap: () => _toggleCountry(countryCode),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF2563EB) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected ? const Color(0xFF2563EB) : Colors.grey[300]!,
-                width: 1.5,
-              ),
-              boxShadow: isSelected ? [
-                BoxShadow(
-                  color: const Color(0xFF2563EB).withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ] : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _countryFlags[countryCode] ?? '🏳️',
-                  style: const TextStyle(fontSize: 18),
-                ),
-                const SizedBox(width: 6),
-                if (isSelected)
-                  const Icon(
-                    Icons.check_circle,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+          cursor = end;
+          patternIndex++;
+          if (cursor < allChips.length) {
+            rows.add(const SizedBox(height: verticalGap));
+          }
+        }
+
+        return Column(children: rows);
+      },
     );
   }
 
@@ -826,31 +918,14 @@ class _SearchModalState extends State<SearchModal>
           padding: const EdgeInsets.symmetric(vertical: 40),
           child: Column(
             children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.search,
-                  size: 36,
-                  color: Colors.grey[400],
-                ),
+              Icon(
+                Icons.search,
+                size: 56, // ✅ Agrandie
+                color: Colors.grey[400],
               ),
               const SizedBox(height: 16),
               Text(
-                translationService.translate('FRONTPAGE_Msg05'),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Scannez un code-barres ou\nsaisissez un code article',
+                translationService.translate('PRODUCTSEARCH_ENTER_CODE'),
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[500],
@@ -879,18 +954,18 @@ class _SearchModalState extends State<SearchModal>
           Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
           const SizedBox(height: 12),
           Text(
-            'Aucun résultat',
+            'Erreur de recherche',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.red[700],
+              color: Colors.blue[700],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             _errorMessage,
             style: TextStyle(
-              color: Colors.red[600],
+              color: Colors.blue[600],
               fontSize: 14,
             ),
             textAlign: TextAlign.center,
