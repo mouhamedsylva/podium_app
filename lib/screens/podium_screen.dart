@@ -1203,11 +1203,11 @@ class _PodiumScreenState extends State<PodiumScreen>
                             podiumMsg03,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.green[600],
+                              color: Colors.black,
                             ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(Icons.arrow_forward, size: 16, color: Colors.green[600]),
+                          Icon(Icons.trending_down, size: 16, color: Colors.green[600]),
                         ],
                       ),
                     ],
@@ -1227,13 +1227,13 @@ class _PodiumScreenState extends State<PodiumScreen>
                           'Comparaison des prix en Europe',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.green[600],
+                            color: Colors.black,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
                       ),
-                      Icon(Icons.arrow_forward, size: 16, color: Colors.green[600]),
+                      Icon(Icons.trending_down, size: 16, color: Colors.green[600]),
                     ],
                   ),
           ),
@@ -1543,19 +1543,64 @@ class _PodiumScreenState extends State<PodiumScreen>
                         ],
                       ),
                     ),
-                    // Icône Home pour le pays de l'utilisateur
-                    if (isUserCountry)
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: Colors.green[400],
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.home, size: 14, color: Colors.white),
+                    // Icône Home si sMyHomeIcon correspond au pays de l'article
+                    Builder(
+                      builder: (context) {
+                        // Récupérer le code pays de l'article (sLangueIso ou sPays)
+                        final articleCountryCode = (article['sLangueIso'] ?? article['sPays'] ?? '').toString().toUpperCase();
+                        // Récupérer sMyHomeIcon depuis les données du produit (au niveau global)
+                        final sMyHomeIcon = _productData?['sMyHomeIcon']?.toString().toUpperCase() ?? '';
+                        // Vérifier si sMyHomeIcon correspond au pays de cet article
+                        final shouldShowHomeIcon = sMyHomeIcon.isNotEmpty && 
+                            (articleCountryCode == sMyHomeIcon || 
+                             articleCountryCode.contains(sMyHomeIcon) || 
+                             sMyHomeIcon.contains(articleCountryCode));
+                        
+                        if (shouldShowHomeIcon) {
+                          return Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: Colors.green[400],
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.home, size: 14, color: Colors.white),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
                     ),
-                    // Trophée pour la 1ère place
-                    if (rank == 1 && !isUserCountry)
+                    // Icône Panier si IsInBasket correspond au pays de l'article
+                    Builder(
+                      builder: (context) {
+                        // Récupérer le code pays de l'article (sLangueIso ou sPays)
+                        final articleCountryCode = (article['sLangueIso'] ?? article['sPays'] ?? '').toString().toUpperCase();
+                        // Récupérer IsInBasket depuis les données du produit (au niveau global)
+                        final IsInBasket = _productData?['IsInBasket']?.toString().toUpperCase() ?? '';
+                        // Vérifier si IsInBasket correspond au pays de cet article
+                        final shouldShowCartIcon = IsInBasket.isNotEmpty && 
+                            (articleCountryCode == IsInBasket || 
+                             articleCountryCode.contains(IsInBasket) || 
+                             IsInBasket.contains(articleCountryCode));
+                        
+                        if (shouldShowCartIcon) {
+                          return Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[400],
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.shopping_cart, size: 14, color: Colors.white),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                    // Trophée pour la 1ère place (si pas de home icon)
+                    if (rank == 1 && (article['sMyHomeIcon'] == null || article['sMyHomeIcon'].toString().isEmpty))
                       Container(
+                        margin: const EdgeInsets.only(left: 4),
                         padding: const EdgeInsets.all(5),
                         decoration: const BoxDecoration(color: Color(0xFFFFD54F), shape: BoxShape.circle),
                         child: const Icon(Icons.emoji_events, size: 12, color: Color(0xFF7A5F00)),
@@ -1765,29 +1810,12 @@ class _PodiumScreenState extends State<PodiumScreen>
               ),
               // Numéro du rang
               Center(
-                child: Container(
-                  width: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40),
-                  height: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      rank.toString(),
-                      style: TextStyle(
-                        fontSize: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22),
-                        fontWeight: FontWeight.bold,
-                        color: _getPodiumNumberColor(rank),
-                      ),
-                    ),
+                child: Text(
+                  rank.toString(),
+                  style: TextStyle(
+                    fontSize: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22),
+                    fontWeight: FontWeight.bold,
+                    color: _getPodiumNumberColor(rank),
                   ),
                 ),
               ),
@@ -1884,20 +1912,68 @@ class _PodiumScreenState extends State<PodiumScreen>
                 ),
               ),
               
-              // Icône Home pour le pays de l'utilisateur
-              if (isUserCountry)
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.green[400],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.home,
-                    size: 16,
-                    color: Colors.white,
-                ),
+              // Icône Home si sMyHomeIcon correspond au pays
+              Builder(
+                builder: (context) {
+                  // Récupérer le code pays (sLangueIso ou sPays)
+                  final countryCode = (country['sLangueIso'] ?? country['sPays'] ?? '').toString().toUpperCase();
+                  // Récupérer sMyHomeIcon depuis les données du produit (au niveau global)
+                  final sMyHomeIcon = _productData?['sMyHomeIcon']?.toString().toUpperCase() ?? '';
+                  // Vérifier si sMyHomeIcon correspond à ce pays
+                  final shouldShowHomeIcon = sMyHomeIcon.isNotEmpty && 
+                      (countryCode == sMyHomeIcon || 
+                       countryCode.contains(sMyHomeIcon) || 
+                       sMyHomeIcon.contains(countryCode));
+                  
+                  if (shouldShowHomeIcon) {
+                    return Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.green[400],
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.home,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              
+              // Icône Panier si IsInBasket correspond au pays
+              Builder(
+                builder: (context) {
+                  // Récupérer le code pays (sLangueIso ou sPays)
+                  final countryCode = (country['sLangueIso'] ?? country['sPays'] ?? '').toString().toUpperCase();
+                  // Récupérer IsInBasket depuis les données du produit (au niveau global)
+                  final IsInBasket = _productData?['IsInBasket']?.toString().toUpperCase() ?? '';
+                  // Vérifier si IsInBasket correspond à ce pays
+                  final shouldShowCartIcon = IsInBasket.isNotEmpty && 
+                      (countryCode == IsInBasket || 
+                       countryCode.contains(IsInBasket) || 
+                       IsInBasket.contains(countryCode));
+                  
+                  if (shouldShowCartIcon) {
+                    return Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[400],
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.shopping_cart,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
               
               // Prix

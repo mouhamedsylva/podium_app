@@ -623,25 +623,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // Synchroniser avec l'API en arrière-plan (sans bloquer l'UI)
         _syncMainCountryWithAPI(newCountryLangue);
       }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pays principal mis à jour'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
     } catch (e) {
       print('Erreur lors de la mise à jour du pays principal: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
   
@@ -717,28 +700,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // ✅ Synchroniser avec l'API en arrière-plan (sans bloquer l'UI)
         _syncFavoriteCountriesWithAPI(newFavorites);
       }
-      
-      // ✅ Afficher le message de succès immédiatement
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pays favoris mis à jour'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
       print('Erreur lors de la mise à jour des pays favoris: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
     }
   }
   
@@ -830,14 +793,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
     } catch (e) {
       print('Erreur lors du basculement du pays favori: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     }
   }
 

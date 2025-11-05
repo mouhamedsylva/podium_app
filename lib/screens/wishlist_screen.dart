@@ -3101,7 +3101,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10b981), // Emerald-500 SNAL
+                  color: const Color(0xFF22C55F), // Vert #22C55F
                   borderRadius: BorderRadius.circular(20), // Forme de capsule
                 ),
                 child: Text(
@@ -3128,28 +3128,56 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // Drapeaux fixes (Allemagne, Belgique, Espagne) - Responsive
               ...['DE', 'BE', 'ES'].map((countryCode) {
                 print('🏴 Affichage drapeau $countryCode - Mobile: $isMobile');
-                return Container(
-                  margin: EdgeInsets.only(right: isMobile ? 4 : 6),
-                  width: isMobile ? 20 : 24,
-                  height: isMobile ? 15 : 18,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: Image.network(
-                      ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
-                        return Container(
-                          color: Colors.grey[300],
-                          child: Icon(
-                            Icons.flag,
-                            size: isMobile ? 10 : 12,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
+                // Récupérer IsInBasket depuis l'article
+                final IsInBasket = article['IsInBasket']?.toString().toUpperCase() ?? '';
+                // Vérifier si ce pays correspond à IsInBasket
+                final isInBasketCountry = IsInBasket.isNotEmpty && 
+                    (countryCode.toUpperCase() == IsInBasket || 
+                     countryCode.toUpperCase().contains(IsInBasket) || 
+                     IsInBasket.contains(countryCode.toUpperCase()));
+                
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      margin: EdgeInsets.only(right: isMobile ? 4 : 6),
+                      width: isMobile ? 20 : 24,
+                      height: isMobile ? 15 : 18,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: Image.network(
+                          ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
+                            return Container(
+                              color: Colors.grey[300],
+                              child: Icon(
+                                Icons.flag,
+                                size: isMobile ? 10 : 12,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
+                    // Icône panier si ce pays correspond à IsInBasket
+                    if (isInBasketCountry)
+                      Container(
+                        margin: const EdgeInsets.only(left: 2),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[400],
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.shopping_cart,
+                          size: isMobile ? 10 : 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                  ],
                 );
               }).toList(),
               
@@ -3580,6 +3608,36 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                     height: 1.0,
                   ),
                 ),
+              // Icône panier si le pays sélectionné correspond à IsInBasket
+              Builder(
+                builder: (context) {
+                  // Récupérer IsInBasket depuis l'article
+                  final IsInBasket = article['IsInBasket']?.toString().toUpperCase() ?? '';
+                  // Vérifier si le pays sélectionné correspond à IsInBasket
+                  final isInBasketCountry = IsInBasket.isNotEmpty && 
+                      selectedCountry != null &&
+                      (selectedCountry!.toUpperCase() == IsInBasket || 
+                       selectedCountry!.toUpperCase().contains(IsInBasket) || 
+                       IsInBasket.contains(selectedCountry!.toUpperCase()));
+                  
+                  if (isInBasketCountry) {
+                    return Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[400],
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.shopping_cart,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
             ],
           ),
           
@@ -3589,7 +3647,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF10b981), // Emerald-500 SNAL // Vert
+              color: const Color(0xFF22C55F), // Vert #22C55F
               borderRadius: BorderRadius.circular(20), // Forme de capsule
             ),
             child: Text(
@@ -3614,27 +3672,56 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // Drapeaux des pays fixes (Allemagne, Belgique, Espagne)
               ...fixedCountries.map((pays) {
                 final flag = pays['sFlag'] ?? '';
-                return Container(
-                  margin: const EdgeInsets.only(right: 4),
-                  width: isMobile ? 20 : 24,
-                  height: isMobile ? 15 : 18,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: Image.network(
-                      ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${(pays['sPays'] ?? '').toString()}.PNG'),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[300],
-                          child: const Icon(
-                            Icons.flag,
-                            size: 12,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
+                final countryCode = (pays['sPays'] ?? '').toString().toUpperCase();
+                // Récupérer IsInBasket depuis l'article
+                final IsInBasket = article['IsInBasket']?.toString().toUpperCase() ?? '';
+                // Vérifier si ce pays correspond à IsInBasket
+                final isInBasketCountry = IsInBasket.isNotEmpty && 
+                    (countryCode == IsInBasket || 
+                     countryCode.contains(IsInBasket) || 
+                     IsInBasket.contains(countryCode));
+                
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      width: isMobile ? 20 : 24,
+                      height: isMobile ? 15 : 18,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: Image.network(
+                          ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/$countryCode.PNG'),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[300],
+                              child: const Icon(
+                                Icons.flag,
+                                size: 12,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
+                    // Icône panier si ce pays correspond à IsInBasket
+                    if (isInBasketCountry)
+                      Container(
+                        margin: const EdgeInsets.only(left: 2),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[400],
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.shopping_cart,
+                          size: isMobile ? 10 : 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                  ],
                 );
               }).toList(),
               
