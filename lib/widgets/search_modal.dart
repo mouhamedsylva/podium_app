@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:animations/animations.dart';
@@ -27,7 +29,8 @@ class _SearchModalState extends State<SearchModal>
   late Animation<double> _fadeAnimation;
   
   final TextEditingController _searchController = TextEditingController();
-  List<String> _selectedCountries = ['BE']; // Par défaut Belgique (sans final pour pouvoir modifier)
+  List<String> _selectedCountries = [];
+  LinkedHashSet<String> _favoriteCountryCodes = LinkedHashSet<String>();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
   String _errorMessage = '';
@@ -133,9 +136,13 @@ class _SearchModalState extends State<SearchModal>
       await countryService.initialize();
       
       final countries = countryService.getAllCountries();
-      
+      final favorites = await _loadFavoritesFromProfile(countries);
+      final orderedSelected = _orderedFavoritesList(favorites, countries);
+
       setState(() {
         _availableCountries = countries;
+        _favoriteCountryCodes = favorites;
+        _selectedCountries = orderedSelected;
         _isLoadingCountries = false;
       });
       
@@ -146,6 +153,143 @@ class _SearchModalState extends State<SearchModal>
         _isLoadingCountries = false;
       });
     }
+  }
+
+  Future<LinkedHashSet<String>> _loadFavoritesFromProfile(List<Country> countries) async {
+    try {
+      final profile = await LocalStorageService.getProfile();
+      final favoritesRaw = profile?['sPaysFav']?.toString() ?? '';
+      final favorites = _buildFavoriteSet(favoritesRaw, countries);
+      if (favorites.isNotEmpty) {
+        return favorites;
+      }
+    } catch (e) {
+      print('⚠️ Erreur _loadFavoritesFromProfile: $e');
+    }
+    return _buildDefaultFavoriteSet(countries);
+  }
+
+  LinkedHashSet<String> _buildFavoriteSet(String favoritesRaw, List<Country> availableCountries) {
+    final availableCodes = availableCountries
+        .map((country) => (country.sPays ?? '').toUpperCase())
+        .where((code) => code.length == 2)
+        .toSet();
+
+    final favorites = LinkedHashSet<String>();
+
+    var sanitizedFavoritesRaw = favoritesRaw
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+
+    if (sanitizedFavoritesRaw.isNotEmpty) {
+      for (final part in sanitizedFavoritesRaw.split(',')) {
+        final code = part.trim().toUpperCase();
+        if (code.length == 2 && availableCodes.contains(code)) {
+          favorites.add(code);
+        }
+      }
+    }
+
+    if (favorites.isEmpty) {
+      return _buildDefaultFavoriteSet(availableCountries);
+    }
+
+    return favorites;
+  }
+
+  LinkedHashSet<String> _buildDefaultFavoriteSet(List<Country> availableCountries) {
+    final defaults = LinkedHashSet<String>();
+    for (final country in availableCountries) {
+      final code = (country.sPays ?? '').toUpperCase();
+      if (code.length == 2) {
+        defaults.add(code);
+      }
+      if (defaults.length >= 5) break;
+    }
+    if (defaults.isEmpty) {
+      defaults.addAll(['FR', 'BE', 'DE', 'NL', 'ES']);
+    }
+    return defaults;
+  }
+
+  List<String> _orderedFavoritesList(Iterable<String> favorites, List<Country> countries) {
+    final normalized = favorites
+        .map((code) => code.toUpperCase())
+        .where((code) => code.length == 2)
+        .toSet();
+    final ordered = <String>[];
+
+    for (final country in countries) {
+      final code = (country.sPays ?? country.code ?? '').toUpperCase();
+      if (code.length == 2 && normalized.contains(code)) {
+        ordered.add(code);
+      }
+    }
+
+    for (final code in normalized) {
+      if (!ordered.contains(code)) {
+        ordered.add(code);
+      }
+    }
+
+    return ordered;
+  }
+
+  Map<String, dynamic> _composeProfileData({
+    Map<String, dynamic>? base,
+    Map<String, dynamic>? overrides,
+  }) {
+    String normalizeValue(dynamic value) {
+      if (value == null) return '';
+      if (value is Iterable) {
+        final joined = value
+            .map((item) => (item ?? '').toString().trim())
+            .where((item) => item.isNotEmpty)
+            .join(',');
+        return joined;
+      }
+      final stringValue = value.toString();
+      return stringValue.trim();
+    }
+
+    String pick(String key) {
+      final overrideValue = overrides?[key];
+      final normalizedOverride = normalizeValue(overrideValue);
+      if (normalizedOverride.isNotEmpty) {
+        return normalizedOverride;
+      }
+
+      final baseValue = base?[key];
+      final normalizedBase = normalizeValue(baseValue);
+      if (normalizedBase.isNotEmpty) {
+        return normalizedBase;
+      }
+      return '';
+    }
+
+    final result = <String, dynamic>{
+      'iProfile': pick('iProfile'),
+      'iBasket': pick('iBasket'),
+      'sPaysFav': pick('sPaysFav'),
+      'sPaysLangue': pick('sPaysLangue'),
+      'sEmail': pick('sEmail'),
+      'sNom': pick('sNom'),
+      'sPrenom': pick('sPrenom'),
+      'sPhoto': pick('sPhoto'),
+      'sTel': pick('sTel'),
+      'sRue': pick('sRue'),
+      'sZip': pick('sZip'),
+      'sCity': pick('sCity'),
+    };
+
+    final token = overrides?['token'] ?? base?['token'];
+    if (token != null) {
+      result['token'] = token.toString();
+    }
+
+    return result;
   }
 
   @override
@@ -186,20 +330,64 @@ class _SearchModalState extends State<SearchModal>
     }
   }
 
-  void _toggleCountry(String country) {
-    setState(() {
-      // ✅ Nettoyer les doublons avant de basculer (garder unique)
-      _selectedCountries = _selectedCountries.toSet().toList();
-      
-      if (_selectedCountries.contains(country)) {
-        _selectedCountries.remove(country);
-      } else {
-        // ✅ S'assurer qu'on n'ajoute pas de doublon
-        if (!_selectedCountries.contains(country)) {
-          _selectedCountries.add(country);
-        }
+  Future<void> _toggleCountry(String country) async {
+    final normalizedCode = country.toUpperCase();
+    if (normalizedCode.length != 2) {
+      return;
+    }
+
+    final previousFavorites = LinkedHashSet<String>.from(_favoriteCountryCodes);
+    final updatedFavorites = LinkedHashSet<String>.from(_favoriteCountryCodes);
+    final isSelected = updatedFavorites.contains(normalizedCode);
+
+    if (isSelected) {
+      if (updatedFavorites.length <= 1) {
+        return;
       }
-    });
+      updatedFavorites.remove(normalizedCode);
+    } else {
+      updatedFavorites.add(normalizedCode);
+    }
+
+    final orderedFavorites = _orderedFavoritesList(updatedFavorites, _availableCountries);
+    final newFavoritesString = orderedFavorites.join(',');
+
+    if (mounted) {
+      setState(() {
+        _favoriteCountryCodes = updatedFavorites;
+        _selectedCountries = orderedFavorites;
+      });
+    }
+
+    Map<String, dynamic>? previousProfile;
+    try {
+      previousProfile = await LocalStorageService.getProfile();
+      final updatedProfile = _composeProfileData(
+        base: previousProfile,
+        overrides: {
+          'sPaysFav': newFavoritesString,
+        },
+      );
+
+      await LocalStorageService.saveProfile(updatedProfile);
+
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      await apiService.updateProfile({
+        'sPaysFav': newFavoritesString,
+        'sPaysFavList': orderedFavorites,
+      });
+    } catch (e) {
+      print('❌ Erreur _toggleCountry: $e');
+      if (previousProfile != null) {
+        await LocalStorageService.saveProfile(previousProfile);
+      }
+      if (mounted) {
+        setState(() {
+          _favoriteCountryCodes = previousFavorites;
+          _selectedCountries = _orderedFavoritesList(previousFavorites, _availableCountries);
+        });
+      }
+    }
   }
 
   void _onInputCode(String value) {
@@ -681,59 +869,56 @@ class _SearchModalState extends State<SearchModal>
 
   Widget _buildCountrySection(bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
     final translationService = Provider.of<TranslationService>(context, listen: false);
-    
-    // ✅ Nettoyer les doublons dans _selectedCountries (garder unique)
-    _selectedCountries = _selectedCountries.toSet().toList();
-    
-    // ✅ Créer un Set pour éviter les doublons dans les codes de pays affichés
-    Set<String> processedCountryCodes = {};
-    
-    // Séparer les pays sélectionnés et non sélectionnés
-    List<Widget> selectedCountryChips = [];
-    List<Widget> unselectedCountryChips = [];
-    
-    if (_availableCountries.length == 0) {
-      // Utiliser la liste par défaut
-      for (var code in ['BE', 'DE', 'ES', 'FR', 'IT', 'NL', 'PT']) {
-        // ✅ Éviter les doublons dans l'affichage
-        if (processedCountryCodes.contains(code)) continue;
-        processedCountryCodes.add(code);
-        
-        final isSelected = _selectedCountries.contains(code);
-        if (isSelected) {
-          selectedCountryChips.add(_buildCountryChip(code, true, isVerySmallMobile, isSmallMobile, isMobile));
-        } else {
-          unselectedCountryChips.add(_buildCountryChip(code, false, isVerySmallMobile, isSmallMobile, isMobile));
-        }
+
+    final processedCountryCodes = <String>{};
+    final selectedCountryChips = <Widget>[];
+    final unselectedCountryChips = <Widget>[];
+    final selectedCodes = _orderedFavoritesList(_favoriteCountryCodes, _availableCountries);
+
+    if (_availableCountries.isEmpty) {
+      final fallbackCodes = selectedCodes.isNotEmpty
+          ? selectedCodes
+          : ['FR', 'BE', 'DE', 'NL', 'ES', 'IT', 'PT'];
+
+      for (final code in fallbackCodes) {
+        final normalized = code.toUpperCase();
+        if (processedCountryCodes.contains(normalized)) continue;
+        processedCountryCodes.add(normalized);
+
+        final isSelected = _favoriteCountryCodes.contains(normalized);
+        (isSelected ? selectedCountryChips : unselectedCountryChips)
+            .add(_buildCountryChip(normalized, isSelected, isVerySmallMobile, isSmallMobile, isMobile));
       }
     } else {
-      // Utiliser les pays chargés depuis l'API
-      for (var country in _availableCountries) {
-        final countryCode = country.sPays.toUpperCase();
-        
-        // ✅ Éviter les doublons dans l'affichage
-        if (processedCountryCodes.contains(countryCode)) continue;
+      for (final code in selectedCodes) {
+        final normalized = code.toUpperCase();
+        if (processedCountryCodes.contains(normalized)) continue;
+        processedCountryCodes.add(normalized);
+        selectedCountryChips.add(
+          _buildCountryChip(normalized, true, isVerySmallMobile, isSmallMobile, isMobile),
+        );
+      }
+
+      for (final country in _availableCountries) {
+        final countryCode = (country.sPays ?? '').toUpperCase();
+        if (countryCode.length != 2 || processedCountryCodes.contains(countryCode)) continue;
         processedCountryCodes.add(countryCode);
-        
-        final isSelected = _selectedCountries.contains(countryCode);
-        if (isSelected) {
-          selectedCountryChips.add(_buildCountryChip(countryCode, true, isVerySmallMobile, isSmallMobile, isMobile));
-        } else {
-          unselectedCountryChips.add(_buildCountryChip(countryCode, false, isVerySmallMobile, isSmallMobile, isMobile));
-        }
+        final isSelected = _favoriteCountryCodes.contains(countryCode);
+        (isSelected ? selectedCountryChips : unselectedCountryChips)
+            .add(_buildCountryChip(countryCode, isSelected, isVerySmallMobile, isSmallMobile, isMobile));
       }
     }
-    
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        color: Color(0xFFFFD43B), // ✅ Même couleur de fond que product_search_screen
+        color: Color(0xFFFFD43B),
       ),
       child: Padding(
         padding: EdgeInsets.only(
           left: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
           right: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
-          top: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12), // ✅ Réduit le padding en haut
+          top: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12),
           bottom: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
         ),
         child: Column(
@@ -749,20 +934,20 @@ class _SearchModalState extends State<SearchModal>
             ),
             const SizedBox(height: 16),
             _isLoadingCountries
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: SizedBox(
-                      width: 30,
-                      height: 30,
-                      child: LoadingAnimationWidget.progressiveDots(
-                        color: Colors.blue,
-                        size: 30,
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: LoadingAnimationWidget.progressiveDots(
+                          color: Colors.blue,
+                          size: 30,
+                        ),
                       ),
                     ),
-                  ),
-                )
-              : _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
+                  )
+                : _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
           ],
         ),
       ),

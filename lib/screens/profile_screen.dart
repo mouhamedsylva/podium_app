@@ -727,6 +727,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'zip': currentProfile['sZip']?.toString() ?? '',
         'city': currentProfile['sCity']?.toString() ?? '',
         'token': currentProfile['token']?.toString() ?? '',
+        'sPaysFav': currentProfile['sPaysFav']?.toString() ?? '',
+        'sPaysFavList': (currentProfile['sPaysFav']?.toString() ?? '')
+            .split(',')
+            .map((code) => code.trim().toUpperCase())
+            .where((code) => code.isNotEmpty)
+            .toList(),
       };
       
       print('📤 Synchronisation pays favoris avec l\'API:');

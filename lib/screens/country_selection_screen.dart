@@ -478,7 +478,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                   
                   SizedBox(height: isVerySmallMobile ? 20 : (isSmallMobile ? 28 : (isMobile ? 32 : 40))),
                   
-                  // Bouton Terminer
+                  // Bouton Valider
                   _buildSubmitButton(translationService: translationService),
                   
                   SizedBox(height: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : (isMobile ? 16 : 20))),

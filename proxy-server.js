@@ -1384,6 +1384,24 @@ app.post('/api/profile/update', express.json(), async (req, res) => {
     console.log(`🍪 Cookie envoyé à SNAL:`, cookieString.substring(0, 100) + '...');
 
     // Utiliser le bon endpoint SNAL avec l'iProfile
+    console.log(`➡️ [Proxy][UPDATE-PROFILE] URL ciblée: https://jirig.be/api/update-info-profil/${iProfile}`);
+
+    console.log('➡️ [Proxy][UPDATE-PROFILE] Headers envoyés vers SNAL:', {
+      ...req.headers,
+      host: undefined,
+      connection: undefined,
+      'content-length': undefined,
+    });
+
+    console.log('➡️ [Proxy][UPDATE-PROFILE] Données envoyées vers SNAL:', snalProfileData);
+
+    const responsePayload = {
+      ...snalProfileData,
+      iProfile,
+    };
+
+    console.log('🟦 [Proxy][UPDATE-PROFILE] Payload JSON envoyé vers SNAL:', JSON.stringify(responsePayload, null, 2));
+
     const response = await fetch(`https://jirig.be/api/update-info-profil/${iProfile}`, {
       method: 'PUT',
       headers: {
@@ -1392,25 +1410,55 @@ app.post('/api/profile/update', express.json(), async (req, res) => {
         'Cookie': cookieString,
         'User-Agent': 'Mobile-Flutter-App/1.0'
       },
-      body: JSON.stringify(snalProfileData)
+      body: JSON.stringify(responsePayload)
     });
 
     console.log(`📥 Response status: ${response.status}`);
+    const responseHeaders = Object.fromEntries(response.headers.entries());
+    console.log('📥 [Proxy][UPDATE-PROFILE] Headers de réponse SNAL:', responseHeaders);
+
+    const responseText = await response.text();
+    console.log('📥 [Proxy][UPDATE-PROFILE] Corps de réponse SNAL:', responseText);
+
+    console.log('🟦 [Proxy][UPDATE-PROFILE] JSON envoyé (replay):', responseText ? responseText : '(vide)');
+
+    try {
+      const xmlMatch = responseText.match(/<root>[\s\S]*<\/root>/);
+      if (xmlMatch) {
+        console.log('📄 [Proxy][UPDATE-PROFILE] XML renvoyé par SNAL:', xmlMatch[0]);
+      }
+    } catch (xmlParseError) {
+      console.log('⚠️ [Proxy][UPDATE-PROFILE] Analyse XML échouée:', xmlParseError);
+    }
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.log(`❌ Error response:`, errorText);
+      console.log(`❌ [Proxy][UPDATE-PROFILE] Réponse d'erreur SNAL (status ${response.status}):`, responseText);
 
       return res.status(response.status).json({
         success: false,
         error: 'Erreur lors de la mise à jour du profil',
-        message: errorText
+        message: responseText
       });
     }
 
-    const data = await response.json();
-    console.log(`✅ Profil mis à jour avec succès`);
-    console.log(`📥 Réponse:`, data);
+    let data;
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (parseError) {
+      console.log('⚠️ [Proxy][UPDATE-PROFILE] Impossible de parser la réponse JSON:', parseError);
+      return res.status(502).json({
+        success: false,
+        error: 'Réponse SNAL invalide (JSON mal formé)',
+        rawResponse: responseText
+      });
+    }
+
+    if (!data.success) {
+      console.log('⚠️ [Proxy][UPDATE-PROFILE] SNAL a répondu success=false:', data);
+    } else {
+      console.log(`✅ Profil mis à jour avec succès`);
+    }
+    console.log(`📥 Réponse JSON SNAL:`, data);
 
     res.json(data);
   } catch (error) {

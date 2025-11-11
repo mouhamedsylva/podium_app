@@ -148,41 +148,36 @@ class LocalStorageService {
     print('   sPaysLangue: "$sPaysLangue"');
     print('   sPaysFav: "$sPaysFav"');
 
-    // ✅ CORRECTION: Vérifier seulement iProfile et iBasket (sPaysLangue peut être null)
-    // ⚠️ IMPORTANT: Retourner le profil même si iProfile/iBasket sont vides mais non null
-    // pour permettre la vérification et la mise à jour ultérieure
-    if (iProfile != null && iBasket != null) {
-      // ✅ CORRECTION: Récupérer TOUS les champs du profil depuis SharedPreferences
-      final profileResult = <String, dynamic>{
-        'iProfile': iProfile,
-        'iBasket': iBasket,
-        'sPaysLangue': sPaysLangue ?? '', // ✅ Peut être null maintenant
-        'sPaysFav': sPaysFav ?? '',       // ✅ Peut être null maintenant
-        'sEmail': prefs.getString('user_email') ?? '',
-        'sNom': prefs.getString('user_nom') ?? '',
-        'sPrenom': prefs.getString('user_prenom') ?? '',
-        'sPhoto': prefs.getString('user_photo') ?? '',
-        'sTel': prefs.getString('user_tel') ?? '',
-        'sRue': prefs.getString('user_rue') ?? '',
-        'sZip': prefs.getString('user_zip') ?? '',
-        'sCity': prefs.getString('user_city') ?? '',
-      };
-      
-      print('✅ getProfile() - Profil retourné: iProfile="${profileResult['iProfile']}", iBasket="${profileResult['iBasket']}"');
-      print('   sPrenom: "${profileResult['sPrenom']}"');
-      print('   sNom: "${profileResult['sNom']}"');
-      print('   sEmail: "${profileResult['sEmail']}"');
-      print('   sTel: "${profileResult['sTel']}"');
-      print('   sRue: "${profileResult['sRue']}"');
-      print('   sZip: "${profileResult['sZip']}"');
-      print('   sCity: "${profileResult['sCity']}"');
-      return profileResult;
+    if (iProfile == null && iBasket == null) {
+      print('❌ getProfile() - Aucun identifiant iProfile/iBasket trouvé dans SharedPreferences');
+      return null;
     }
 
-    print('❌ getProfile() - Profil incomplet (iProfile ou iBasket manquant dans SharedPreferences)');
-    print('   iProfile présent: ${iProfile != null}');
-    print('   iBasket présent: ${iBasket != null}');
-    return null;
+    // ✅ Récupérer tous les champs du profil, même si certains identifiants sont manquants
+    final profileResult = <String, dynamic>{
+      'iProfile': iProfile ?? '',
+      'iBasket': iBasket ?? '',
+      'sPaysLangue': sPaysLangue ?? '',
+      'sPaysFav': sPaysFav ?? '',
+      'sEmail': prefs.getString('user_email') ?? '',
+      'sNom': prefs.getString('user_nom') ?? '',
+      'sPrenom': prefs.getString('user_prenom') ?? '',
+      'sPhoto': prefs.getString('user_photo') ?? '',
+      'sTel': prefs.getString('user_tel') ?? '',
+      'sRue': prefs.getString('user_rue') ?? '',
+      'sZip': prefs.getString('user_zip') ?? '',
+      'sCity': prefs.getString('user_city') ?? '',
+    };
+
+    print('✅ getProfile() - Profil partiel/complété retourné: iProfile="${profileResult['iProfile']}", iBasket="${profileResult['iBasket']}"');
+    print('   sPrenom: "${profileResult['sPrenom']}"');
+    print('   sNom: "${profileResult['sNom']}"');
+    print('   sEmail: "${profileResult['sEmail']}"');
+    print('   sTel: "${profileResult['sTel']}"');
+    print('   sRue: "${profileResult['sRue']}"');
+    print('   sZip: "${profileResult['sZip']}"');
+    print('   sCity: "${profileResult['sCity']}"');
+    return profileResult;
   }
 
   /// Créer un profil invité par défaut (comme SNAL)

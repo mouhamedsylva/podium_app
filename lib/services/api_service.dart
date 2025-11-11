@@ -195,7 +195,18 @@ class ApiService {
 
           // ✅ IMPORTANT : Ajouter le GuestProfile comme COOKIE (comme SNAL)
           final guestProfileEncoded = Uri.encodeComponent(guestProfileJson);
-          final cookieHeader = 'GuestProfile=' + guestProfileEncoded;
+          final cookieParts = <String>[
+            'GuestProfile=' + guestProfileEncoded,
+          ];
+
+          if (finalIProfile.isNotEmpty) {
+            cookieParts.add('iProfile=' + Uri.encodeComponent(finalIProfile));
+          }
+          if (finalIBasket.isNotEmpty) {
+            cookieParts.add('iBasket=' + Uri.encodeComponent(finalIBasket));
+          }
+
+          final cookieHeader = cookieParts.join('; ');
           options.headers['Cookie'] = cookieHeader;
           options.headers['cookie'] = cookieHeader;
 
@@ -978,9 +989,13 @@ class ApiService {
       print('🛒 iBasket récupéré: $iBasket');
       print('🌍 sPaysListe: $sPaysListe');
 
-      final response = await _dio!.post('/update-country-wishlistBasket',
+      final response = await _dio!.post(
+        '/update-country-wishlistBasket',
         data: {
           'sPaysListe': sPaysListe,
+        },
+        queryParameters: {
+          if (iBasket.isNotEmpty) 'iBasket': iBasket,
         },
         options: Options(
           headers: {
@@ -995,6 +1010,11 @@ class ApiService {
 
       if (response.statusCode == 200) {
         print('✅ Liste des pays mise à jour avec succès');
+        await LocalStorageService.saveProfile({
+          'iProfile': iProfile,
+          'iBasket': iBasket,
+          'sPaysFav': sPaysListe,
+        });
         return response.data;
       } else {
         print('❌ Status code non-200: ${response.statusCode}');
@@ -1736,7 +1756,32 @@ class ApiService {
       final gp = await LocalStorageService.getProfile();
       final iProfile = gp?['iProfile']?.toString();
       final iBasket = gp?['iBasket']?.toString() ?? '';
-      final sPaysFav = gp?['sPaysFav']?.toString() ?? '';
+
+      // Gérer sPaysFav provenant du payload ou du profil existant
+      final payloadPaysFavString = profileData['sPaysFav']?.toString();
+      final payloadPaysFavList = (profileData['sPaysFavList'] as List?)
+          ?.map((e) => e.toString().toUpperCase())
+          .where((code) => code.isNotEmpty)
+          .toList();
+
+      final existingPaysFavString = gp?['sPaysFav']?.toString() ?? '';
+
+      final basePaysFavString = payloadPaysFavString != null && payloadPaysFavString.trim().isNotEmpty
+          ? payloadPaysFavString
+          : existingPaysFavString;
+
+      final basePaysFavListFromString = basePaysFavString
+          .split(',')
+          .map((code) => code.trim().toUpperCase())
+          .where((code) => code.isNotEmpty)
+          .toList();
+
+      final effectivePaysFavList = payloadPaysFavList != null && payloadPaysFavList.isNotEmpty
+          ? payloadPaysFavList
+          : basePaysFavListFromString;
+
+      final effectivePaysFavString = effectivePaysFavList.join(',');
+
       final sPaysLangue = gp?['sPaysLangue']?.toString() ?? '';
 
       if (iProfile == null || iProfile.isEmpty) {
@@ -1745,25 +1790,13 @@ class ApiService {
 
       // Mapper les champs Flutter vers le format SNAL (comme le proxy)
       final snalProfileData = {
-        'sNom': profileData['Nom']?.toString() ?? '',
-        'sPrenom': profileData['Prenom']?.toString() ?? '',
-        'sPhoto': '',
-        'sRue': profileData['rue']?.toString() ?? '',
-        'sZip': profileData['zip']?.toString() ?? '',
-        'sCity': profileData['city']?.toString() ?? '',
-        'iPays': -1,
-        'sTel': profileData['tel']?.toString() ?? '',
-        'sPaysFav': sPaysFav,
-        'sPaysLangue': sPaysLangue,
-        'sEmail': profileData['email']?.toString() ?? '',
-        'sTypeAccount': 'EMAIL',
-        'sLangue': sPaysLangue.isNotEmpty && sPaysLangue.contains('/') ? sPaysLangue.split('/').last : 'FR',
+        'sPaysFav': effectivePaysFavString,
       };
 
       print('📤 Données mappées SNAL: ' + snalProfileData.toString());
       print('📤 iProfile: $iProfile');
       print('📤 iBasket: $iBasket');
-      print('📤 sPaysFav envoyé: $sPaysFav');
+      print('📤 sPaysFav envoyé: $effectivePaysFavList');
       print('📤 sPaysLangue envoyé: $sPaysLangue');
 
       // ✅ CORRECTION: Ajouter explicitement les headers X-IProfile et X-IBasket
@@ -1776,7 +1809,7 @@ class ApiService {
             'X-IProfile': iProfile,
             'X-IBasket': iBasket.isNotEmpty ? iBasket : '0',
             'X-Pays-Langue': sPaysLangue.isNotEmpty ? sPaysLangue : '',
-            'X-Pays-Fav': sPaysFav.isNotEmpty ? sPaysFav : '',
+            'X-Pays-Fav': effectivePaysFavString.isNotEmpty ? effectivePaysFavString : '',
           },
         ),
       );
@@ -1787,11 +1820,17 @@ class ApiService {
       // Mettre à jour localement les infos connues
       if (response.data is Map<String, dynamic>) {
         final respMap = response.data as Map<String, dynamic>;
+        final responsePaysFav = respMap['sPaysFav'];
+        final normalizedPaysFav = responsePaysFav is List
+            ? responsePaysFav.map((e) => e.toString().toUpperCase()).join(',')
+            : responsePaysFav?.toString() ?? effectivePaysFavString;
+        final normalizedPaysLangue = respMap['sPaysLangue']?.toString() ?? sPaysLangue;
+
         await LocalStorageService.saveProfile({
           'iProfile': iProfile,
           'iBasket': gp?['iBasket']?.toString() ?? '',
-          'sPaysFav': respMap['sPaysFav']?.toString() ?? sPaysFav,
-          'sPaysLangue': respMap['sPaysLangue']?.toString() ?? sPaysLangue,
+          'sPaysFav': normalizedPaysFav,
+          'sPaysLangue': normalizedPaysLangue,
           'sEmail': respMap['sEmail']?.toString() ?? (profileData['email']?.toString() ?? ''),
           'sNom': respMap['sNom']?.toString() ?? (profileData['Nom']?.toString() ?? ''),
           'sPrenom': respMap['sPrenom']?.toString() ?? (profileData['Prenom']?.toString() ?? ''),

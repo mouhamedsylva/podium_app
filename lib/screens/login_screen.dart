@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -33,7 +34,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   final TextEditingController _codeController = TextEditingController();
   bool _isLoading = false;
   bool _awaitingCode = false;
-  bool _showMailModal = false;
   String _errorMessage = '';
   // Validation e-mail en temps réel
   bool _isEmailValid = false;
@@ -271,19 +271,25 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('✅ Profil créé avec identifiants vides (comme Jirig): sPaysLangue: $sPaysLangue et sPaysFav: $sPaysFav');
         }
         
-        final response = await apiService.login(_emailController.text.trim());
-        
+        final Map<String, dynamic> response = await apiService.login(_emailController.text.trim());
         print('📧 Code envoyé à ${_emailController.text}');
+
+        final generatedCode = response['code']?.toString() ??
+            response['token']?.toString() ??
+            response['password']?.toString() ??
+            response['generatedPassword']?.toString();
 
         setState(() {
           _awaitingCode = true;
-          _showMailModal = true;
+          if (generatedCode != null && generatedCode.isNotEmpty) {
+            _codeController.text = generatedCode;
+          } else {
+            _codeController.clear();
+          }
         });
 
-        // Attendre que le setState soit terminé avant d'afficher le modal
-        await Future.delayed(Duration(milliseconds: 100));
         if (mounted) {
-          _openMailModal();
+          _openCodeModal(code: (generatedCode ?? _codeController.text.trim()));
         }
       } else {
         // Étape 2 : validation du code
@@ -294,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           return;
         }
 
-        final response = await apiService.login(
+        final Map<String, dynamic> response = await apiService.login(
           _emailController.text.trim(),
           code: _codeController.text.trim(),
         );
@@ -449,234 +455,174 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  void _openMailModal() {
-    showDialog(
+  void _openCodeModal({String? code}) {
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: true,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Container(
-          margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white,
-                Colors.grey[50]!,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 40,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) {
+        final media = MediaQuery.of(context);
+        final hasCode = code != null && code.isNotEmpty;
+        final displayedCode = hasCode ? code!.trim() : '';
+        final primaryColor = const Color(0xFF0051BA);
+
+        return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                // Icône email avec animation
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: media.viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
                 Container(
-                  width: 80,
-                  height: 80,
+                  width: 72,
+                  height: 72,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF0051BA).withOpacity(0.1),
-                        Color(0xFF0051BA).withOpacity(0.05),
-                      ],
-                    ),
+                    color: primaryColor.withOpacity(0.08),
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Color(0xFF0051BA).withOpacity(0.2),
-                      width: 2,
-                    ),
                   ),
                   child: Icon(
                     Icons.mark_email_unread_outlined,
-                    size: 40,
-                    color: Color(0xFF0051BA),
+                    size: 32,
+                    color: primaryColor,
                   ),
                 ),
-                const SizedBox(height: 24),
-                
-                // Titre stylisé
+                const SizedBox(height: 16),
                 Text(
-                  '📧 Code envoyé !',
+                  'Code envoyé',
                   style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
                     color: Colors.grey[900],
-                    letterSpacing: -0.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 12),
-                
-                // Message principal avec email en surbrillance
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Color(0xFF0051BA).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Color(0xFF0051BA).withOpacity(0.2),
-                      width: 1,
-                    ),
+                const SizedBox(height: 8),
+                Text(
+                  'Copiez ce code ou ouvrez votre boîte mail pour le récupérer.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
                   ),
-                  child: Column(
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        'Nous avons envoyé un code de connexion à',
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontSize: 16,
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF0051BA),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0xFF0051BA).withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          _emailController.text.trim(),
+                      Expanded(
+                        child: SelectableText(
+                          hasCode ? displayedCode : 'Code envoyé par email',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: hasCode ? 4 : 0,
+                            color: hasCode ? Colors.black : Colors.grey[500],
                           ),
+                          textAlign: TextAlign.center,
                         ),
+                      ),
+                      IconButton(
+                        onPressed: hasCode ? () => _copyCode(displayedCode) : null,
+                        icon: const Icon(Icons.copy_rounded),
+                        tooltip: 'Copier',
+                        color: hasCode ? Colors.black : Colors.grey[400],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                
-                // Instructions
+                const SizedBox(height: 16),
                 Text(
-                  'Ouvrez votre boîte mail et entrez le code reçu :',
+                  'Vous pouvez aussi ouvrir votre messagerie pour retrouver ce message.',
                   style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    color: Colors.grey[500],
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
-                
-                // Boutons avec icônes et animations
-                _buildMailButton(
-                  'Gmail',
-                  'https://mail.google.com/mail/u/0/#inbox',
-                  Colors.red[600]!,
-                  Icons.mail_outline,
-                ),
-                const SizedBox(height: 12),
-                _buildMailButton(
-                  'Outlook',
-                  'https://outlook.office.com/mail/',
-                  Colors.blue[600]!,
-                  Icons.alternate_email,
-                ),
-                const SizedBox(height: 12),
-                _buildMailButton(
-                  'Yahoo Mail',
-                  'https://mail.yahoo.com/',
-                  Colors.purple[600]!,
-                  Icons.email_outlined,
+                TextButton.icon(
+                  onPressed: () => _openMailApp(),
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Ouvrir ma boîte mail'),
                 ),
                 const SizedBox(height: 24),
-                
-                // Bouton de fermeture stylisé
-                Container(
+                SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.check_circle_outline, size: 18),
-                    label: Text(
-                      "J'ai reçu le code",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF10b981), // Vert émeraude
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shadowColor: Color(0xFF10b981).withOpacity(0.3),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    child: const Text(
+                      'J\'ai copié le code',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _loginWithEmail();
+                  },
+                  child: Text(
+                    'Renvoyer un code',
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ],
-              ),
             ),
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  void _copyCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Code copié dans le presse-papiers'),
+        duration: Duration(seconds: 2),
       ),
     );
   }
-  
-  /// Widget pour créer un bouton de mail stylisé
-  Widget _buildMailButton(String label, String url, Color color, IconData icon) {
-    return Container(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton.icon(
-        onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-        icon: Icon(icon, size: 20),
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shadowColor: color.withOpacity(0.3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
-    );
+
+  Future<void> _openMailApp() async {
+    final uri = Uri.parse('mailto:');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -1257,7 +1203,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           : Row(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
-                                                Icon(Icons.login, size: isMobile ? 18 : 20),
+                    Icon(Icons.fingerprint, size: isMobile ? 20 : 22),
                                                 SizedBox(width: 8),
                                                 Text(
                                                   _awaitingCode ? 'Valider le code' : 'Envoi du code',

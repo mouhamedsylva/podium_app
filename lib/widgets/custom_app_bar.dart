@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../services/country_notifier.dart';
@@ -23,6 +24,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+    final horizontalPadding =
+        isMobile ? (screenWidth < 360 ? 12.0 : 16.0) : 24.0;
 
     return Consumer2<TranslationService, AuthNotifier>(
       builder: (context, translationService, authNotifier, child) {
@@ -30,7 +33,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         final userInfo = authNotifier.userInfo;
         return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 16 : 24, 
+        horizontal: horizontalPadding,
         vertical: 12
       ),
       decoration: BoxDecoration(
@@ -57,9 +60,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                     child: const Center(child: CircularProgressIndicator()),
                   );
                 }
-                
-                final selectedCountry = countryNotifier.selectedCountry ?? settingsService.selectedCountry;
-                
+
+                final currentLanguageCode = translationService.currentLanguage;
+                final displayFlag = _getLanguageFlag(currentLanguageCode);
+
                 return PopupMenuButton<String>(
                   onSelected: (String countryCode) {
                     _onCountrySelected(context, countryCode, settingsService, countryNotifier);
@@ -67,7 +71,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   itemBuilder: (BuildContext context) => _buildLanguageMenuItems(),
                   child: isMobile 
                     ? Text(
-                        _getCountryFlag(selectedCountry?.sPays),
+                        displayFlag,
                         style: TextStyle(fontSize: 20),
                       )
                     : Row(
@@ -75,7 +79,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            _getCountryFlag(selectedCountry?.sPays),
+                            displayFlag,
                             style: TextStyle(fontSize: 22),
                           ),
                           SizedBox(width: 4),
@@ -97,20 +101,60 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             
             // Icônes sociales et bouton Connexion / Avatar
-          Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-              children: [
-                  _buildSocialIcons(isMobile),
-                  SizedBox(width: isMobile ? 12 : 16),
-                  // Afficher avatar si connecté, sinon bouton connexion
-                  isLoggedIn
-                      ? _buildUserAvatar(context, isMobile, authNotifier, userInfo)
-                      : _buildConnectionButton(context, isMobile, translationService),
-              ],
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final double availableWidth = constraints.maxWidth;
+                  final double spacing = isMobile
+                      ? (availableWidth < 320 ? 8.0 : 12.0)
+                      : 24.0;
+                  final double actionWidth = isLoggedIn
+                      ? (isMobile ? 40.0 : 44.0)
+                      : (availableWidth < 360 ? 96.0 : (isMobile ? 116.0 : 140.0));
+
+                  final double rawIconsWidth =
+                      availableWidth - spacing - actionWidth;
+                  final double iconsMaxWidth = rawIconsWidth <= 0
+                      ? availableWidth * 0.6
+                      : rawIconsWidth;
+
+                  final connectionButton = _buildConnectionButton(
+                    context,
+                    isMobile,
+                    translationService,
+                    maxWidth: actionWidth,
+                  );
+                  final actionWidget = isLoggedIn
+                      ? _buildUserAvatar(
+                          context, isMobile, authNotifier, userInfo)
+                      : connectionButton;
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: _buildSocialIcons(
+                            isMobile,
+                            maxWidth: iconsMaxWidth,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: spacing),
+                      if (isLoggedIn)
+                        actionWidget
+                      else
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: connectionButton,
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
         ],
       ),
       ),
@@ -119,106 +163,115 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildSocialIcons(bool isMobile) {
-    final spacing = isMobile ? 8.0 : 12.0;
-    final iconSize = isMobile ? 32.0 : 38.0;
-    
+  Widget _buildSocialIcons(bool isMobile, {double? maxWidth}) {
+    double iconSize = isMobile ? 26.0 : 30.0;
+    double spacing = isMobile ? 6.0 : 12.0;
+
+    final socialItems = [
+      {
+        'icon': FontAwesomeIcons.facebookF,
+        'color': const Color(0xFF1877F2),
+        'onTap': _goToFacebook,
+      },
+      {
+        'icon': FontAwesomeIcons.instagram,
+        'color': Colors.white,
+        'gradient': const LinearGradient(
+          colors: [
+            Color(0xFFFEDA75),
+            Color(0xFFFA7E1E),
+            Color(0xFFD62976),
+            Color(0xFF962FBF),
+            Color(0xFF4F5BD5),
+          ],
+          begin: Alignment.bottomLeft,
+          end: Alignment.topRight,
+        ),
+        'onTap': _goToInstagram,
+      },
+      {
+        'icon': FontAwesomeIcons.xTwitter,
+        'color': Colors.black,
+        'onTap': _goToTwitter,
+      },
+      {
+        'icon': FontAwesomeIcons.tiktok,
+        'color': Colors.black,
+        'onTap': _goToTikTok,
+      },
+    ];
+
+    final double totalBaseWidth =
+        iconSize * socialItems.length + spacing * (socialItems.length - 1);
+
+    if (maxWidth != null && maxWidth > 0 && maxWidth < totalBaseWidth) {
+      final double scale = (maxWidth / totalBaseWidth).clamp(0.6, 1.0);
+      iconSize *= scale;
+      spacing *= scale;
+    }
+
     return Row(
-                      mainAxisSize: MainAxisSize.min,
-          children: [
-        // Facebook - cercle bleu
-        _buildFacebookIcon(iconSize, _goToFacebook),
-        SizedBox(width: spacing),
-        // Instagram - dégradé
-        _buildInstagramIcon(iconSize, _goToInstagram),
-        SizedBox(width: spacing),
-        // X (Twitter) - noir
-        _buildXIcon(iconSize, _goToTwitter),
-        SizedBox(width: spacing),
-        // TikTok - logo avec couleurs cyan et magenta
-        _buildTikTokIcon(iconSize, _goToTikTok),
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (int i = 0; i < socialItems.length; i++) ...[
+          _buildSocialIcon(
+            socialItems[i]['icon'] as IconData,
+            iconSize,
+            socialItems[i]['onTap'] as VoidCallback,
+            color: socialItems[i]['color'] as Color,
+            gradient: socialItems[i]['gradient'] as LinearGradient?,
+            accentColors: socialItems[i]['accentColors'] as List<Color>?,
+          ),
+          if (i != socialItems.length - 1) SizedBox(width: spacing),
+        ],
       ],
     );
   }
 
-  Widget _buildFacebookIcon(double size, VoidCallback onTap) {
+  Widget _buildSocialIcon(
+    IconData icon,
+    double size,
+    VoidCallback onTap, {
+    required Color color,
+    LinearGradient? gradient,
+    List<Color>? accentColors,
+  }) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-        width: size,
-        height: size,
-        child: Image.asset(
-          'assets/images/face.png',
           width: size,
           height: size,
-          fit: BoxFit.contain,
-        ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInstagramIcon(double size, VoidCallback onTap) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-        width: size,
-        height: size,
-        child: Image.asset(
-          'assets/images/insta.png',
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-        ),
-      ),
-    ),
-    );
-  }
-
-  Widget _buildXIcon(double size, VoidCallback onTap) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-        width: size,
-        height: size,
-        child: Image.asset(
-          'assets/images/twit.png',
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-        ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTikTokIcon(double size, VoidCallback onTap) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-        width: size,
-        height: size,
-        child: Image.asset(
-          'assets/images/tiktok.png',
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-            ),
+          alignment: Alignment.center,
+          decoration: gradient != null || accentColors != null
+              ? BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(size * 0.35),
+                )
+              : null,
+          child: Icon(
+            icon,
+            size: size * 0.68,
+            color: gradient != null ? Colors.white : color,
           ),
         ),
+      ),
     );
   }
 
-  Widget _buildConnectionButton(BuildContext context, bool isMobile, TranslationService translationService) {
-    return Flexible(
+  Widget _buildConnectionButton(
+    BuildContext context,
+    bool isMobile,
+    TranslationService translationService, {
+    double? maxWidth,
+  }) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: isMobile ? 88.0 : 110.0,
+        maxWidth: maxWidth ?? (isMobile ? 140.0 : 160.0),
+      ),
       child: ElevatedButton(
         onPressed: () {
           try {
@@ -233,23 +286,25 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
           backgroundColor: const Color(0xFF0066FF),
           foregroundColor: Colors.white,
           padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 20 : 28, 
-            vertical: isMobile ? 10 : 12
+            horizontal: isMobile ? 16 : 24,
+            vertical: isMobile ? 10 : 12,
           ),
-          minimumSize: Size(isMobile ? 90 : 110, isMobile ? 38 : 42),
+          minimumSize: Size.fromHeight(isMobile ? 38 : 42),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
           elevation: 0,
         ),
-        child: Text(
-          translationService.translate('APPHEADER_LOGIN'),
-          style: TextStyle(
-            fontSize: isMobile ? 13 : 15,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            translationService.translate('APPHEADER_LOGIN'),
+            style: TextStyle(
+              fontSize: isMobile ? 13 : 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
           ),
-          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
@@ -258,7 +313,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Widget pour afficher l'avatar de l'utilisateur avec dropdown
   Widget _buildUserAvatar(BuildContext context, bool isMobile, AuthNotifier authNotifier, Map<String, String>? userInfo) {
     final userName = '${userInfo?['prenom'] ?? ''} ${userInfo?['nom'] ?? ''}'.trim();
-    final userPhoto = userInfo?['photo'] ?? 'assets/img/avatar.png';
+    final userPhoto = userInfo?['photo'];
     
     return PopupMenuButton<String>(
       onSelected: (value) async {
@@ -324,24 +379,28 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ],
       child: Container(
-        width: isMobile ? 36 : 40,
-        height: isMobile ? 36 : 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-        ),
-        child: ClipOval(
-          child: Image.asset(
-            'assets/img/avatar.png',
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Icon(
+        width: isMobile ? 34 : 36,
+        height: isMobile ? 34 : 36,
+        alignment: Alignment.center,
+        child: userPhoto != null && userPhoto.isNotEmpty
+            ? ClipOval(
+                child: Image.network(
+                  userPhoto,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.person,
+                      color: Colors.black87,
+                      size: isMobile ? 28 : 30,
+                    );
+                  },
+                ),
+              )
+            : Icon(
                 Icons.person,
-                color: Colors.grey[600],
-                size: isMobile ? 20 : 24,
-              );
-            },
-          ),
-        ),
+                color: Colors.black87,
+                size: isMobile ? 28 : 30,
+              ),
       ),
       offset: Offset(0, 50),
       shape: RoundedRectangleBorder(
@@ -406,20 +465,17 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     }
   }
 
-  String _getCountryFlag(String? countryCode) {
+  String _getLanguageFlag(String? languageCode) {
     const flags = {
-      'BE': '🇧🇪',
-      'FR': '🇫🇷',
-      'DE': '🇩🇪',
-      'ES': '🇪🇸',
-      'IT': '🇮🇹',
-      'NL': '🇳🇱',
-      'PT': '🇵🇹',
-      'GB': '🇬🇧',
-      'US': '🇺🇸',
-      'CA': '🇨🇦',
+      'fr': '🇫🇷',
+      'en': '🇬🇧',
+      'de': '🇩🇪',
+      'es': '🇪🇸',
+      'pt': '🇵🇹',
+      'it': '🇮🇹',
+      'nl': '🇳🇱',
     };
-    return flags[countryCode] ?? '🏳️';
+    return flags[languageCode?.toLowerCase()] ?? '🏳️';
   }
 
   List<PopupMenuEntry<String>> _buildLanguageMenuItems() {

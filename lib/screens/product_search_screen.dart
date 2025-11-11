@@ -3,10 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:animations/animations.dart';
+import 'dart:collection';
+
+import '../models/country.dart';
 import '../services/translation_service.dart';
 import '../services/settings_service.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/country_service.dart';
 import '../config/api_config.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/bottom_navigation_bar.dart';
@@ -27,19 +31,11 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
   String _errorMessage = '';
   bool _hasSearched = false; // Nouveau flag pour savoir si une recherche a été effectuée
   
-  // Liste des pays sélectionnés
-  final List<String> _selectedCountries = ['BE', 'DE', 'ES', 'FR', 'IT'];
-  final List<String> _availableCountries = ['BE', 'DE', 'ES', 'FR', 'IT', 'NL', 'PT'];
-  
-  final Map<String, String> _countryFlags = {
-    'BE': '🇧🇪',
-    'DE': '🇩🇪',
-    'ES': '🇪🇸',
-    'FR': '🇫🇷',
-    'IT': '🇮🇹',
-    'NL': '🇳🇱',
-    'PT': '🇵🇹',
-  };
+  // Gestion dynamique des pays favoris
+  final CountryService _countryService = CountryService();
+  List<Country> _allCountries = [];
+  LinkedHashSet<String> _favoriteCountryCodes = LinkedHashSet<String>();
+  bool _isLoadingCountries = true;
   
   // Controllers d'animation (style différent de home_screen)
   late AnimationController _heroController;
@@ -135,6 +131,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       
       // Initialiser le profil utilisateur
       await _initializeProfile();
+      await _loadCountryData();
     } catch (e) {
       print('❌ Erreur lors de l\'initialisation des services: $e');
     }
@@ -153,6 +150,216 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     } catch (e) {
       print('❌ Erreur lors de la vérification du profil: $e');
     }
+  }
+
+  Future<void> _loadCountryData() async {
+    try {
+      final shouldShowSpinner = _allCountries.isEmpty;
+
+      if (shouldShowSpinner && mounted) {
+        setState(() {
+          _isLoadingCountries = true;
+        });
+      }
+
+      await _countryService.initialize();
+      final rawCountries = _countryService.getAllCountries();
+      final countries = _dedupeCountriesByCode(rawCountries);
+
+      final apiService = ApiService();
+      await apiService.initialize();
+
+      final localProfile = await LocalStorageService.getProfile();
+      final remoteProfile = await apiService.getProfile();
+
+      final mergedProfile = _composeProfileData(
+        base: localProfile,
+        overrides: remoteProfile.isNotEmpty ? remoteProfile : null,
+      );
+
+      if (mergedProfile['iProfile']?.toString().isNotEmpty == true ||
+          mergedProfile['iBasket']?.toString().isNotEmpty == true) {
+        await LocalStorageService.saveProfile(mergedProfile);
+      }
+
+      final storedProfile = await LocalStorageService.getProfile();
+      final favoritesRaw = storedProfile?['sPaysFav']?.toString() ?? '';
+      final favorites = _buildFavoriteSet(favoritesRaw, countries);
+
+      if (mounted) {
+        setState(() {
+          _allCountries = countries;
+          _favoriteCountryCodes = favorites;
+          _isLoadingCountries = false;
+        });
+      } else if (shouldShowSpinner) {
+        _isLoadingCountries = false;
+      }
+    } catch (e) {
+      print('❌ Erreur lors du chargement des pays favoris: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingCountries = false;
+        });
+      } else {
+        _isLoadingCountries = false;
+      }
+    }
+  }
+
+  Map<String, dynamic> _composeProfileData({
+    Map<String, dynamic>? base,
+    Map<String, dynamic>? overrides,
+  }) {
+    String normalizeValue(dynamic value) {
+      if (value == null) return '';
+      if (value is Iterable) {
+        final joined = value
+            .map((item) => (item ?? '').toString().trim())
+            .where((item) => item.isNotEmpty)
+            .join(',');
+        return joined;
+      }
+      final stringValue = value.toString();
+      return stringValue.trim();
+    }
+
+    String pick(String key) {
+      final overrideValue = overrides?[key];
+      final normalizedOverride = normalizeValue(overrideValue);
+      if (normalizedOverride.isNotEmpty) {
+        return normalizedOverride;
+      }
+
+      final baseValue = base?[key];
+      final normalizedBase = normalizeValue(baseValue);
+      if (normalizedBase.isNotEmpty) {
+        return normalizedBase;
+      }
+      return '';
+    }
+
+    final result = <String, dynamic>{
+      'iProfile': pick('iProfile'),
+      'iBasket': pick('iBasket'),
+      'sPaysFav': pick('sPaysFav'),
+      'sPaysLangue': pick('sPaysLangue'),
+      'sEmail': pick('sEmail'),
+      'sNom': pick('sNom'),
+      'sPrenom': pick('sPrenom'),
+      'sPhoto': pick('sPhoto'),
+      'sTel': pick('sTel'),
+      'sRue': pick('sRue'),
+      'sZip': pick('sZip'),
+      'sCity': pick('sCity'),
+    };
+
+    final token = overrides?['token'] ?? base?['token'];
+    if (token != null) {
+      result['token'] = token.toString();
+    }
+
+    return result;
+  }
+
+  LinkedHashSet<String> _buildFavoriteSet(String favoritesRaw, List<Country> availableCountries) {
+    final availableCodes = availableCountries
+        .map((country) => (country.sPays ?? '').toUpperCase())
+        .where((code) => code.length == 2)
+        .toSet();
+
+    final favorites = LinkedHashSet<String>();
+
+    var sanitizedFavoritesRaw = favoritesRaw
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+
+    if (sanitizedFavoritesRaw.isNotEmpty) {
+      for (final part in sanitizedFavoritesRaw.split(',')) {
+        final code = part.trim().toUpperCase();
+        if (code.length == 2 && availableCodes.contains(code)) {
+          favorites.add(code);
+        }
+      }
+    }
+
+    if (favorites.isEmpty && availableCountries.isNotEmpty) {
+      for (final country in availableCountries) {
+        final code = (country.sPays ?? '').toUpperCase();
+        if (code.length == 2 && availableCodes.contains(code)) {
+          favorites.add(code);
+        }
+        if (favorites.length >= 5) {
+          break;
+        }
+      }
+    }
+
+    return favorites;
+  }
+
+  List<String> _orderedFavoritesList(Iterable<String> favorites) {
+    final normalized = favorites
+        .map((code) => code.toUpperCase())
+        .where((code) => code.length == 2)
+        .toSet();
+    final ordered = <String>[];
+
+    for (final country in _allCountries) {
+      final code = (country.sPays ?? country.code ?? '').toUpperCase();
+      if (code.length == 2 && normalized.contains(code)) {
+        ordered.add(code);
+      }
+    }
+
+    return ordered;
+  }
+
+  Country? _findCountryByCode(String code) {
+    try {
+      if (code.length != 2) {
+        return null;
+      }
+      return _allCountries.firstWhere(
+        (country) =>
+            ((country.sPays ?? country.code ?? '').toUpperCase()) == code.toUpperCase(),
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  List<Country> _dedupeCountriesByCode(List<Country> countries) {
+    final unique = <String, Country>{};
+
+    for (final country in countries) {
+      final code = (country.sPays ?? country.code ?? '').toUpperCase();
+      if (code.length == 2 && !unique.containsKey(code)) {
+        unique[code] = country;
+      }
+    }
+
+    return unique.values.toList();
+  }
+
+  String _flagEmoji(String countryCode) {
+    const overrides = {
+      'UK': 'GB',
+      'EN': 'GB',
+    };
+
+    final normalized = overrides[countryCode.toUpperCase()] ?? countryCode.toUpperCase();
+    if (normalized.length != 2) {
+      return '🏳️';
+    }
+
+    final codeUnits = normalized.codeUnits;
+    return String.fromCharCodes([
+      0x1F1E6 + codeUnits[0] - 65,
+      0x1F1E6 + codeUnits[1] - 65,
+    ]);
   }
 
   @override
@@ -441,16 +648,74 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     }
   }
 
-  void _toggleCountry(String country) {
-    setState(() {
-      if (_selectedCountries.contains(country)) {
-        if (_selectedCountries.length > 1) {
-          _selectedCountries.remove(country);
-        }
-      } else {
-        _selectedCountries.add(country);
+  Future<void> _toggleCountry(String countryCode) async {
+    if (_isLoadingCountries) return;
+
+    final normalizedCode = countryCode.toUpperCase();
+    if (normalizedCode.length != 2) {
+      return;
+    }
+    final previousFavorites = LinkedHashSet<String>.from(_favoriteCountryCodes);
+    final updatedFavorites = LinkedHashSet<String>.from(_favoriteCountryCodes);
+    final isCurrentlySelected = updatedFavorites.contains(normalizedCode);
+
+    if (isCurrentlySelected) {
+      if (updatedFavorites.length <= 1) {
+        // Toujours garder au moins un pays sélectionné
+        return;
       }
-    });
+      updatedFavorites.remove(normalizedCode);
+    } else {
+      updatedFavorites.add(normalizedCode);
+    }
+
+    final orderedFavorites = _orderedFavoritesList(updatedFavorites);
+    final newFavoritesString = orderedFavorites.join(',');
+
+    if (mounted) {
+      setState(() {
+        _favoriteCountryCodes = LinkedHashSet<String>.from(orderedFavorites);
+      });
+    }
+
+    Map<String, dynamic>? previousProfile;
+    try {
+      previousProfile = await LocalStorageService.getProfile();
+
+      final apiService = ApiService();
+      final updateResponse = await apiService.updateProfile({
+        'sPaysFav': newFavoritesString,
+      });
+      final refreshedProfile = updateResponse.isNotEmpty
+          ? updateResponse
+          : await apiService.getProfile();
+
+      if (refreshedProfile.isNotEmpty) {
+        final mergedProfile = _composeProfileData(
+          base: previousProfile,
+          overrides: refreshedProfile,
+        );
+        await LocalStorageService.saveProfile(mergedProfile);
+      } else {
+        final fallbackProfile = _composeProfileData(
+          base: previousProfile,
+          overrides: {
+            'sPaysFav': newFavoritesString,
+          },
+        );
+        await LocalStorageService.saveProfile(fallbackProfile);
+      }
+    } catch (e) {
+      print('❌ Erreur lors de la mise à jour des pays favoris: $e');
+      if (previousProfile != null) {
+        await LocalStorageService.saveProfile(previousProfile);
+      }
+      if (mounted) {
+        setState(() {
+          _favoriteCountryCodes = previousFavorites;
+        });
+      }
+    }
   }
 
   @override
@@ -524,18 +789,63 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
   }
 
   Widget _buildCountrySection(bool isMobile, TranslationService translationService) {
-    List<Widget> selectedCountryChips = [];
-    for (var country in _selectedCountries) {
-      selectedCountryChips.add(_buildCountryChip(country, true, isMobile));
+    if (_isLoadingCountries) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 16.0 : 32.0,
+          vertical: isMobile ? 32.0 : 48.0,
+        ),
+        color: const Color(0xFFFFD43B),
+        child: const Center(child: CircularProgressIndicator()),
+      );
     }
-    
-    List<Widget> unselectedCountryChips = [];
-    for (var country in _availableCountries) {
-      if (!_selectedCountries.contains(country)) {
-        unselectedCountryChips.add(_buildCountryChip(country, false, isMobile));
-      }
+
+    if (_allCountries.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 16.0 : 32.0,
+          vertical: isMobile ? 24.0 : 32.0,
+        ),
+        color: const Color(0xFFFFD43B),
+        child: Text(
+          'Aucun pays disponible pour le moment',
+          style: TextStyle(
+            fontSize: isMobile ? 16 : 18,
+            fontWeight: FontWeight.w500,
+            color: Colors.black,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
     }
-    
+
+    final orderedFavorites = _orderedFavoritesList(_favoriteCountryCodes);
+    var selectedCountries = orderedFavorites
+        .map(_findCountryByCode)
+        .whereType<Country>()
+        .toList();
+
+    if (selectedCountries.isEmpty && _allCountries.isNotEmpty) {
+      selectedCountries = _allCountries.take(4).toList();
+    }
+
+    final unselectedCountries = _allCountries
+        .where((country) {
+          final code = (country.sPays ?? '').toUpperCase();
+          return code.length == 2 && !_favoriteCountryCodes.contains(code);
+        })
+        .toList();
+
+    final selectedCountryChips = selectedCountries
+        .map((country) => _buildCountryChip(country, true, isMobile))
+        .toList();
+
+    final unselectedCountryChips = unselectedCountries
+        .map((country) => _buildCountryChip(country, false, isMobile))
+        .toList();
+
     // Animation : SharedAxisTransition (slide horizontal - style Material Design)
     return SharedAxisTransition(
       animation: _countryController,
@@ -563,8 +873,12 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              // Affichage 4 drapeaux en haut, 3 en bas, sans défilement
-              _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
+              // Affichage des drapeaux sans overflow
+              _buildCountryGrid(
+                selectedCountryChips,
+                unselectedCountryChips,
+                isMobile,
+              ),
             ],
           ),
         ),
@@ -572,26 +886,31 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     );
   }
 
-  Widget _buildCountryGrid(List<Widget> selectedChips, List<Widget> unselectedChips) {
-    // Objectif d'affichage: 4 drapeaux sur la première ligne, 3 sur la seconde (pattern 4/3)
-    // Responsive sans overflow: largeur de puce contrainte par ligne via LayoutBuilder
+  Widget _buildCountryGrid(
+    List<Widget> selectedChips,
+    List<Widget> unselectedChips,
+    bool isMobile,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double maxWidth = constraints.maxWidth;
-        const double horizontalGap = 8.0;
-        const double verticalGap = 8.0;
+        const double horizontalGap = 12.0;
+        const double verticalGap = 10.0;
 
         final List<Widget> allChips = [...selectedChips, ...unselectedChips];
-        final List<int> pattern = [4, 3];
-        int patternIndex = 0;
+        if (allChips.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final pattern = [4, 3];
+        final rows = <Widget>[];
         int cursor = 0;
-        final List<Widget> rows = [];
+        int patternIndex = 0;
 
         while (cursor < allChips.length) {
-          final int count = pattern[patternIndex % pattern.length];
-          final int end = (cursor + count).clamp(0, allChips.length);
-          
-          final List<Widget> rowChildren = [];
+          final count = pattern[patternIndex % pattern.length];
+          final end = (cursor + count).clamp(0, allChips.length);
+          final rowChildren = <Widget>[];
+
           for (int j = cursor; j < end; j++) {
             final chipIndex = j;
             rowChildren.add(
@@ -605,55 +924,73 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                       scale: 0.5 + (value * 0.5),
                       child: Opacity(
                         opacity: (value.clamp(0.0, 1.0) as double),
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: isMobile ? 36.0 : 40.0,
+                          ),
+                          child: Align(
+                            alignment: Alignment.center,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 0),
-                              child: allChips[j],
+                              padding: EdgeInsets.symmetric(
+                                horizontal: horizontalGap * 0.15,
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: child,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     );
                   },
+                  child: allChips[j],
                 ),
               ),
             );
+
             if (j < end - 1) {
-              rowChildren.add(const SizedBox(width: horizontalGap));
+              rowChildren.add(SizedBox(width: horizontalGap));
             }
           }
 
-          rows.add(Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: rowChildren,
-          ));
+          rows.add(
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.max,
+              children: rowChildren,
+            ),
+          );
 
           cursor = end;
           patternIndex++;
+
           if (cursor < allChips.length) {
             rows.add(const SizedBox(height: verticalGap));
           }
         }
 
-        return Column(children: rows);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: rows,
+        );
       },
     );
   }
 
-  Widget _buildCountryChip(String countryCode, bool isSelected, bool isMobile) {
+  Widget _buildCountryChip(Country country, bool isSelected, bool isMobile) {
+    final countryCode = country.sPays.toUpperCase();
+
     return GestureDetector(
       onTap: () => _toggleCountry(countryCode),
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 18 : 24,
-          vertical: isMobile ? 6 : 8,
+          horizontal: isMobile ? 22 : 28,
+          vertical: isMobile ? 6 : 6,
         ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(isMobile ? 24 : 28),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -663,17 +1000,18 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           ],
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _countryFlags[countryCode] ?? '',
-              style: TextStyle(fontSize: isMobile ? 16 : 18),
+              _flagEmoji(countryCode),
+              style: TextStyle(fontSize: isMobile ? 18 : 20),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Text(
               isSelected ? '✓' : '+',
               style: TextStyle(
-                fontSize: isMobile ? 14 : 16,
+                fontSize: isMobile ? 15 : 17,
                 color: isSelected ? const Color(0xFF0D6EFD) : Colors.grey[500],
                 fontWeight: FontWeight.bold,
               ),

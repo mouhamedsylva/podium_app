@@ -155,7 +155,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       // Délai de 1 seconde pour éviter les rechargements trop fréquents
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted && !_isLoading) {
-          _loadWishlistData();
+          _loadWishlistData(force: true);
         }
       });
     }
@@ -174,7 +174,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         _lastRefreshParam = refreshParam;
         // OPTIMISATION: Vérifier qu'on n'est pas déjà en train de charger
         if (!_isLoading) {
-          _loadWishlistData();
+          _loadWishlistData(force: true);
         }
       }
     } catch (e) {
@@ -182,10 +182,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     }
   }
 
-  Future<void> _loadWishlistData() async {
+  Future<void> _loadWishlistData({bool force = false}) async {
     // OPTIMISATION: Éviter les rechargements trop fréquents (moins de 5 secondes)
     final now = DateTime.now();
-    if (_lastLoadTime != null && now.difference(_lastLoadTime!).inSeconds < 5) {
+    if (!force && _lastLoadTime != null && now.difference(_lastLoadTime!).inSeconds < 5) {
       print('⏱️ Rechargement ignoré - trop récent (${now.difference(_lastLoadTime!).inSeconds}s)');
       return;
     }
@@ -293,7 +293,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       // ✅ Récupérer sPaysFav depuis le LocalStorage
       final profileData = await LocalStorageService.getProfile();
-      final sPaysFav = profileData?['sPaysFav'] ?? '';
+      final rawPaysFav = profileData?['sPaysFav']?.toString() ?? '';
+      final sPaysFav = _normalizeCountriesString(rawPaysFav);
+      final normalizedCountriesList = _normalizeCountriesList(
+        _extractCountriesFromString(rawPaysFav),
+      );
+      if (normalizedCountriesList.isNotEmpty) {
+        await LocalStorageService.saveSelectedCountries(normalizedCountriesList);
+      }
       
       print('📞 Appel get-basket-list-article avec:');
       print('   - iProfile: $iProfile');
@@ -1267,11 +1274,40 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Obtenir les pays actuellement sélectionnés (ceux qui sont activés)
+  List<String> _normalizeCountriesList(Iterable<dynamic> codes) {
+    final ordered = <String>[];
+    final seen = <String>{};
+    for (final code in codes) {
+      final normalized = code?.toString().toUpperCase().trim() ?? '';
+      if (normalized.length == 2 && !seen.contains(normalized)) {
+        seen.add(normalized);
+        ordered.add(normalized);
+      }
+    }
+    return ordered;
+  }
+
+  List<String> _extractCountriesFromString(String raw) {
+    if (raw.isEmpty) return [];
+    final sanitized = raw
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+    final parts = sanitized.split(',');
+    return _normalizeCountriesList(parts);
+  }
+
+  String _normalizeCountriesString(String raw) {
+    final codes = _extractCountriesFromString(raw);
+    return codes.join(',');
+  }
+
   Future<List<String>> _getCurrentSelectedCountries() async {
     try {
       // D'abord, essayer de récupérer depuis le localStorage (pays ajoutés via le modal)
       final savedCountries = await LocalStorageService.getSelectedCountries();
-      final normalizedSaved = savedCountries.map((c) => c.toUpperCase()).toSet().toList();
+      final normalizedSaved = _normalizeCountriesList(savedCountries);
       if (normalizedSaved.isNotEmpty) {
         final primaryCountryCode = await _getPrimaryCountryCode();
         if (primaryCountryCode != null && !normalizedSaved.contains(primaryCountryCode)) {
@@ -1298,11 +1334,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       }
       
       // Convertir en liste et filtrer
-      final countries = selectedCountries
-          .where((code) => code.isNotEmpty && code != 'AT' && code != 'CH')
-          .map((code) => code.toUpperCase())
-          .toSet()
-          .toList();
+      final countries = _normalizeCountriesList(
+        selectedCountries
+            .where((code) => code.isNotEmpty && code != 'AT' && code != 'CH'),
+      );
 
       final primaryCountryCode = await _getPrimaryCountryCode();
       if (primaryCountryCode != null && primaryCountryCode.isNotEmpty && !countries.contains(primaryCountryCode)) {
@@ -1334,6 +1369,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       // Sauvegarder les pays sélectionnés dans localStorage pour la persistance
       await LocalStorageService.saveSelectedCountries(normalizedCountries);
+      await LocalStorageService.saveProfile({
+        'sPaysFav': normalizedCountries.join(','),
+      });
       
       final profileData = await LocalStorageService.getProfile();
       final iBasket = profileData?['iBasket']?.toString() ?? '';
@@ -1356,7 +1394,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         print('✅ Pays sauvegardés avec succès');
         
         // Recharger les données de la wishlist
-        await _loadWishlistData();
+        await _loadWishlistData(force: true);
       } else {
         print('❌ Erreur lors de la sauvegarde: ${response?['error']}');
       }
@@ -4887,7 +4925,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 class _CountryManagementModal extends StatefulWidget {
   final List<Map<String, dynamic>> availableCountries;
   final List<String> selectedCountries;
-  final Function(List<String>) onSave;
+  final Future<void> Function(List<String>) onSave;
   final String? lockedCountryCode;
 
   const _CountryManagementModal({
@@ -5159,9 +5197,11 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                   // Bouton Modifier (aqua)
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        widget.onSave(_selectedCountries);
-                        Navigator.of(context).pop();
+                      onPressed: () async {
+                        await widget.onSave(_selectedCountries);
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00BCD4), // Aqua
