@@ -2816,16 +2816,16 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 valueListenable: notifier,
                 builder: (context, articleValue, _) {
                   final displayArticle = articleValue.isNotEmpty ? articleValue : Map<String, dynamic>.from(sourceArticle);
-          return _WishlistArticleRow(
-            article: displayArticle,
-            sourceArticle: sourceArticle,
-            articleNotifier: notifier,
-            translationService: translationService,
-            isMobile: isMobile,
-            isSmallMobile: isSmallMobile,
-            isVerySmallMobile: isVerySmallMobile,
-            animationIndex: index,
-          );
+              return _buildTableRow(
+                displayArticle,
+                translationService,
+                sourceArticle: sourceArticle,
+                articleNotifier: notifier,
+                isMobile: isMobile,
+                isSmallMobile: isSmallMobile,
+                isVerySmallMobile: isVerySmallMobile,
+                itemIndex: index,
+              );
                 },
               );
             },
@@ -4068,41 +4068,6 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
 }
 
-class _WishlistArticleRow extends StatelessWidget {
-  final Map<String, dynamic> article;
-  final Map<String, dynamic> sourceArticle;
-  final ValueNotifier<Map<String, dynamic>> articleNotifier;
-  final TranslationService translationService;
-  final bool isMobile;
-  final bool isSmallMobile;
-  final bool isVerySmallMobile;
-  final int animationIndex;
-
-  const _WishlistArticleRow({
-    required this.article,
-    required this.sourceArticle,
-    required this.articleNotifier,
-    required this.translationService,
-    required this.isMobile,
-    required this.isSmallMobile,
-    required this.isVerySmallMobile,
-    required this.animationIndex,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildTableRow(
-      article,
-      translationService,
-      sourceArticle: sourceArticle,
-      articleNotifier: articleNotifier,
-      isMobile: isMobile,
-      isSmallMobile: isSmallMobile,
-      isVerySmallMobile: isVerySmallMobile,
-      itemIndex: animationIndex,
-    );
-  }
-}
 
 /// Widget de modal de succès animé avec check (style Notiflix Report.success)
 class _AnimatedSuccessModal extends StatefulWidget {
