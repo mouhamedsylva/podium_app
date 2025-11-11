@@ -2816,16 +2816,16 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 valueListenable: notifier,
                 builder: (context, articleValue, _) {
                   final displayArticle = articleValue.isNotEmpty ? articleValue : Map<String, dynamic>.from(sourceArticle);
-                  return _buildTableRow(
-                    displayArticle,
-                    translationService,
-                    sourceArticle: sourceArticle,
-                    articleNotifier: notifier,
-                    isMobile: isMobile,
-                    isSmallMobile: isSmallMobile,
-                    isVerySmallMobile: isVerySmallMobile,
-                    itemIndex: index,
-                  );
+          return _WishlistArticleRow(
+            article: displayArticle,
+            sourceArticle: sourceArticle,
+            articleNotifier: notifier,
+            translationService: translationService,
+            isMobile: isMobile,
+            isSmallMobile: isSmallMobile,
+            isVerySmallMobile: isVerySmallMobile,
+            animationIndex: index,
+          );
                 },
               );
             },
@@ -4068,6 +4068,42 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
 }
 
+class _WishlistArticleRow extends StatelessWidget {
+  final Map<String, dynamic> article;
+  final Map<String, dynamic> sourceArticle;
+  final ValueNotifier<Map<String, dynamic>> articleNotifier;
+  final TranslationService translationService;
+  final bool isMobile;
+  final bool isSmallMobile;
+  final bool isVerySmallMobile;
+  final int animationIndex;
+
+  const _WishlistArticleRow({
+    required this.article,
+    required this.sourceArticle,
+    required this.articleNotifier,
+    required this.translationService,
+    required this.isMobile,
+    required this.isSmallMobile,
+    required this.isVerySmallMobile,
+    required this.animationIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildTableRow(
+      article,
+      translationService,
+      sourceArticle: sourceArticle,
+      articleNotifier: articleNotifier,
+      isMobile: isMobile,
+      isSmallMobile: isSmallMobile,
+      isVerySmallMobile: isVerySmallMobile,
+      itemIndex: animationIndex,
+    );
+  }
+}
+
 /// Widget de modal de succès animé avec check (style Notiflix Report.success)
 class _AnimatedSuccessModal extends StatefulWidget {
   final String title;
@@ -4701,6 +4737,9 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                   final borderWidth = isSelected ? 2.0 : 1.0;
                             
                             // ✨ Animation : Chaque pays apparaît en vague
+                            final bool isTouchPlatform = defaultTargetPlatform == TargetPlatform.iOS ||
+                                defaultTargetPlatform == TargetPlatform.android;
+
                             return TweenAnimationBuilder<double>(
                               duration: Duration(milliseconds: 300 + (index * 60)), // Vague progressive
                               tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -4718,7 +4757,12 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                               child: Container(
                               margin: EdgeInsets.only(bottom: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
                               child: GestureDetector(
-                      onTap: (_isChanging || !isAvailable) ? null : () => _handleCountryChange(code),
+                      onTap: (_isChanging || !isAvailable)
+                          ? null
+                          : () => _handleCountryChange(
+                                code,
+                                closeModal: isTouchPlatform,
+                              ),
                       onDoubleTap: (_isChanging || !isAvailable)
                           ? null
                           : () => _handleCountryChange(code, closeModal: true),
