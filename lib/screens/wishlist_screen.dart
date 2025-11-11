@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/translation_service.dart';
@@ -41,6 +42,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   bool _isGreenLight = false; // Pour l'animation du point vert
   int _currentImageIndex = 0; // Index de l'image actuellement affichée en plein écran
   bool _isCountrySidebarOpen = false; // Empêcher ouvertures multiples du sidebar
+  final Map<String, ValueNotifier<Map<String, dynamic>>> _articleNotifiers = {};
   
   // ✨ ANIMATIONS - Style "Cascade Fluide" (différent des 3 autres pages)
   late AnimationController _buttonsController;
@@ -50,6 +52,53 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   
   ApiService get _apiService => Provider.of<ApiService>(context, listen: false);
   TranslationService get _translationService => Provider.of<TranslationService>(context, listen: false);
+
+  String _articleKey(Map<String, dynamic> article) {
+    return (article['sCodeArticleCrypt'] ??
+            article['sCodeArticle'] ??
+            article['sName'] ??
+            article['sname'] ??
+            article.hashCode)
+        .toString();
+  }
+
+  ValueNotifier<Map<String, dynamic>> _ensureArticleNotifier(Map<String, dynamic> article) {
+    final key = _articleKey(article);
+    final mapData = Map<String, dynamic>.from(article);
+    final existing = _articleNotifiers[key];
+    if (existing != null) {
+      if (!mapEquals(existing.value, mapData)) {
+        existing.value = mapData;
+      }
+      return existing;
+    }
+    final notifier = ValueNotifier<Map<String, dynamic>>(mapData);
+    _articleNotifiers[key] = notifier;
+    return notifier;
+  }
+
+  void _refreshArticleNotifiers() {
+    final articles = (_wishlistData?['pivotArray'] as List?) ?? const [];
+    final activeKeys = <String>{};
+
+    for (final item in articles) {
+      if (item is Map) {
+        final mapData = Map<String, dynamic>.from(item as Map);
+        final key = _articleKey(mapData);
+        activeKeys.add(key);
+        final notifier = _articleNotifiers.putIfAbsent(key, () => ValueNotifier<Map<String, dynamic>>(mapData));
+        if (!mapEquals(notifier.value, mapData)) {
+          notifier.value = mapData;
+        }
+      }
+    }
+
+    final toRemove = _articleNotifiers.keys.where((key) => !activeKeys.contains(key)).toList();
+    for (final key in toRemove) {
+      _articleNotifiers[key]?.dispose();
+      _articleNotifiers.remove(key);
+    }
+  }
 
   @override
   void initState() {
@@ -128,6 +177,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     } catch (e) {
       print('❌ Erreur dispose animations wishlist: $e');
     }
+    for (final notifier in _articleNotifiers.values) {
+      notifier.dispose();
+    }
+    _articleNotifiers.clear();
     super.dispose();
   }
 
@@ -254,6 +307,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           _selectedBasketName = 'Wishlist (0 Art.)';
           _hasLoaded = true; // Marquer comme chargé même si vide
         });
+        _refreshArticleNotifiers();
       
       print('⚠️ Pas de profil trouvé - Wishlist vide affichée');
     } catch (e) {
@@ -357,6 +411,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             _isLoading = false;
             _hasLoaded = true;
           });
+          _refreshArticleNotifiers();
           print('✅ Articles de test chargés: $articleCount');
           return;
         } else if (responseData is Map<String, dynamic>) {
@@ -384,6 +439,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             _isLoading = false;
             _hasLoaded = true; // Marquer comme chargé
           });
+          _refreshArticleNotifiers();
           print('✅ Articles chargés: $articleCount');
         } else {
           // Pas de données
@@ -400,6 +456,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             _selectedBasketName = 'Wishlist (0 Art.)';
             _hasLoaded = true; // Marquer comme chargé même si vide
           });
+          _refreshArticleNotifiers();
         }
       } else {
         setState(() {
@@ -415,6 +472,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           _selectedBasketName = 'Wishlist (0 Art.)';
           _hasLoaded = true; // Marquer comme chargé même si vide
         });
+        _refreshArticleNotifiers();
       }
     } catch (e) {
       print('❌ Erreur _loadArticlesDirectly: $e');
@@ -949,6 +1007,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         _wishlistData!['pivotArray'] = pivotArray;
         setState(() {});
+        _refreshArticleNotifiers();
         
         print('✅ Données mises à jour après changement de quantité');
       }
@@ -958,7 +1017,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Ouvrir le sidebar pour sélectionner le pays d'un article (comme SNAL avec updateDisplayChoice)
-  void _openCountrySidebarForArticle(Map<String, dynamic> article, {String? defaultSelectedCountry}) async {
+  void _openCountrySidebarForArticle(Map<String, dynamic> article, {String? defaultSelectedCountry, ValueNotifier<Map<String, dynamic>>? articleNotifier}) async {
     if (_isCountrySidebarOpen) {
       return; // Sidebar déjà ouvert/ouvrant
     }
@@ -1077,7 +1136,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       print('🌍 Pays actuellement sélectionné: $currentSelectedCountry');
       
       // ✅ Créer un ValueNotifier pour l'article
-      final articleNotifier = ValueNotifier<Map<String, dynamic>>(article);
+      final effectiveNotifier = articleNotifier ?? _ensureArticleNotifier(article);
 
       // ✅ Utiliser showModalBottomSheet pour un vrai sidebar plein écran
       await showModalBottomSheet(
@@ -1086,7 +1145,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         backgroundColor: Colors.transparent,
         builder: (BuildContext modalContext) {
           return _CountrySidebarModal(
-            articleNotifier: articleNotifier,
+            articleNotifier: effectiveNotifier,
             availableCountries: allCountries,
             currentSelected: currentSelectedCountry,
             homeCountryCode: _getHomeCountryCode(article),
@@ -1096,13 +1155,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             },
             onCountrySelected: (String countryCode) async {
               // Ne PAS fermer le modal - il restera ouvert et se mettra à jour
-              await _changeArticleCountry(article, countryCode, articleNotifier);
+              await _changeArticleCountry(article, countryCode, effectiveNotifier);
             },
           );
         },
       ).whenComplete(() {
-        // Nettoyer le ValueNotifier quand le modal se ferme
-        articleNotifier.dispose();
         _isCountrySidebarOpen = false;
       });
     } catch (e) {
@@ -1119,7 +1176,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       // Utiliser le premier article comme référence
       final articles = _wishlistData?['pivotArray'] as List? ?? [];
       if (articles.isNotEmpty) {
-        _openCountrySidebarForArticle(articles[0]); // Appel asynchrone
+        final firstArticle = articles[0];
+        if (firstArticle is Map) {
+          final mapArticle = firstArticle as Map<String, dynamic>;
+          final notifier = _ensureArticleNotifier(mapArticle);
+          _openCountrySidebarForArticle(mapArticle, articleNotifier: notifier); // Appel asynchrone
+        }
       }
     } catch (e) {
       print('❌ Erreur dans _openCountrySidebar: $e');
@@ -1427,11 +1489,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         );
         if (articleIndex != -1) {
           pivotArray[articleIndex]['spaysSelected'] = countryCode;
+          pivotArray[articleIndex]['sPaysSelected'] = countryCode;
+          pivotArray[articleIndex]['sPays'] = countryCode;
           if (articleNotifier != null) {
             articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
           }
           if (mounted) setState(() {});
           print('⚡ UI mise à jour immédiatement (optimistic) avec pays: $countryCode');
+          unawaited(_loadWishlistData(force: true));
         }
       }
       
@@ -1473,7 +1538,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             
             if (articleIndex != -1) {
               // ✅ Mettre à jour l'article avec le nouveau pays sélectionné (comme SNAL ligne 4090)
-              pivotArray[articleIndex]['spaysSelected'] = totals['sNewPaysSelected'] ?? countryCode;
+              final newSelected = totals['sNewPaysSelected']?.toString() ?? countryCode;
+              pivotArray[articleIndex]['spaysSelected'] = newSelected;
+              pivotArray[articleIndex]['sPaysSelected'] = newSelected;
+              pivotArray[articleIndex]['sPays'] = newSelected;
               pivotArray[articleIndex]['sMyHomeIcon'] = totals['sMyHomeIcon'];
               pivotArray[articleIndex]['sPaysListe'] = totals['sPaysListe'];
               
@@ -2480,7 +2548,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
     
     if (!_animationsInitialized) {
-      return FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: cardWidget);
+      return cardWidget;
     }
     
     // ✨ Animation Cascade : Apparition en décalé avec slide depuis la gauche
@@ -2503,7 +2571,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           ),
         );
       },
-      child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: cardWidget),
+      child: cardWidget,
     );
   }
 
@@ -2738,8 +2806,28 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             itemCount: articles.length,
             separatorBuilder: (context, index) => SizedBox(height: isMobile ? 8 : 12),
             itemBuilder: (context, index) {
-              final article = articles[index];
-              return _buildTableRow(article, translationService, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile, itemIndex: index);
+              final rawArticle = articles[index];
+              if (rawArticle is! Map) {
+                return const SizedBox.shrink();
+              }
+              final sourceArticle = rawArticle as Map<String, dynamic>;
+              final notifier = _ensureArticleNotifier(sourceArticle);
+              return ValueListenableBuilder<Map<String, dynamic>>(
+                valueListenable: notifier,
+                builder: (context, articleValue, _) {
+                  final displayArticle = articleValue.isNotEmpty ? articleValue : Map<String, dynamic>.from(sourceArticle);
+                  return _buildTableRow(
+                    displayArticle,
+                    translationService,
+                    sourceArticle: sourceArticle,
+                    articleNotifier: notifier,
+                    isMobile: isMobile,
+                    isSmallMobile: isSmallMobile,
+                    isVerySmallMobile: isVerySmallMobile,
+                    itemIndex: index,
+                  );
+                },
+              );
             },
           ),
           
@@ -2792,7 +2880,17 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   // }
 
   /// Ligne du tableau à 2 colonnes
-  Widget _buildTableRow(Map<String, dynamic> article, TranslationService translationService, {bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false, int itemIndex = 0}) {
+  Widget _buildTableRow(
+    Map<String, dynamic> article,
+    TranslationService translationService, {
+    Map<String, dynamic>? sourceArticle,
+    ValueNotifier<Map<String, dynamic>>? articleNotifier,
+    bool isMobile = false,
+    bool isSmallMobile = false,
+    bool isVerySmallMobile = false,
+    int itemIndex = 0,
+  }) {
+    final baseArticle = sourceArticle ?? article;
     final imageUrl = article['sImage'] ?? '';
     final name = article['sname'] ?? translationService.translate('PRODUCTCODE_Msg08');
     final code = article['scodearticle'] ?? '';
@@ -2820,7 +2918,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           // Colonne gauche - Détails de l'article
           Expanded(
             flex: isVerySmallMobile ? 1 : (isSmallMobile ? 1 : (isMobile ? 2 : 3)),
-            child: _buildLeftColumn(article, translationService, imageUrl, name, code, quantity, codeCrypt, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
+            child: _buildLeftColumn(baseArticle, translationService, imageUrl, name, code, quantity, codeCrypt, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
           ),
           
           SizedBox(width: isVerySmallMobile ? 2 : (isSmallMobile ? 3 : (isMobile ? 6 : 8))),
@@ -2828,7 +2926,15 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           // Colonne droite - Prix et pays
           Expanded(
             flex: isVerySmallMobile ? 1 : (isSmallMobile ? 1 : (isMobile ? 2 : 2)),
-            child: _buildRightColumn(article, paysListe, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
+            child: _buildRightColumn(
+              article,
+              paysListe,
+              sourceArticle: baseArticle,
+              articleNotifier: articleNotifier,
+              isMobile: isMobile,
+              isSmallMobile: isSmallMobile,
+              isVerySmallMobile: isVerySmallMobile,
+            ),
           ),
         ],
       ),
@@ -3090,7 +3196,15 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Colonne droite - Prix et pays d'origine
-  Widget _buildRightColumn(Map<String, dynamic> article, List paysListe, {bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false}) {
+  Widget _buildRightColumn(
+    Map<String, dynamic> article,
+    List paysListe, {
+    Map<String, dynamic>? sourceArticle,
+    ValueNotifier<Map<String, dynamic>>? articleNotifier,
+    bool isMobile = false,
+    bool isSmallMobile = false,
+    bool isVerySmallMobile = false,
+  }) {
     // ✅ Utiliser le pays sélectionné (spaysSelected avec minuscule - comme l'API le retourne)
     String? selectedCountry = article['spaysSelected'] ?? // ✅ Minuscule 's' (comme l'API)
                              article['sPaysSelected'] ??   // Fallback majuscule
@@ -3167,7 +3281,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
+                    onTap: () => _openCountrySidebarForArticle(
+                      sourceArticle ?? article,
+                      defaultSelectedCountry: selectedCountry ?? '',
+                      articleNotifier: articleNotifier,
+                    ),
                     child: Text(
                       sDescr,
                       maxLines: 1,
@@ -3199,7 +3317,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-              onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
+              onTap: () => _openCountrySidebarForArticle(
+                sourceArticle ?? article,
+                defaultSelectedCountry: selectedCountry ?? '',
+                articleNotifier: articleNotifier,
+              ),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
@@ -3285,7 +3407,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               
               // Bouton + bleu (ouvre le sidebar de sélection de pays pour cet article)
               GestureDetector(
-                onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
+                onTap: () => _openCountrySidebarForArticle(
+                  article,
+                  defaultSelectedCountry: selectedCountry ?? '',
+                ),
                 child: Container(
                   width: 24,
                   height: 24,
@@ -3829,7 +3954,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               
               // Bouton + bleu (ouvre le sidebar de sélection de pays pour cet article)
               GestureDetector(
-                onTap: () => _openCountrySidebarForArticle(article, defaultSelectedCountry: selectedCountry ?? ''),
+                onTap: () => _openCountrySidebarForArticle(
+                  article,
+                  defaultSelectedCountry: selectedCountry ?? '',
+                ),
                 child: Container(
                   width: 24,
                   height: 24,
@@ -4181,7 +4309,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     super.dispose();
   }
 
-  Future<void> _handleCountryChange(String countryCode) async {
+  Future<void> _handleCountryChange(String countryCode, {bool closeModal = false}) async {
     if (_selectedCountry == countryCode || _isChanging) {
       return; // Ne rien faire si c'est déjà le pays sélectionné ou si un changement est en cours
     }
@@ -4200,21 +4328,30 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 
     setState(() {
       _isChanging = true;
+      _selectedCountry = countryCode;
     });
 
-    try {
-      // Appeler le callback pour changer le pays
-      await widget.onCountrySelected(countryCode);
-      
-      // Mettre à jour l'état local
-      if (mounted) {
-        setState(() {
-          _selectedCountry = countryCode;
-          _isChanging = false;
-        });
+    final changeFuture = widget.onCountrySelected(countryCode);
+
+    if (closeModal) {
+      changeFuture.whenComplete(() {
+        if (mounted) {
+          setState(() {
+            _isChanging = false;
+          });
+        }
+      });
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
       }
+      return;
+    }
+
+    try {
+      await changeFuture;
     } catch (e) {
       print('❌ Erreur lors du changement de pays: $e');
+    } finally {
       if (mounted) {
         setState(() {
           _isChanging = false;
@@ -4584,12 +4721,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                       onTap: (_isChanging || !isAvailable) ? null : () => _handleCountryChange(code),
                       onDoubleTap: (_isChanging || !isAvailable)
                           ? null
-                          : () {
-                              // Sélection immédiate + fermeture instantanée
-                              setState(() => _selectedCountry = code);
-                              _handleCountryChange(code); // ne pas await
-                              if (mounted) Navigator.of(context).pop();
-                            },
+                          : () => _handleCountryChange(code, closeModal: true),
                       child: Opacity(
                         opacity: (_isChanging && !isSelected) || !isAvailable ? 0.5 : 1.0,
                                   child: Container(

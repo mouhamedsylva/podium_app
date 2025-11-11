@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
+import '../models/country.dart';
 import '../services/local_storage_service.dart';
+import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../services/api_service.dart';
 import '../widgets/bottom_navigation_bar.dart';
@@ -21,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isEditing = true; // Mode édition activé par défaut
   bool _isSaving = false;
+  Country? _selectedCountry;
   
   // Controllers pour les champs du formulaire
   final _prenomController = TextEditingController();
@@ -60,19 +63,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('📱 Données depuis localStorage: $profile');
       
       if (profile != null && mounted) {
+        final normalizedProfile = Map<String, dynamic>.from(profile);
+        normalizedProfile['sPaysFav'] =
+            _normalizeCountriesString(profile['sPaysFav']?.toString() ?? '');
+
         setState(() {
-          _profile = profile;
+          _profile = normalizedProfile;
           _isLoading = false;
           
           // Initialiser les controllers avec les données du profil
-          _prenomController.text = profile['sPrenom'] ?? '';
-          _nomController.text = profile['sNom'] ?? '';
-          _emailController.text = profile['sEmail'] ?? '';
-          _telController.text = profile['sTel'] ?? '';
-          _rueController.text = profile['sRue'] ?? '';
-          _zipController.text = profile['sZip'] ?? '';
-          _cityController.text = profile['sCity'] ?? '';
+          _prenomController.text = normalizedProfile['sPrenom'] ?? '';
+          _nomController.text = normalizedProfile['sNom'] ?? '';
+          _emailController.text = normalizedProfile['sEmail'] ?? '';
+          _telController.text = normalizedProfile['sTel'] ?? '';
+          _rueController.text = normalizedProfile['sRue'] ?? '';
+          _zipController.text = normalizedProfile['sZip'] ?? '';
+          _cityController.text = normalizedProfile['sCity'] ?? '';
         });
+      }
+
+      final settingsService = SettingsService();
+      final selected = await settingsService.getSelectedCountry();
+      if (mounted) {
+        Map<String, dynamic>? updatedProfileForStorage;
+        setState(() {
+          _selectedCountry = selected;
+          if (selected != null) {
+            final langue = selected.sPaysLangue ?? '${selected.sPays}/fr';
+            updatedProfileForStorage = {
+              ...?_profile,
+              'sPaysLangue': langue,
+            };
+            _profile = updatedProfileForStorage;
+          }
+        });
+        if (selected != null && updatedProfileForStorage != null) {
+          await LocalStorageService.saveProfile(updatedProfileForStorage!);
+        }
       }
       
       // ✅ Synchroniser avec l'API en arrière-plan (sans écraser les données locales immédiatement)
@@ -214,6 +241,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // ✅ CORRECTION: Partir de TOUTES les valeurs actuelles du localStorage
       // pour garantir qu'on ne perd aucune donnée existante (même si elle n'est pas dans _profile)
       final updatedLocalProfile = Map<String, dynamic>.from(currentProfile ?? {});
+      updatedLocalProfile['sPaysFav'] = _normalizeCountriesString(
+        updatedLocalProfile['sPaysFav']?.toString() ??
+            _profile?['sPaysFav']?.toString() ??
+            '',
+      );
+      if (_selectedCountry != null) {
+        updatedLocalProfile['sPaysLangue'] =
+            _selectedCountry!.sPaysLangue ?? '${_selectedCountry!.sPays}/fr';
+      }
       
       // ✅ Mettre à jour uniquement les champs modifiés dans le formulaire
       // Les autres champs conservent leurs valeurs actuelles depuis le localStorage
@@ -254,6 +290,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // pour s'assurer que les données modifiées sont bien persistées et ÉCRASENT les anciennes
           // Utiliser les valeurs des controllers (nouvelles modifications) comme source de vérité
           final finalProfile = Map<String, dynamic>.from(updatedLocalProfile);
+          finalProfile['sPaysFav'] = _normalizeCountriesString(
+            finalProfile['sPaysFav']?.toString() ??
+                _profile?['sPaysFav']?.toString() ??
+                '',
+          );
           
           // ✅ FORCER l'écrasement de TOUTES les données modifiées, même si elles sont vides
           // Cela garantit que les anciennes données sont remplacées par les nouvelles
@@ -392,15 +433,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       case 'FR':
         return 'France';
       case 'DE':
-        return 'Allemagne';
+        return 'Deutschland';
       case 'BE':
-        return 'Belgique';
+        return 'Belgique/België';
       case 'ES':
-        return 'Espagne';
+        return 'España';
       case 'IT':
-        return 'Italie';
+        return 'Italia';
       case 'NL':
-        return 'Pays-Bas';
+        return 'Nederland';
       case 'PT':
         return 'Portugal';
       case 'LU':
@@ -408,6 +449,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       default:
         return code;
     }
+  }
+
+  String _normalizeCountriesString(String raw) {
+    if (raw.isEmpty) return '';
+    final sanitized = raw
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+    final codes = sanitized
+        .split(',')
+        .map((code) => code.trim().toUpperCase())
+        .where((code) => code.isNotEmpty)
+        .toList();
+    return codes.join(',');
   }
 
   /// Obtenir le chemin du drapeau
@@ -684,7 +740,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       // Mettre à jour le profil local avec TOUTES les données existantes
       final updatedProfile = Map<String, dynamic>.from(currentProfile);
-      updatedProfile['sPaysFav'] = newFavorites;
+      final normalizedFavorites = _normalizeCountriesString(newFavorites);
+      updatedProfile['sPaysFav'] = normalizedFavorites;
       
       // ✅ Sauvegarder immédiatement dans localStorage
       await LocalStorageService.saveProfile(updatedProfile);
@@ -698,7 +755,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       if (isLoggedIn) {
         // ✅ Synchroniser avec l'API en arrière-plan (sans bloquer l'UI)
-        _syncFavoriteCountriesWithAPI(newFavorites);
+        _syncFavoriteCountriesWithAPI(normalizedFavorites);
       }
     } catch (e) {
       print('Erreur lors de la mise à jour des pays favoris: $e');
@@ -1362,11 +1419,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String currentValue,
     bool isMobile,
   ) {
-    final favoriteCountries = currentValue.isNotEmpty ? currentValue.split(',') : [];
-    final cleanCountries = favoriteCountries
-        .map((code) => code.trim().toUpperCase())
-        .where((code) => code.isNotEmpty)
-        .toList();
+    final normalizedFavorites = _normalizeCountriesString(currentValue);
+    final cleanCountries = normalizedFavorites.isNotEmpty
+        ? normalizedFavorites.split(',')
+        : <String>[];
     
     return InkWell(
       onTap: () => _showFavoriteCountriesDialog(isMobile),

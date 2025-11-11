@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../models/country.dart';
 import '../services/local_storage_service.dart';
 import '../services/auth_notifier.dart';
 import '../services/profile_service.dart';
 import '../services/translation_service.dart';
+import '../services/settings_service.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../config/api_config.dart'; // Added import for ApiConfig
@@ -21,6 +23,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   bool _isLoading = true;
   String _sPaysLangue = '';
   String _sPaysFav = '';
+  Country? _selectedCountry;
   Map<String, String>? _userInfo;
   final ProfileService _profileService = ProfileService();
 
@@ -80,7 +83,24 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       print('❌ Erreur chargement profil: $e');
       _sPaysLangue = '';
       _sPaysFav = '';
+    }
+
+    try {
+      final settingsService = SettingsService();
+      final selected = await settingsService.getSelectedCountry();
+      if (selected != null) {
+        _selectedCountry = selected;
+        final langue = selected.sPaysLangue;
+        if (langue != null && langue.isNotEmpty) {
+          _sPaysLangue = langue;
+        } else {
+          _sPaysLangue = selected.sPays;
+        }
+      }
+    } catch (e) {
+      print('⚠️ Impossible de récupérer le pays sélectionné: $e');
     } finally {
+      _sPaysFav = _normalizeCountriesString(_sPaysFav);
       setState(() => _isLoading = false);
     }
   }
@@ -123,6 +143,21 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       default:
         return code;
     }
+  }
+
+  String _normalizeCountriesString(String raw) {
+    if (raw.isEmpty) return '';
+    final sanitized = raw
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+    final codes = sanitized
+        .split(',')
+        .map((code) => code.trim().toUpperCase())
+        .where((code) => code.isNotEmpty)
+        .toList();
+    return codes.join(',');
   }
 
   /// Obtenir le chemin local du drapeau depuis les assets
@@ -220,9 +255,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   }
 
   Widget _buildMainCountrySection(bool isMobile) {
-    final countryCode = _getCountryCodeFromLangue(_sPaysLangue);
-    final countryName = _getCountryNameFromCode(countryCode);
-    final flagPath = _getFlagPath(countryCode);
+    String countryCode = _getCountryCodeFromLangue(_sPaysLangue);
+    String countryName = _getCountryNameFromCode(countryCode);
+
+    if (_selectedCountry != null) {
+      countryCode = _selectedCountry!.countryCode.toUpperCase();
+      countryName = _selectedCountry!.sDescr;
+    }
     
     // Debug pour voir les données utilisées
     print('🔍 DEBUG Pays principal:');

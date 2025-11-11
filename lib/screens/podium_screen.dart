@@ -1528,8 +1528,9 @@ class _PodiumScreenState extends State<PodiumScreen>
                               fontWeight: FontWeight.w700,
                             ),
                             textAlign: TextAlign.center,
-                            maxLines: 2,
-                            softWrap: true,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           SizedBox(height: isVerySmallMobile ? 0.5 : 1),
                           Text(
@@ -1899,8 +1900,9 @@ class _PodiumScreenState extends State<PodiumScreen>
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
-                      maxLines: 2,
-                      softWrap: true,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const Text(
                       'IKEA',

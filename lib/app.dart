@@ -21,6 +21,7 @@ import 'services/country_notifier.dart';
 import 'services/auth_notifier.dart';
 import 'services/local_storage_service.dart';
 import 'services/route_persistence_service.dart';
+import 'services/route_tracker.dart';
 // Import deep_link_service supprimé - plus utilisé
 
 /// Application principale
@@ -52,7 +53,7 @@ class _JirigAppState extends State<JirigApp> {
   ) {
     return CustomTransitionPage<void>(
       key: state.pageKey,
-      child: child,
+      child: RouteTrackingWrapper(child: child),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return PageTransition(
           type: PageTransitionType.fade,
@@ -106,15 +107,21 @@ class _JirigAppState extends State<JirigApp> {
         routes: [
           GoRoute(
             path: '/splash',
-            builder: (context, state) => const SplashScreen(),
+            builder: (context, state) => const RouteTrackingWrapper(
+              child: SplashScreen(),
+            ),
           ),
           GoRoute(
             path: '/',
-            builder: (context, state) => const SplashScreen(),
+            builder: (context, state) => const RouteTrackingWrapper(
+              child: SplashScreen(),
+            ),
           ),
           GoRoute(
             path: '/country-selection',
-            builder: (context, state) => const CountrySelectionScreen(),
+            builder: (context, state) => const RouteTrackingWrapper(
+              child: CountrySelectionScreen(),
+            ),
           ),
           GoRoute(
             path: '/home',
@@ -343,4 +350,19 @@ class _JirigAppState extends State<JirigApp> {
       ),
     );
   }
+}
+
+class RouteTrackingWrapper extends StatefulWidget {
+  final Widget child;
+
+  const RouteTrackingWrapper({super.key, required this.child});
+
+  @override
+  State<RouteTrackingWrapper> createState() => _RouteTrackingWrapperState();
+}
+
+class _RouteTrackingWrapperState extends State<RouteTrackingWrapper>
+    with RouteTracker<RouteTrackingWrapper> {
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

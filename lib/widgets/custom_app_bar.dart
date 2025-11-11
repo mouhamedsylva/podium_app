@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -267,10 +268,16 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     TranslationService translationService, {
     double? maxWidth,
   }) {
+    final double minWidth = isMobile ? 88.0 : 110.0;
+    final double resolvedMaxWidth = math.max(
+      maxWidth ?? (isMobile ? 140.0 : 160.0),
+      minWidth,
+    );
+
     return ConstrainedBox(
       constraints: BoxConstraints(
-        minWidth: isMobile ? 88.0 : 110.0,
-        maxWidth: maxWidth ?? (isMobile ? 140.0 : 160.0),
+        minWidth: minWidth,
+        maxWidth: resolvedMaxWidth,
       ),
       child: ElevatedButton(
         onPressed: () {
