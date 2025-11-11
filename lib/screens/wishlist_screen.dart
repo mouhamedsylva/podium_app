@@ -1082,6 +1082,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             articleNotifier: articleNotifier,
             availableCountries: allCountries,
             currentSelected: currentSelectedCountry,
+            homeCountryCode: _getHomeCountryCode(article),
             onManageCountries: () {
               Navigator.of(modalContext).pop(); // Fermer le modal de sélection
               _openCountryManagementModal(); // Ouvrir le modal de gestion
@@ -1147,13 +1148,19 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     if (mounted) {
       // Récupérer les pays sélectionnés de manière asynchrone
       final selectedCountries = await _getCurrentSelectedCountries();
+      final primaryCountryCode = await _getPrimaryCountryCode();
+      if (primaryCountryCode != null && primaryCountryCode.isNotEmpty && !selectedCountries.contains(primaryCountryCode)) {
+        selectedCountries.add(primaryCountryCode);
+      }
+      final uniqueSelectedCountries = selectedCountries.map((c) => c.toUpperCase()).toSet().toList();
       
       showDialog(
         context: context,
         builder: (BuildContext dialogContext) {
           return _CountryManagementModal(
             availableCountries: _getAllAvailableCountries(),
-            selectedCountries: selectedCountries,
+            selectedCountries: uniqueSelectedCountries,
+            lockedCountryCode: primaryCountryCode,
             onSave: _saveCountryChanges,
           );
         },
@@ -1223,14 +1230,58 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     }
   }
 
+  /// Récupérer le code du pays principal choisi pendant l'onboarding
+  Future<String?> _getPrimaryCountryCode() async {
+    try {
+      final settingsService = SettingsService();
+      final selectedCountry = settingsService.selectedCountry ?? await settingsService.getSelectedCountry();
+      final code = selectedCountry?.sPays?.toString().toUpperCase();
+      if (code != null && code.isNotEmpty) {
+        return code;
+      }
+    } catch (e) {
+      print('❌ Erreur _getPrimaryCountryCode: $e');
+    }
+    return null;
+  }
+
+  String? _getHomeCountryCode([Map<String, dynamic>? article]) {
+    try {
+      final articleHome = article?['sMyHomeIcon'] ?? article?['smyhomeicon'];
+      if (articleHome is String && articleHome.isNotEmpty) {
+        return articleHome.toUpperCase();
+      }
+      final meta = _wishlistData?['meta'];
+      final metaHome = meta?['sMyHomeIcon'] ?? meta?['smyhomeicon'] ?? meta?['sPaysMyHome'];
+      if (metaHome is String && metaHome.isNotEmpty) {
+        return metaHome.toUpperCase();
+      }
+      final rootHome = _wishlistData?['sMyHomeIcon'] ?? _wishlistData?['smyhomeicon'];
+      if (rootHome is String && rootHome.isNotEmpty) {
+        return rootHome.toUpperCase();
+      }
+    } catch (e) {
+      print('❌ Erreur _getHomeCountryCode: $e');
+    }
+    return null;
+  }
+
   /// Obtenir les pays actuellement sélectionnés (ceux qui sont activés)
   Future<List<String>> _getCurrentSelectedCountries() async {
     try {
       // D'abord, essayer de récupérer depuis le localStorage (pays ajoutés via le modal)
       final savedCountries = await LocalStorageService.getSelectedCountries();
-      if (savedCountries.isNotEmpty) {
-        print('✅ Pays récupérés depuis localStorage: $savedCountries');
-        return savedCountries;
+      final normalizedSaved = savedCountries.map((c) => c.toUpperCase()).toSet().toList();
+      if (normalizedSaved.isNotEmpty) {
+        final primaryCountryCode = await _getPrimaryCountryCode();
+        if (primaryCountryCode != null && !normalizedSaved.contains(primaryCountryCode)) {
+          normalizedSaved.add(primaryCountryCode);
+        }
+        print('✅ Pays récupérés depuis localStorage: $normalizedSaved');
+        if (normalizedSaved.isNotEmpty) {
+          await LocalStorageService.saveSelectedCountries(normalizedSaved);
+        }
+        return normalizedSaved;
       }
       
       // Fallback: Récupérer les pays sélectionnés depuis les données de la wishlist
@@ -1242,14 +1293,21 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       for (final article in pivotArray) {
         final spaysSelected = article['spaysSelected']?.toString();
         if (spaysSelected != null && spaysSelected.isNotEmpty) {
-          selectedCountries.add(spaysSelected);
+          selectedCountries.add(spaysSelected.toUpperCase());
         }
       }
       
       // Convertir en liste et filtrer
-      final countries = selectedCountries.where((code) => 
-        code.isNotEmpty && code != 'AT' && code != 'CH'
-      ).toList();
+      final countries = selectedCountries
+          .where((code) => code.isNotEmpty && code != 'AT' && code != 'CH')
+          .map((code) => code.toUpperCase())
+          .toSet()
+          .toList();
+
+      final primaryCountryCode = await _getPrimaryCountryCode();
+      if (primaryCountryCode != null && primaryCountryCode.isNotEmpty && !countries.contains(primaryCountryCode)) {
+        countries.add(primaryCountryCode);
+      }
       
       // Sauvegarder ces pays dans localStorage pour la prochaine fois
       if (countries.isNotEmpty) {
@@ -1268,8 +1326,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     print('💾 Sauvegarde des changements de pays: $selectedCountries');
     
     try {
+      final normalizedCountries = selectedCountries.map((c) => c.toUpperCase()).where((c) => c.isNotEmpty).toSet().toList();
+      final primaryCountryCode = await _getPrimaryCountryCode();
+      if (primaryCountryCode != null && primaryCountryCode.isNotEmpty && !normalizedCountries.contains(primaryCountryCode)) {
+        normalizedCountries.add(primaryCountryCode);
+      }
+      
       // Sauvegarder les pays sélectionnés dans localStorage pour la persistance
-      await LocalStorageService.saveSelectedCountries(selectedCountries);
+      await LocalStorageService.saveSelectedCountries(normalizedCountries);
       
       final profileData = await LocalStorageService.getProfile();
       final iBasket = profileData?['iBasket']?.toString() ?? '';
@@ -1280,7 +1344,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       }
 
       // Formater la liste des pays en string (FR,BE,NL,PT,DE,ES,IT)
-      final sPaysListe = selectedCountries.join(',');
+      final sPaysListe = normalizedCountries.join(',');
       print('📤 Envoi de sPaysListe: $sPaysListe');
       
       // Appeler l'API pour sauvegarder les pays sélectionnés (comme SNAL)
@@ -3140,27 +3204,27 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      margin: EdgeInsets.only(right: isMobile ? 4 : 6),
-                      width: isMobile ? 20 : 24,
-                      height: isMobile ? 15 : 18,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: Image.network(
-                          ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
-                            return Container(
-                              color: Colors.grey[300],
-                              child: Icon(
-                                Icons.flag,
-                                size: isMobile ? 10 : 12,
-                                color: Colors.grey,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                  margin: EdgeInsets.only(right: isMobile ? 4 : 6),
+                  width: isMobile ? 20 : 24,
+                  height: isMobile ? 15 : 18,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: Image.network(
+                      ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
+                        return Container(
+                          color: Colors.grey[300],
+                          child: Icon(
+                            Icons.flag,
+                            size: isMobile ? 10 : 12,
+                            color: Colors.grey,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                     ),
                     // Icône panier si ce pays correspond à IsInBasket
                     if (isInBasketCountry)
@@ -3637,7 +3701,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   }
                   return const SizedBox.shrink();
                 },
-              ),
+                ),
             ],
           ),
           
@@ -3685,26 +3749,26 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      margin: const EdgeInsets.only(right: 4),
-                      width: isMobile ? 20 : 24,
-                      height: isMobile ? 15 : 18,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: Image.network(
+                  margin: const EdgeInsets.only(right: 4),
+                  width: isMobile ? 20 : 24,
+                  height: isMobile ? 15 : 18,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: Image.network(
                           ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/$countryCode.PNG'),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: const Icon(
-                                Icons.flag,
-                                size: 12,
-                                color: Colors.grey,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Icon(
+                            Icons.flag,
+                            size: 12,
+                            color: Colors.grey,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                     ),
                     // Icône panier si ce pays correspond à IsInBasket
                     if (isInBasketCountry)
@@ -3984,6 +4048,7 @@ class _CountrySidebarModal extends StatefulWidget {
   final ValueNotifier<Map<String, dynamic>> articleNotifier;
   final List<Map<String, dynamic>> availableCountries;
   final String currentSelected;
+  final String? homeCountryCode;
   final Function(String) onCountrySelected;
   final VoidCallback onManageCountries;
 
@@ -3992,6 +4057,7 @@ class _CountrySidebarModal extends StatefulWidget {
     required this.articleNotifier,
     required this.availableCountries,
     required this.currentSelected,
+    required this.homeCountryCode,
     required this.onManageCountries,
     required this.onCountrySelected,
   }) : super(key: key);
@@ -4004,6 +4070,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
   late String _selectedCountry;
   late Map<String, dynamic> _currentArticle;
   bool _isChanging = false;
+  late String _initialHomeCountryCode;
   
   // ✨ Animations
   late AnimationController _slideController;
@@ -4015,6 +4082,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     super.initState();
     _selectedCountry = widget.currentSelected;
     _currentArticle = widget.articleNotifier.value;
+    _initialHomeCountryCode = (widget.homeCountryCode ?? '').toUpperCase();
     widget.articleNotifier.addListener(_onArticleNotifierChanged);
     
     // ✨ Initialiser animation du sidebar (slide depuis la droite)
@@ -4058,6 +4126,14 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
         }
       });
     }
+  }
+
+  String _resolveHomeCountryCode() {
+    final articleHome = _currentArticle['sMyHomeIcon'] ?? _currentArticle['smyhomeicon'];
+    if (articleHome is String && articleHome.isNotEmpty) {
+      return articleHome.toUpperCase();
+    }
+    return _initialHomeCountryCode;
   }
 
   @override
@@ -4111,6 +4187,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 
   Widget _buildSelectedCountryAndPrice() {
     final selectedCountryCode = _currentArticle['spaysSelected']?.toString() ?? '';
+    final homeCountryCode = _resolveHomeCountryCode();
     
     if (selectedCountryCode.isEmpty) {
       return const SizedBox.shrink();
@@ -4125,68 +4202,74 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     final selectedCountryName = selectedCountryData['name']?.toString() ?? selectedCountryCode;
     final selectedCountryFlag = selectedCountryData['flag']?.toString() ?? '';
     final selectedCountryPrice = selectedCountryData['price']?.toString() ?? 'N/A';
+    final isHomeCountry = homeCountryCode.isNotEmpty && selectedCountryCode.toUpperCase() == homeCountryCode;
     
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4), // Vert très clair
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: const Color(0xFF10B981).withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-                child: Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
-                  children: [
-          // Drapeau du pays sélectionné
+        children: [
           if (selectedCountryFlag.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: Image.network(
                 selectedCountryFlag,
-                width: 20,
-                height: 15,
+                width: 32,
+                height: 22,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    width: 20,
-                    height: 15,
+                    width: 32,
+                    height: 22,
                     color: Colors.grey[200],
-                    child: const Icon(Icons.flag, size: 10, color: Colors.grey),
+                    child: const Icon(Icons.flag, size: 14, color: Colors.grey),
                   );
                 },
               ),
-            )
-          else
-            Container(
-              width: 20,
-              height: 15,
-              color: Colors.grey[200],
-              child: const Icon(Icons.flag, size: 10, color: Colors.grey),
             ),
-          const SizedBox(width: 8),
-          
-          // Nom du pays
+          const SizedBox(height: 6),
           Text(
             selectedCountryName,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Color(0xFF059669),
             ),
           ),
-          const SizedBox(width: 4),
-          
-          // Prix
+          const SizedBox(height: 4),
           Text(
-            '$selectedCountryPrice €',
+            '$selectedCountryCode - $selectedCountryPrice €',
             style: const TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF10B981),
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF6B7280),
             ),
           ),
+          if (isHomeCountry) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.green[400],
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.home,
+                  size: 32,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -4416,6 +4499,8 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                         }
                       }
 
+                      final homeCountryCode = _resolveHomeCountryCode();
+
                       return ListView.builder(
                       padding: EdgeInsets.all(isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
                       itemCount: widget.availableCountries.length,
@@ -4428,6 +4513,17 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                   final isAvailable = country['isAvailable'] ?? false;
                   final isSelected = code == _selectedCountry;
                   final isBest = code == bestCountryCode;
+                  final normalizedCode = code.toUpperCase();
+                  final isHomeCountry = homeCountryCode.isNotEmpty && normalizedCode == homeCountryCode;
+                  final containerColor = !isAvailable
+                      ? Colors.grey[100]
+                      : (isSelected
+                          ? const Color(0xFFECFDF5)
+                          : Colors.white);
+                  final borderColor = isSelected
+                      ? const Color(0xFF10B981)
+                      : (!isAvailable ? const Color(0xFFD1D5DB) : const Color(0xFFE5E7EB));
+                  final borderWidth = isSelected ? 2.0 : 1.0;
                             
                             // ✨ Animation : Chaque pays apparaît en vague
                             return TweenAnimationBuilder<double>(
@@ -4458,152 +4554,24 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                             },
                       child: Opacity(
                         opacity: (_isChanging && !isSelected) || !isAvailable ? 0.5 : 1.0,
-                                child: Container(
-                                  padding: EdgeInsets.all(isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
-                                  decoration: BoxDecoration(
-                                    color: isAvailable
-                                        ? (isSelected
-                                            ? const Color(0xFFECFDF5) // Vert très clair quand sélectionné (emerald-50)
-                                            : Colors.white)
-                                        : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isSelected 
-                                  ? const Color(0xFF10B981)
-                                          : !isAvailable 
-                                              ? const Color(0xFFD1D5DB) // Gris pour indisponible
-                                          : const Color(0xFFE5E7EB),
-                              width: isSelected ? 2 : 1,
-                            ),
-                            boxShadow: isSelected ? [
-                              BoxShadow(
-                                color: const Color(0xFF10B981).withOpacity(0.1),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                              ),
-                            ] : [],
-                                  ),
-                                  child: name == 'España'
-                                      // Layout spécial pour España : drapeau en dessous du nom
-                                      ? Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            // Nom du pays
-                                            Text(
-                                              name,
-                                              style: TextStyle(
-                                                fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : 14),
-                                                fontWeight: FontWeight.w600,
-                                                color: isAvailable ? Colors.black : const Color(0xFF9CA3AF),
-                                                height: 1.0,
-                                              ),
-                                            ),
-                                            SizedBox(height: isVerySmallMobile ? 1 : 2),
-                                            // Drapeau en dessous
-                                            Row(
-                                              children: [
-                                                ClipRRect(
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  child: flag.isNotEmpty
-                                                      ? Image.network(
-                                                          flag,
-                                                          width: isVerySmallMobile ? 28 : (isSmallMobile ? 30 : 32),
-                                                          height: isVerySmallMobile ? 21 : (isSmallMobile ? 22.5 : 24),
-                                                          fit: BoxFit.cover,
-                                                          loadingBuilder: (context, child, loadingProgress) {
-                                                            if (loadingProgress == null) return child;
-                                                            return Container(
-                                                              width: isVerySmallMobile ? 28 : (isSmallMobile ? 30 : 32),
-                                                              height: isVerySmallMobile ? 21 : (isSmallMobile ? 22.5 : 24),
-                                                              color: Colors.grey[100],
-                                                              child: const Center(
-                                                                child: SizedBox(
-                                                                  width: 12,
-                                                                  height: 12,
-                                                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
-                                                          errorBuilder: (context, error, stackTrace) {
-                                                            return Container(
-                                                              width: isVerySmallMobile ? 28 : (isSmallMobile ? 30 : 32),
-                                                              height: isVerySmallMobile ? 21 : (isSmallMobile ? 22.5 : 24),
-                                                              color: Colors.grey[300],
-                                                              child: const Icon(Icons.flag, size: 16, color: Colors.grey),
-                                                            );
-                                                          },
-                                                        )
-                                                      : Container(
-                                                          width: isVerySmallMobile ? 28 : (isSmallMobile ? 30 : 32),
-                                                          height: isVerySmallMobile ? 21 : (isSmallMobile ? 22.5 : 24),
-                                                          color: Colors.grey[300],
-                                                          child: const Icon(Icons.flag, size: 16, color: Colors.grey),
-                                                        ),
-                                                ),
-                                                SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
-                                                Text(
-                                                  code,
-                                                  style: TextStyle(
-                                                    fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
-                                                    color: Color(0xFF6B7280),
-                                                    height: 1.0,
-                                                  ),
-                                                ),
-                                                Spacer(),
-                                                // Prix ou Indisponible
-                                                if (isAvailable)
-                                                  Text(
-                                                    price,
-                                                    style: TextStyle(
-                                                      fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-                                                      fontWeight: FontWeight.w700,
-                                                      color: isSelected ? const Color(0xFF10B981) : const Color(0xFF374151),
-                                                    ),
-                                                  )
-                                                else
-                                                  Container(
-                                                    padding: EdgeInsets.symmetric(
-                                                      horizontal: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8),
-                                                      vertical: isVerySmallMobile ? 3 : 4,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFFF3F4F6),
-                                                      borderRadius: BorderRadius.circular(6),
-                                                      border: Border.all(color: const Color(0xFFD1D5DB), width: 1),
-                                                    ),
-                                                    child: Text(
-                                                      'Indisponible',
-                                                      style: TextStyle(
-                                                        fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
-                                                        fontWeight: FontWeight.w500,
-                                                        color: Color(0xFF6B7280),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                // Check si sélectionné
-                                                if (isSelected) ...[
-                                                  SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
-                                                  Container(
-                                                    width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
-                                                    height: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
-                                                    decoration: const BoxDecoration(
-                                                      color: Color(0xFF10B981),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.check,
-                                                      color: Colors.white,
-                                                      size: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ],
-                                        )
-                                      // Layout normal pour les autres pays : drapeau à gauche
-                                      : Row(
+                                  child: Container(
+                                    padding: EdgeInsets.all(isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16)),
+                                    decoration: BoxDecoration(
+                                      color: containerColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: borderColor,
+                                        width: borderWidth,
+                                      ),
+                                      boxShadow: isSelected ? [
+                                        BoxShadow(
+                                          color: const Color(0xFF10B981).withOpacity(0.1),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        ),
+                                      ] : [],
+                                    ),
+                                    child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       // Drapeau
@@ -4677,17 +4645,53 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                       ),
                                               ),
                                             SizedBox(height: isVerySmallMobile ? 2 : 4),
-                                            Text(
-                                              code,
-                                              style: TextStyle(
-                                                fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : 14),
-                                                color: Color(0xFF6B7280),
-                                      height: 1.0,
-                                              ),
-                                            ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            code,
+                            style: TextStyle(
+                              fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : 14),
+                              color: const Color(0xFF6B7280),
+                              height: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
                                           ],
                                         ),
                                       ),
+                
+                if (isHomeCountry) ...[
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        width: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                        height: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                        decoration: BoxDecoration(
+                          color: Colors.green[400],
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.home,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(width: 12),
+                ],
                                       
                             // Prix ou Indisponible (pour layout normal)
                                       if (isAvailable)
@@ -4733,7 +4737,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                                   : const Color(0xFF374151),
                                             ),
                                           ),
-                                        ],
+                                          ],
                                       )
                                       else
                                         Container(
@@ -4884,12 +4888,14 @@ class _CountryManagementModal extends StatefulWidget {
   final List<Map<String, dynamic>> availableCountries;
   final List<String> selectedCountries;
   final Function(List<String>) onSave;
+  final String? lockedCountryCode;
 
   const _CountryManagementModal({
     Key? key,
     required this.availableCountries,
     required this.selectedCountries,
     required this.onSave,
+    this.lockedCountryCode,
   }) : super(key: key);
   
   @override
@@ -4898,6 +4904,7 @@ class _CountryManagementModal extends StatefulWidget {
 
 class _CountryManagementModalState extends State<_CountryManagementModal> with SingleTickerProviderStateMixin {
   late List<String> _selectedCountries;
+  late final String? _lockedCountryCode;
   
   // ✨ Animations
   late AnimationController _modalController;
@@ -4907,7 +4914,11 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
   @override
   void initState() {
     super.initState();
-    _selectedCountries = List.from(widget.selectedCountries);
+    _lockedCountryCode = widget.lockedCountryCode?.toUpperCase();
+    _selectedCountries = widget.selectedCountries.map((c) => c.toUpperCase()).toSet().toList();
+    if (_lockedCountryCode != null && _lockedCountryCode!.isNotEmpty && !_selectedCountries.contains(_lockedCountryCode)) {
+      _selectedCountries.add(_lockedCountryCode!);
+    }
     
     // ✨ Initialiser animation du modal (fade + scale)
     _modalController = AnimationController(
@@ -4947,17 +4958,22 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
 
   /// Toggle un pays (comme SNAL toggleCountry)
   void _toggleCountry(String countryCode) {
+    final normalizedCode = countryCode.toUpperCase();
+    if (_lockedCountryCode != null && normalizedCode == _lockedCountryCode) {
+      print('⚠️ Pays principal non modifiable: $normalizedCode');
+      return;
+    }
     setState(() {
-      final index = _selectedCountries.indexOf(countryCode);
+      final index = _selectedCountries.indexOf(normalizedCode);
       if (index == -1) {
-        _selectedCountries.add(countryCode); // Ajouter
-        print('✅ Pays activé: $countryCode');
+        _selectedCountries.add(normalizedCode); // Ajouter
+        print('✅ Pays activé: $normalizedCode');
       } else {
         _selectedCountries.removeAt(index); // Supprimer
-        print('❌ Pays désactivé: $countryCode');
+        print('❌ Pays désactivé: $normalizedCode');
       }
     });
-    print('🔄 Pays togglé: $countryCode, Sélectionnés: $_selectedCountries');
+    print('🔄 Pays togglé: $normalizedCode, Sélectionnés: $_selectedCountries');
   }
   
   @override
@@ -5034,7 +5050,9 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                       final country = entry.value;
                       final code = country['code']?.toString() ?? '';
                       final name = country['name']?.toString() ?? '';
-                      final isSelected = _selectedCountries.contains(code);
+                      final normalizedCode = code.toUpperCase();
+                      final isSelected = _selectedCountries.contains(normalizedCode);
+                      final isLocked = _lockedCountryCode != null && normalizedCode == _lockedCountryCode;
 
                       // ✨ Animation : Chaque chip apparaît en vague
                       return TweenAnimationBuilder<double>(
@@ -5053,7 +5071,7 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                           );
                         },
                         child: GestureDetector(
-                          onTap: () => _toggleCountry(code),
+                          onTap: isLocked ? null : () => _toggleCountry(normalizedCode),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOut,
@@ -5062,8 +5080,10 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                             color: isSelected ? const Color(0xFFE0F7FF) : const Color(0xFFF3F4F6), // Aqua très clair si sélectionné, gris clair sinon
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: isSelected ? const Color(0xFF00BCD4) : const Color(0xFFD1D5DB), // Aqua si sélectionné, gris sinon
-                              width: isSelected ? 2 : 1,
+                              color: isLocked
+                                  ? const Color(0xFF0284C7)
+                                  : (isSelected ? const Color(0xFF00BCD4) : const Color(0xFFD1D5DB)), // Aqua si sélectionné, gris sinon
+                              width: isLocked ? 2 : (isSelected ? 2 : 1),
                             ),
                           ),
                           child: Row(
@@ -5074,9 +5094,19 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: isSelected ? const Color(0xFF00BCD4) : const Color(0xFF6B7280), // Aqua pour sélectionné, gris pour non sélectionné
+                                  color: isLocked
+                                      ? const Color(0xFF0284C7)
+                                      : (isSelected ? const Color(0xFF00BCD4) : const Color(0xFF6B7280)), // Aqua pour sélectionné, gris pour non sélectionné
                                 ),
                               ),
+                              if (isLocked) ...[
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.lock,
+                                  size: 16,
+                                  color: Color(0xFF0284C7),
+                                ),
+                              ],
                               // Pas de check icon quand sélectionné (demandé par l'utilisateur)
                             ],
                           ),
