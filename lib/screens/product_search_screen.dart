@@ -901,20 +901,22 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           return const SizedBox.shrink();
         }
 
-        final pattern = [4, 3];
+        final int columns = isMobile ? 4 : 6;
         final rows = <Widget>[];
         int cursor = 0;
-        int patternIndex = 0;
 
         while (cursor < allChips.length) {
-          final count = pattern[patternIndex % pattern.length];
-          final end = (cursor + count).clamp(0, allChips.length);
-          final rowChildren = <Widget>[];
+          final remaining = allChips.length - cursor;
+          final count = remaining < columns ? remaining : columns;
+          final double chipWidth = (constraints.maxWidth - horizontalGap * (columns - 1)) / columns;
+          final double totalWidth = count * chipWidth + (count - 1) * horizontalGap;
 
-          for (int j = cursor; j < end; j++) {
-            final chipIndex = j;
+          final rowChildren = <Widget>[];
+          for (int i = 0; i < count; i++) {
+            final chipIndex = cursor + i;
             rowChildren.add(
-              Expanded(
+              SizedBox(
+                width: chipWidth,
                 child: TweenAnimationBuilder<double>(
                   duration: Duration(milliseconds: 300 + (chipIndex * 50)),
                   tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -944,26 +946,30 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                       ),
                     );
                   },
-                  child: allChips[j],
+                  child: allChips[chipIndex],
                 ),
               ),
             );
 
-            if (j < end - 1) {
+            if (i < count - 1) {
               rowChildren.add(SizedBox(width: horizontalGap));
             }
           }
 
           rows.add(
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.max,
-              children: rowChildren,
+            Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: totalWidth,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: rowChildren,
+                ),
+              ),
             ),
           );
 
-          cursor = end;
-          patternIndex++;
+          cursor += count;
 
           if (cursor < allChips.length) {
             rows.add(const SizedBox(height: verticalGap));

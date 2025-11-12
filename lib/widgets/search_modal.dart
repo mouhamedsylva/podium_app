@@ -947,7 +947,7 @@ class _SearchModalState extends State<SearchModal>
                       ),
                     ),
                   )
-                : _buildCountryGrid(selectedCountryChips, unselectedCountryChips),
+                : _buildCountryGrid(selectedCountryChips, unselectedCountryChips, isMobile),
           ],
         ),
       ),
@@ -1005,56 +1005,63 @@ class _SearchModalState extends State<SearchModal>
   }
 
   /// Grille avec 4 pays en haut et 3 en bas (comme product_search_screen)
-  Widget _buildCountryGrid(List<Widget> selectedChips, List<Widget> unselectedChips) {
-    // Objectif d'affichage: 4 drapeaux sur la première ligne, 3 sur la seconde (pattern 4/3)
-    // Responsive sans overflow: largeur de puce contrainte par ligne via LayoutBuilder
+  Widget _buildCountryGrid(
+    List<Widget> selectedChips,
+    List<Widget> unselectedChips,
+    bool isMobile,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double maxWidth = constraints.maxWidth;
         const double horizontalGap = 8.0;
         const double verticalGap = 8.0;
 
         final List<Widget> allChips = [...selectedChips, ...unselectedChips];
-        const List<int> pattern = [4, 3]; // 4 en haut, 3 en bas
-        int patternIndex = 0;
+        final int columns = isMobile ? 4 : 6;
         int cursor = 0;
         final List<Widget> rows = [];
 
         while (cursor < allChips.length) {
-          final int count = pattern[patternIndex % pattern.length];
-          final int end = (cursor + count).clamp(0, allChips.length);
-          
+          final remaining = allChips.length - cursor;
+          final count = remaining < columns ? remaining : columns;
+          final double chipWidth = (constraints.maxWidth - horizontalGap * (columns - 1)) / columns;
+          final double totalWidth = count * chipWidth + (count - 1) * horizontalGap;
+
           final List<Widget> rowChildren = [];
-          for (int j = cursor; j < end; j++) {
-            final chipIndex = j;
+          for (int i = 0; i < count; i++) {
+            final chipIndex = cursor + i;
             rowChildren.add(
-              Expanded(
+              SizedBox(
+                width: chipWidth,
                 child: Center(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 0),
-                      child: allChips[j],
+                      child: allChips[chipIndex],
                     ),
                   ),
                 ),
               ),
             );
-            if (j < end - 1) {
+            if (i < count - 1) {
               rowChildren.add(const SizedBox(width: horizontalGap));
             }
           }
 
           rows.add(
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: rowChildren,
+            Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: totalWidth,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: rowChildren,
+                ),
+              ),
             ),
           );
 
-          cursor = end;
-          patternIndex++;
+          cursor += count;
           if (cursor < allChips.length) {
             rows.add(const SizedBox(height: verticalGap));
           }

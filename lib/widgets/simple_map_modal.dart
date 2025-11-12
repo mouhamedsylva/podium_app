@@ -463,22 +463,22 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
           
           // Modale centrée
           Center(
-            child: Container(
-              width: containerWidth,
-              height: containerHeight,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
+              child: Container(
+                width: containerWidth,
+                height: containerHeight,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
                   // En-tête avec recherche intégrée
                   Container(
                     padding: const EdgeInsets.all(16),

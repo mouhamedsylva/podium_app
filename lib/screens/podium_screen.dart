@@ -1258,35 +1258,73 @@ class _PodiumScreenState extends State<PodiumScreen>
         GestureDetector(
           onTap: _showFullscreenImage,
           child: Container(
-          width: double.infinity,
-          height: height ?? 200,
-          decoration: BoxDecoration(
-            color: Colors.white, // Background blanc
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: imageUrl.isNotEmpty
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.image_not_supported,
-                        size: 64,
-                        color: Colors.grey[400],
-                      );
-                    },
+            width: double.infinity,
+            height: height ?? 200,
+            decoration: BoxDecoration(
+              color: Colors.white, // Background blanc
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: imageUrl.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.image_not_supported,
+                          size: 64,
+                          color: Colors.grey[400],
+                        );
+                      },
+                    ),
+                  )
+                : Icon(
+                    Icons.image,
+                    size: 64,
+                    color: Colors.grey[400],
                   ),
-                )
-              : Icon(
-                  Icons.image,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
-        ),
+          ),
         ),
         
+        // Indication visuelle sur mobile
+        if (isMobile && imageUrl.isNotEmpty)
+          Positioned(
+            right: MediaQuery.of(context).size.width < 360 ? 8 : 12,
+            bottom: MediaQuery.of(context).size.width < 360 ? 8 : 12,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.of(context).size.width < 360 ? 6 : 10,
+                vertical: MediaQuery.of(context).size.width < 360 ? 3 : 6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.open_in_full,
+                    size: MediaQuery.of(context).size.width < 360 ? 11 : 14,
+                    color: Colors.white,
+                  ),
+                  SizedBox(
+                    width: MediaQuery.of(context).size.width < 360 ? 4 : 6,
+                  ),
+                  Text(
+                    'Voir en plein écran',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: MediaQuery.of(context).size.width < 360 ? 9.5 : 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         
         // Boutons de navigation
         if (hasMultipleImages && !isMobile) ...[
@@ -1295,11 +1333,11 @@ class _PodiumScreenState extends State<PodiumScreen>
             top: ((height ?? 200) / 2) - 20,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
-            child: CircleAvatar(
-              backgroundColor: Colors.black54,
-              child: IconButton(
-                icon: const Icon(Icons.chevron_left, color: Colors.white),
-                onPressed: _prevImage,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.chevron_left, color: Colors.white),
+                  onPressed: _prevImage,
                 ),
               ),
             ),
@@ -1309,11 +1347,11 @@ class _PodiumScreenState extends State<PodiumScreen>
             top: ((height ?? 200) / 2) - 20,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
-            child: CircleAvatar(
-              backgroundColor: Colors.black54,
-              child: IconButton(
-                icon: const Icon(Icons.chevron_right, color: Colors.white),
-                onPressed: _nextImage,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.chevron_right, color: Colors.white),
+                  onPressed: _nextImage,
                 ),
               ),
             ),
@@ -1422,8 +1460,15 @@ class _PodiumScreenState extends State<PodiumScreen>
     
     // Calculer l'écart de prix
     final currentPrice = _extractPrice(article['sPrice'] ?? '');
-    final priceDifference = maxPrice - currentPrice;
+    final priceDifference = (currentPrice > 0 && maxPrice > 0)
+        ? maxPrice - currentPrice
+        : 0.0;
     final isEconomy = priceDifference > 0;
+    final bool priceUnavailable =
+        currentPrice <= 0 ||
+        article['sPrice'] == null ||
+        article['sPrice'].toString().trim().isEmpty ||
+        article['sPrice'].toString().toUpperCase().contains('INDISPONIBLE');
     
     // Vérifier si tous les prix sont identiques
     final allPricesSame = _checkAllPricesSame();
@@ -1520,26 +1565,43 @@ class _PodiumScreenState extends State<PodiumScreen>
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            article['sPays'] ?? 'Pays',
-                            style: TextStyle(
-                              fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
-                              fontWeight: FontWeight.w700,
+                          SizedBox(
+                            width: double.infinity,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                article['sPays'] ?? 'Pays',
+                                style: TextStyle(
+                                  fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : 14),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.visible,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           SizedBox(height: isVerySmallMobile ? 0.5 : 1),
-                          Text(
-                            'IKEA',
-                            style: TextStyle(
-                              fontSize: isVerySmallMobile ? 8 : (isSmallMobile ? 9 : 10),
-                              color: Colors.grey[600],
+                          SizedBox(
+                            width: double.infinity,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'IKEA',
+                                style: TextStyle(
+                                  fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.visible,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
@@ -1614,18 +1676,18 @@ class _PodiumScreenState extends State<PodiumScreen>
               
               // Prix centré
               Text(
-                article['sPrice']?.toString() ?? 'N/A',
+                priceUnavailable ? 'Indisponible' : article['sPrice']?.toString() ?? 'N/A',
                 style: TextStyle(
                   fontSize: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+                  color: priceUnavailable ? Colors.grey : Colors.blue,
                 ),
               ),
               SizedBox(height: isVerySmallMobile ? 3 : 4),
               
               
               // Badge d'écart de prix (seulement si les prix ne sont pas tous identiques)
-              if (priceDifference.abs() > 0.01 && !allPricesSame)
+              if (!priceUnavailable && priceDifference.abs() > 0.01 && !allPricesSame)
                 Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12),
@@ -1728,28 +1790,31 @@ class _PodiumScreenState extends State<PodiumScreen>
               
               // Bouton cœur
               MouseRegion(
-                cursor: SystemMouseCursors.click,
+                cursor: priceUnavailable ? SystemMouseCursors.basic : SystemMouseCursors.click,
                 child: GestureDetector(
-                  onTap: () {
-                    // TODO: Ajouter au panier
-                    _addToCart(article);
-                  },
+                  onTap: priceUnavailable
+                      ? null
+                      : () {
+                          _addToCart(article);
+                        },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2196F3),  // Toujours bleu actif
+                      color: priceUnavailable ? const Color(0xFFE0F2FF) : const Color(0xFF2196F3),
                       borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF2196F3).withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                      boxShadow: priceUnavailable
+                          ? []
+                          : [
+                              BoxShadow(
+                                color: const Color(0xFF2196F3).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.favorite,
-                      color: Colors.white,  // Toujours blanc
+                      color: priceUnavailable ? Colors.grey[400] : Colors.white,
                       size: 20,
                     ),
                   ),
@@ -1979,53 +2044,82 @@ class _PodiumScreenState extends State<PodiumScreen>
               ),
               
               // Prix
-              Text(
-                country['sPrice']?.toString() ?? 'N/A',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900, // ✅ Font weight augmenté
-                  color: Color(0xFF2563EB), // ✅ text-blue-600 comme SNAL-Project
-                ),
-              ),
-              
-              const SizedBox(width: 8),
-              
-              // Wishlist
-              StatefulBuilder(
-                builder: (context, setState) {
-                  bool isHovered = false;
-                  return MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    onEnter: (_) => setState(() => isHovered = true),
-                    onExit: (_) => setState(() => isHovered = false),
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        _addToWishlist(country);
-                      },
-                      icon: Icon(
-                        isHovered ? Icons.favorite : Icons.favorite_border,
-                        size: 18,
-                        color: isHovered ? Colors.red : Colors.grey[700],
-                      ),
-                      label: Text(
-                        'Wishlist',
+              Builder(
+                builder: (context) {
+                  final priceStr = country['sPrice']?.toString() ?? '';
+                  final bool priceUnavailable = priceStr.trim().isEmpty ||
+                      priceStr.toUpperCase().contains('INDISPONIBLE') ||
+                      priceStr == '0' ||
+                      priceStr == '0.0';
+
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        priceUnavailable ? 'Indisponible' : priceStr,
                         style: TextStyle(
-                          fontSize: 13,
-                          color: isHovered ? Colors.red : Colors.grey[700],
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: priceUnavailable ? Colors.grey : const Color(0xFF2563EB),
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: isHovered ? Colors.red : Colors.grey[700],
-                        side: BorderSide(
-                          color: isHovered ? Colors.red : Colors.grey[300]!,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        backgroundColor: isHovered ? Colors.blue[100] : null,
+                      const SizedBox(width: 8),
+
+                      // Wishlist
+                      StatefulBuilder(
+                        builder: (context, setState) {
+                          bool isHovered = false;
+                          final Color borderColor = priceUnavailable
+                              ? Colors.grey[300]!
+                              : (isHovered ? Colors.red : Colors.grey[300]!);
+                          final Color labelColor = priceUnavailable
+                              ? Colors.grey
+                              : (isHovered ? Colors.red : Colors.grey[700]!);
+                          final Color? backgroundColor = priceUnavailable
+                              ? const Color(0xFFE5F3FF)
+                              : (isHovered ? Colors.blue[100] : null);
+                          final Color iconColor = priceUnavailable
+                              ? Colors.grey[400]!
+                              : (isHovered ? Colors.red : Colors.grey[700]!);
+
+                          return MouseRegion(
+                            cursor: priceUnavailable ? SystemMouseCursors.basic : SystemMouseCursors.click,
+                            onEnter: (_) {
+                              if (!priceUnavailable) setState(() => isHovered = true);
+                            },
+                            onExit: (_) => setState(() => isHovered = false),
+                            child: OutlinedButton.icon(
+                              onPressed: priceUnavailable
+                                  ? null
+                                  : () {
+                                      _addToWishlist(country);
+                                    },
+                              icon: Icon(
+                                isHovered && !priceUnavailable ? Icons.favorite : Icons.favorite_border,
+                                size: 18,
+                                color: iconColor,
+                              ),
+                              label: Text(
+                                'Wishlist',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: labelColor,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: labelColor,
+                                side: BorderSide(color: borderColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                backgroundColor: backgroundColor,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
+                    ],
                   );
                 },
               ),

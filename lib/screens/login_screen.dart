@@ -625,6 +625,28 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
+  void _handleBackNavigation(BuildContext context) {
+    if (widget.fromAuthError == true) {
+      context.go('/home');
+      return;
+    }
+
+    if (kIsWeb) {
+      try {
+        WebUtils.navigateBack();
+        return;
+      } catch (e) {
+        // Ignorer et fallback ci-dessous
+      }
+    }
+
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      context.go('/wishlist');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -657,30 +679,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 elevation: 0,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                  onPressed: () {
-                  // Retourner à la page précédente
-                  if (kIsWeb) {
-                    try {
-                      WebUtils.navigateBack();
-                    } catch (e) {
-                      // Fallback pour Android/iOS ou si l'historique est vide
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        // ✅ Rediriger vers wishlist au lieu de splash
-                        context.go('/wishlist');
-                      }
-                    }
-                  } else {
-                    // Mobile: utiliser la navigation Flutter
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    } else {
-                      // ✅ Rediriger vers wishlist au lieu de splash
-                      context.go('/wishlist');
-                    }
-                  }
-                },
+                  onPressed: () => _handleBackNavigation(context),
       ),
                 ),
               )
@@ -689,28 +688,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               elevation: 0,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                  onPressed: () {
-                    // Retourner à la page précédente
-                    if (kIsWeb) {
-                      try {
-                        WebUtils.navigateBack();
-                      } catch (e) {
-                        if (Navigator.canPop(context)) {
-                          Navigator.pop(context);
-                        } else {
-                          // ✅ Rediriger vers wishlist au lieu de splash
-                          context.go('/wishlist');
-                        }
-                      }
-                    } else {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        // ✅ Rediriger vers wishlist au lieu de splash
-                        context.go('/wishlist');
-                      }
-                    }
-                  },
+                  onPressed: () => _handleBackNavigation(context),
                       ),
                     ),
                   ),

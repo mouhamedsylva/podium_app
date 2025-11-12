@@ -5157,6 +5157,21 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
   
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    final screenWidth = mediaQuery?.size.width ?? 1024;
+    final screenHeight = mediaQuery?.size.height ?? 768;
+    final isMobile = screenWidth < 600;
+    final dialogWidth = screenWidth * (isMobile ? 0.94 : 0.9);
+    final dialogMaxWidth = isMobile ? 420.0 : 500.0;
+    final dialogMaxHeight = isMobile ? screenHeight * 0.85 : double.infinity;
+    final horizontalPadding = isMobile ? 16.0 : 24.0;
+    final headerTopPadding = isMobile ? 18.0 : 20.0;
+    final headerBottomPadding = isMobile ? 12.0 : 16.0;
+    final infoSpacing = isMobile ? 10.0 : 12.0;
+    final chipHorizontalPadding = isMobile ? 10.0 : 12.0;
+    final chipVerticalPadding = isMobile ? 6.0 : 8.0;
+    final chipFontSize = isMobile ? 14.0 : 16.0;
+
     // ✨ Animation : Modal fade + scale
     return ScaleTransition(
       scale: _scaleAnimation,
@@ -5165,8 +5180,11 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
         child: Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-        width: (MediaQuery.maybeOf(context)?.size.width ?? 1024) * 0.9,
-        constraints: const BoxConstraints(maxWidth: 500),
+        width: dialogWidth,
+        constraints: BoxConstraints(
+          maxWidth: dialogMaxWidth,
+          maxHeight: dialogMaxHeight,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -5183,7 +5201,12 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
           children: [
             // Header - Titre centré
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                headerTopPadding,
+                horizontalPadding,
+                headerBottomPadding,
+              ),
               child: const Text(
                 'Ajouter des pays',
                 style: TextStyle(
@@ -5196,111 +5219,136 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
             ),
 
             // Section Pays disponibles
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                  // Sous-titre "Pays disponibles"
-                  Text(
-                    Provider.of<TranslationService>(context, listen: false).translate('AVAILABLE_COUNTRIES') ?? 'Pays disponibles',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Cliquez pour activer/désactiver les pays dans votre wishlist',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Grille des pays en chips
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: widget.availableCountries.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final country = entry.value;
-                      final code = country['code']?.toString() ?? '';
-                      final name = country['name']?.toString() ?? '';
-                      final normalizedCode = code.toUpperCase();
-                      final isSelected = _selectedCountries.contains(normalizedCode);
-                      final isLocked = _lockedCountryCode != null && normalizedCode == _lockedCountryCode;
-
-                      // ✨ Animation : Chaque chip apparaît en vague
-                      return TweenAnimationBuilder<double>(
-                        duration: Duration(milliseconds: 200 + (index * 50)), // Vague rapide
-                        tween: Tween<double>(begin: 0.0, end: 1.0),
-                        curve: Curves.easeOutBack,
-                        builder: (context, value, child) {
-                          final safeOpacity = value.clamp(0.0, 1.0);
-                          final safeScale = (0.8 + (0.2 * value)).clamp(0.5, 1.5);
-                          return Transform.scale(
-                            scale: safeScale, // Scale de 0.8 → 1.0 avec bounce
-                            child: Opacity(
-                              opacity: safeOpacity,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: GestureDetector(
-                          onTap: isLocked ? null : () => _toggleCountry(normalizedCode),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOut,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFE0F7FF) : const Color(0xFFF3F4F6), // Aqua très clair si sélectionné, gris clair sinon
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isLocked
-                                  ? const Color(0xFF0284C7)
-                                  : (isSelected ? const Color(0xFF00BCD4) : const Color(0xFFD1D5DB)), // Aqua si sélectionné, gris sinon
-                              width: isLocked ? 2 : (isSelected ? 2 : 1),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  0,
+                  horizontalPadding,
+                  isMobile ? 16 : 20,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            Provider.of<TranslationService>(context, listen: false).translate('AVAILABLE_COUNTRIES') ?? 'Pays disponibles',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF1F2937),
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                name,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                          const SizedBox(height: 4),
+                          Text(
+                            'Cliquez pour activer/désactiver les pays dans votre wishlist',
+                            style: TextStyle(
+                              fontSize: isMobile ? 11 : 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: infoSpacing),
+
+                    // Grille des pays en chips
+                    Wrap(
+                      spacing: isMobile ? 8 : 10,
+                      runSpacing: isMobile ? 8 : 10,
+                      alignment: WrapAlignment.center,
+                      runAlignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: widget.availableCountries.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final country = entry.value;
+                        final code = country['code']?.toString() ?? '';
+                        final name = country['name']?.toString() ?? '';
+                        final normalizedCode = code.toUpperCase();
+                        final isSelected = _selectedCountries.contains(normalizedCode);
+                        final isLocked = _lockedCountryCode != null && normalizedCode == _lockedCountryCode;
+
+                        // ✨ Animation : Chaque chip apparaît en vague
+                        return TweenAnimationBuilder<double>(
+                          duration: Duration(milliseconds: 200 + (index * 50)), // Vague rapide
+                          tween: Tween<double>(begin: 0.0, end: 1.0),
+                          curve: Curves.easeOutBack,
+                          builder: (context, value, child) {
+                            final safeOpacity = value.clamp(0.0, 1.0);
+                            final safeScale = (0.8 + (0.2 * value)).clamp(0.5, 1.5);
+                            return Transform.scale(
+                              scale: safeScale, // Scale de 0.8 → 1.0 avec bounce
+                              child: Opacity(
+                                opacity: safeOpacity,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: GestureDetector(
+                            onTap: isLocked ? null : () => _toggleCountry(normalizedCode),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOut,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: chipHorizontalPadding,
+                                vertical: chipVerticalPadding,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFFE0F7FF) : const Color(0xFFF3F4F6), // Aqua très clair si sélectionné, gris clair sinon
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
                                   color: isLocked
                                       ? const Color(0xFF0284C7)
-                                      : (isSelected ? const Color(0xFF00BCD4) : const Color(0xFF6B7280)), // Aqua pour sélectionné, gris pour non sélectionné
+                                      : (isSelected ? const Color(0xFF00BCD4) : const Color(0xFFD1D5DB)), // Aqua si sélectionné, gris sinon
+                                  width: isLocked ? 2 : (isSelected ? 2 : 1),
                                 ),
                               ),
-                              if (isLocked) ...[
-                                const SizedBox(width: 6),
-                                const Icon(
-                                  Icons.lock,
-                                  size: 16,
-                                  color: Color(0xFF0284C7),
-                                ),
-                              ],
-                              // Pas de check icon quand sélectionné (demandé par l'utilisateur)
-                            ],
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: chipFontSize,
+                                      fontWeight: FontWeight.w600,
+                                      color: isLocked
+                                          ? const Color(0xFF0284C7)
+                                          : (isSelected ? const Color(0xFF00BCD4) : const Color(0xFF6B7280)), // Aqua pour sélectionné, gris pour non sélectionné
+                                    ),
+                                  ),
+                                  if (isLocked) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.lock,
+                                      size: 16,
+                                      color: Color(0xFF0284C7),
+                                    ),
+                                  ],
+                                  // Pas de check icon quand sélectionné (demandé par l'utilisateur)
+                                ],
+                              ),
+                            ),
                           ),
-                          ),
-                        ),
-                      ); // Ferme TweenAnimationBuilder
-                    }).toList(),
-                  ),
-                ],
+                        ); // Ferme TweenAnimationBuilder
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
             ),
 
             // Boutons en bas
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                isMobile ? 14 : 16,
+                horizontalPadding,
+                isMobile ? 18 : 24,
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: const BorderRadius.only(
@@ -5333,7 +5381,7 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                     ),
                   ),
 
-                  const SizedBox(width: 12),
+                  SizedBox(width: isMobile ? 10 : 12),
 
                   // Bouton Modifier (aqua)
                   Expanded(
