@@ -160,10 +160,19 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path_android: "assets/img/logo_mobile.png"
-  image_path_ios: "assets/img/logo_mobile.png"
+
+  # Chemin du logo
+  image_path: "assets/images/logo-tiaka-rv-optimized.png"
+
+  # Icône adaptative (Android 8+)
+  adaptive_icon_foreground: "assets/images/logo-tiaka-rv-optimized.png"
+  adaptive_icon_background: "#FFFFFF"
+  # adaptive_icon_background: "#1FB5CE"
+  # adaptive_icon_padding: 0
+
   remove_alpha_ios: true
-  # Configuration Android
-  #adaptive_icon_background: "#29B6F6"
-  #adaptive_icon_foreground: "assets/icons/logo_mobile.png"
+
+  # Recommandations : optimise le padding
+  # min_sdk_android: 21
+
   
