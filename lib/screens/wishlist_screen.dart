@@ -4453,17 +4453,26 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 
   @override
   Widget build(BuildContext context) {
+    final translationService = Provider.of<TranslationService>(context);
+    final manageCountriesLabel =
+        translationService.translate('WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON');
+    final closeLabel =
+        translationService.translate('WISHLIST_COUNTRY_SIDEBAR_CLOSE');
+    final emptyStateLabel =
+        translationService.translate('WISHLIST_COUNTRY_EMPTY');
+    final unavailableLabel =
+        translationService.translate('WISHLIST_COUNTRY_PRICE_UNAVAILABLE');
+    final bestPriceLabel = translationService.translate('BEST_PRICE');
+
     // Utilisation sécurisée de MediaQuery pour éviter les erreurs
     final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 1024;
     final screenHeight = MediaQuery.maybeOf(context)?.size.height ?? 768;
-    final isVerySmallMobile = screenWidth < 361;   // Galaxy Fold fermé, Galaxy S8+ (≤360px)
-    final isSmallMobile = screenWidth < 431;       // iPhone XR/14 Pro Max, Pixel 7, Galaxy S20/A51 (361-430px)
-    final isMobile = screenWidth < 768;            // Tous les mobiles standards (431-767px)
+    final isVerySmallMobile = screenWidth < 361;
+    final isSmallMobile = screenWidth < 431;
+    final isMobile = screenWidth < 768;
     final isWeb = screenWidth >= 768;
-    final modalWidth = isWeb 
-        ? screenWidth * 0.75  // 75% sur web
-        : screenWidth;        // 100% sur mobile
-    
+    final modalWidth = isWeb ? screenWidth * 0.75 : screenWidth;
+
     // ✨ Animation : Sidebar slide depuis la droite
     return SlideTransition(
       position: _slideAnimation,
@@ -4476,7 +4485,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
         height: screenHeight,
                         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: isWeb 
+          borderRadius: isWeb
               ? const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   bottomLeft: Radius.circular(16),
@@ -4639,19 +4648,19 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
             // Liste des pays
                       Expanded(
               child: widget.availableCountries.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.flag_outlined,
                             size: 48,
                             color: Colors.grey,
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           Text(
-                            'Aucun pays disponible',
-                            style: TextStyle(
+                            emptyStateLabel,
+                            style: const TextStyle(
                               fontSize: 16,
                               color: Colors.grey,
                             ),
@@ -4894,7 +4903,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                                   const Text('🥇', style: TextStyle(fontSize: 14)),
                                                   SizedBox(width: isVerySmallMobile ? 2 : 4),
                                                   Text(
-                                                    Provider.of<TranslationService>(context, listen: false).translate('BEST_PRICE'),
+                                                    bestPriceLabel,
                                                     style: TextStyle(
                                                       fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
                                                       fontWeight: FontWeight.w700,
@@ -4933,11 +4942,11 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                             ),
                                           ),
                                           child: Text(
-                                            'Indisponible',
+                                            unavailableLabel,
                                             style: TextStyle(
                                               fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
                                               fontWeight: FontWeight.w500,
-                                              color: Color(0xFF6B7280),
+                                              color: const Color(0xFF6B7280),
                                             ),
                                           ),
                                         ),
@@ -5004,25 +5013,25 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                           children: [
                             Icon(
                               Icons.swap_horiz,
-                            size: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
-                            color: Colors.black,
+                              size: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
+                              color: Colors.black,
                             ),
                             SizedBox(width: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8)),
                             Text(
-                              'Ajouter/Supprimer un pays',
+                              manageCountriesLabel,
                               style: TextStyle(
-                              fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black,
+                                fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black,
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    
+
                     SizedBox(height: isVerySmallMobile ? 10 : (isSmallMobile ? 12 : 16)),
-                    
+
                     // Bouton Fermer
                     SizedBox(
                       width: double.infinity,
@@ -5041,7 +5050,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                           elevation: 0,
                         ),
                         child: Text(
-                          'Fermer',
+                          closeLabel,
                           style: TextStyle(
                             fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
                             fontWeight: FontWeight.w600,
@@ -5157,6 +5166,26 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
   
   @override
   Widget build(BuildContext context) {
+    final translationService = Provider.of<TranslationService>(context);
+    final titleText = translationService.translate('WISHLIST_COUNTRY_MODAL_TITLE');
+    final availableCountriesLabel =
+        translationService.translate('WISHLIST_COUNTRY_MODAL_AVAILABLE');
+    final availableCountriesHint =
+        translationService.translate('WISHLIST_COUNTRY_MODAL_HELP');
+    final cancelLabel =
+        translationService.translate('WISHLIST_COUNTRY_MODAL_CANCEL');
+    final saveLabel =
+        translationService.translate('WISHLIST_COUNTRY_MODAL_SAVE');
+    final manageCountriesLabel =
+        translationService.translate('WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON');
+    final closeLabel =
+        translationService.translate('WISHLIST_COUNTRY_SIDEBAR_CLOSE');
+    final emptyStateLabel =
+        translationService.translate('WISHLIST_COUNTRY_EMPTY');
+    final unavailableLabel =
+        translationService.translate('WISHLIST_COUNTRY_PRICE_UNAVAILABLE');
+    final bestPriceLabel = translationService.translate('BEST_PRICE');
+
     final mediaQuery = MediaQuery.maybeOf(context);
     final screenWidth = mediaQuery?.size.width ?? 1024;
     final screenHeight = mediaQuery?.size.height ?? 768;
@@ -5180,10 +5209,10 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
         child: Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-        width: dialogWidth,
+        width: screenWidth * (screenWidth < 600 ? 0.94 : 0.9),
         constraints: BoxConstraints(
-          maxWidth: dialogMaxWidth,
-          maxHeight: dialogMaxHeight,
+          maxWidth: screenWidth * (screenWidth < 600 ? 0.94 : 0.9),
+          maxHeight: screenWidth < 600 ? screenWidth * 0.85 : double.infinity,
         ),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -5207,9 +5236,9 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                 horizontalPadding,
                 headerBottomPadding,
               ),
-              child: const Text(
-                'Ajouter des pays',
-                style: TextStyle(
+              child: Text(
+                titleText,
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1F2937),
@@ -5236,30 +5265,30 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            Provider.of<TranslationService>(context, listen: false).translate('AVAILABLE_COUNTRIES') ?? 'Pays disponibles',
-                            style: TextStyle(
+                            availableCountriesLabel,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
-                              color: const Color(0xFF1F2937),
+                              color: Color(0xFF1F2937),
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Cliquez pour activer/désactiver les pays dans votre wishlist',
+                            availableCountriesHint,
                             style: TextStyle(
-                              fontSize: isMobile ? 11 : 12,
+                              fontSize: screenWidth < 600 ? 11 : 12,
                               color: Colors.grey[600],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(height: infoSpacing),
+                    SizedBox(height: 12.0),
 
                     // Grille des pays en chips
                     Wrap(
-                      spacing: isMobile ? 8 : 10,
-                      runSpacing: isMobile ? 8 : 10,
+                      spacing: screenWidth < 600 ? 8 : 10,
+                      runSpacing: screenWidth < 600 ? 8 : 10,
                       alignment: WrapAlignment.center,
                       runAlignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -5294,8 +5323,8 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOut,
                               padding: EdgeInsets.symmetric(
-                                horizontal: chipHorizontalPadding,
-                                vertical: chipVerticalPadding,
+                                horizontal: 10.0,
+                                vertical: 6.0,
                               ),
                               decoration: BoxDecoration(
                                 color: isSelected ? const Color(0xFFE0F7FF) : const Color(0xFFF3F4F6), // Aqua très clair si sélectionné, gris clair sinon
@@ -5313,7 +5342,7 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                                   Text(
                                     name,
                                     style: TextStyle(
-                                      fontSize: chipFontSize,
+                                      fontSize: screenWidth < 600 ? 14 : 16,
                                       fontWeight: FontWeight.w600,
                                       color: isLocked
                                           ? const Color(0xFF0284C7)
@@ -5344,10 +5373,10 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
             // Boutons en bas
             Container(
               padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                isMobile ? 14 : 16,
-                horizontalPadding,
-                isMobile ? 18 : 24,
+                16.0,
+                screenWidth < 600 ? 14 : 16,
+                16.0,
+                screenWidth < 600 ? 18 : 24,
               ),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -5371,9 +5400,9 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Annuler',
-                        style: TextStyle(
+                      child: Text(
+                        cancelLabel,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),
@@ -5381,7 +5410,7 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                     ),
                   ),
 
-                  SizedBox(width: isMobile ? 10 : 12),
+                  SizedBox(width: screenWidth < 600 ? 10 : 12),
 
                   // Bouton Modifier (aqua)
                   Expanded(
@@ -5401,9 +5430,9 @@ class _CountryManagementModalState extends State<_CountryManagementModal> with S
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Modifier',
-                style: TextStyle(
+                      child: Text(
+                        saveLabel,
+                style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),

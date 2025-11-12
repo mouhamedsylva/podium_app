@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../services/route_persistence_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,112 +17,100 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _progressAnimation;
+  bool _hasNavigated = false;
 
   @override
   void initState() {
     super.initState();
-    
-    // Animation controller pour l'anneau bleu (rotation normale)
+
     _blueRingController = AnimationController(
       duration: const Duration(milliseconds: 3000),
       vsync: this,
     )..repeat();
-    
-    // Animation controller pour l'anneau jaune (rotation inverse)
+
     _yellowRingController = AnimationController(
       duration: const Duration(milliseconds: 4000),
       vsync: this,
     )..repeat();
-    
-    // Animation controller pour la barre de progression
+
     _progressController = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 4),
       vsync: this,
     );
-    
-    // Animation controller pour le fade in (séparé, ne se répète pas)
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    
-    // Animation de fade in (ne se répète pas)
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
+
+    _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
       curve: Curves.easeIn,
-    ));
-    
-    // Animation de progression
-    _progressAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
+    );
+
+    _progressAnimation = CurvedAnimation(
       parent: _progressController,
       curve: Curves.easeInOut,
-    ));
-    
-    // Démarrer le fade in et la progression
+    );
+
     _fadeController.forward();
-    _progressController.forward();
-    
-    // Naviguer quand la progression est terminée
-    _progressController.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        // Arrêter toutes les animations avant de naviguer
-        _blueRingController.stop();
-        _yellowRingController.stop();
-        _progressController.stop();
-        // ✅ Utiliser replace au lieu de go pour ne pas garder splash dans l'historique
-        context.replace('/country-selection');
-      }
-    });
+    _progressController
+      ..forward()
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed && mounted) {
+          _blueRingController.stop();
+          _yellowRingController.stop();
+          _progressController.stop();
+          _navigateToLastRoute();
+        }
+      });
   }
 
   @override
   void dispose() {
-    try {
-      // Arrêter les animations avant de les disposer
-      if (_blueRingController.isAnimating) {
-        _blueRingController.stop();
-      }
-      if (_yellowRingController.isAnimating) {
-        _yellowRingController.stop();
-      }
-      if (_progressController.isAnimating) {
-        _progressController.stop();
-      }
-      if (_fadeController.isAnimating) {
-        _fadeController.stop();
-      }
-      
-      _blueRingController.dispose();
-      _yellowRingController.dispose();
-      _progressController.dispose();
-      _fadeController.dispose();
-    } catch (e) {
-      print('Erreur lors du dispose du SplashScreen: $e');
-    }
+    _blueRingController.dispose();
+    _yellowRingController.dispose();
+    _progressController.dispose();
+    _fadeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _navigateToLastRoute() async {
+    if (_hasNavigated || !mounted) {
+      return;
+    }
+    _hasNavigated = true;
+
+    try {
+      final savedRoute = await RoutePersistenceService.getStartupRoute();
+      final targetRoute = (savedRoute.isEmpty ||
+              savedRoute == '/' ||
+              savedRoute == '/splash')
+          ? '/country-selection'
+          : savedRoute;
+
+      if (mounted) {
+        context.go(targetRoute);
+      }
+    } catch (e) {
+      if (mounted) {
+        context.go('/country-selection');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Récupérer les insets de sécurité (notch, bottom bar, etc.)
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFF21252F),
       body: Stack(
         children: [
-          // Contenu principal
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo Jirig avec anneaux animés
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: SizedBox(
@@ -130,16 +119,14 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // Cercle de fond gris foncé
                         Container(
                           width: 140,
                           height: 140,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2D3E5C),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF2D3E5C),
                             shape: BoxShape.circle,
                           ),
                         ),
-                        // Chemin du cercle extérieur (pour anneau jaune)
                         CustomPaint(
                           size: const Size(140, 140),
                           painter: CirclePathPainter(
@@ -148,7 +135,6 @@ class _SplashScreenState extends State<SplashScreen>
                             radiusOffset: 10,
                           ),
                         ),
-                        // Chemin du cercle intérieur (pour anneau bleu)
                         CustomPaint(
                           size: const Size(140, 140),
                           painter: CirclePathPainter(
@@ -157,7 +143,6 @@ class _SplashScreenState extends State<SplashScreen>
                             radiusOffset: 22,
                           ),
                         ),
-                        // Anneau jaune sur cercle extérieur
                         AnimatedBuilder(
                           animation: _yellowRingController,
                           builder: (context, child) {
@@ -166,7 +151,7 @@ class _SplashScreenState extends State<SplashScreen>
                               painter: MovingArcPainter(
                                 color: const Color(0xFFFDD835),
                                 progress: _yellowRingController.value,
-                                arcLength: 3.14159 * 0.5, // 90 degrés
+                                arcLength: 3.14159 * 0.5,
                                 strokeWidth: 5,
                                 clockwise: false,
                                 radiusOffset: 10,
@@ -174,7 +159,6 @@ class _SplashScreenState extends State<SplashScreen>
                             );
                           },
                         ),
-                        // Anneau bleu sur cercle intérieur
                         AnimatedBuilder(
                           animation: _blueRingController,
                           builder: (context, child) {
@@ -183,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen>
                               painter: MovingArcPainter(
                                 color: const Color(0xFF0066FF),
                                 progress: _blueRingController.value,
-                                arcLength: 3.14159 * 1.5, // 270 degrés
+                                arcLength: 3.14159 * 1.5,
                                 strokeWidth: 5,
                                 clockwise: true,
                                 radiusOffset: 22,
@@ -191,7 +175,6 @@ class _SplashScreenState extends State<SplashScreen>
                             );
                           },
                         ),
-                        // Cercle intérieur blanc avec logo JIRIG
                         Container(
                           width: 65,
                           height: 65,
@@ -206,11 +189,11 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ],
                           ),
-                          child: Center(
+                          child: const Center(
                             child: Text(
                               'JIRIG',
                               style: TextStyle(
-                                color: const Color(0xFF0066FF),
+                                color: Color(0xFF0066FF),
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                                 letterSpacing: 1.0,
@@ -223,7 +206,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 40),
-                // Texte "Chargement en cours"
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Text(
@@ -239,8 +221,6 @@ class _SplashScreenState extends State<SplashScreen>
               ],
             ),
           ),
-          
-          // Barre de progression en bas
           Positioned(
             left: 0,
             right: 0,
@@ -278,7 +258,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// Painter pour dessiner les chemins circulaires (rails)
 class CirclePathPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
@@ -309,7 +288,6 @@ class CirclePathPainter extends CustomPainter {
   }
 }
 
-// Painter pour dessiner un arc animé qui se déplace sur son chemin
 class MovingArcPainter extends CustomPainter {
   final Color color;
   final double progress;
@@ -339,12 +317,9 @@ class MovingArcPainter extends CustomPainter {
     final double radius = (size.width / 2) - strokeWidth / 2 - radiusOffset;
     final Rect rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Calcul de l'angle de départ basé sur la progression
-    final double rotationAngle = clockwise 
-        ? progress * 2 * 3.14159 
+    final double rotationAngle = clockwise
+        ? progress * 2 * 3.14159
         : -progress * 2 * 3.14159;
-    
-    // Position de départ de l'arc
     final double startAngle = -3.14159 / 2 + rotationAngle;
 
     canvas.drawArc(rect, startAngle, arcLength, false, paint);
@@ -355,3 +330,4 @@ class MovingArcPainter extends CustomPainter {
     return oldDelegate.progress != progress;
   }
 }
+

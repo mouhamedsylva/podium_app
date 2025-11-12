@@ -1312,13 +1312,15 @@ class _PodiumScreenState extends State<PodiumScreen>
                   SizedBox(
                     width: MediaQuery.of(context).size.width < 360 ? 4 : 6,
                   ),
-                  Text(
-                    'Voir en plein écran',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: MediaQuery.of(context).size.width < 360 ? 9.5 : 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
+                  Consumer<TranslationService>(
+                    builder: (context, translationService, child) => Text(
+                      translationService.translate('PODIUM_ENLARGE'),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: MediaQuery.of(context).size.width < 360 ? 9.5 : 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
                     ),
                   ),
                 ],

@@ -28,14 +28,16 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     final horizontalPadding =
         isMobile ? (screenWidth < 360 ? 12.0 : 16.0) : 24.0;
 
-    return Consumer2<TranslationService, AuthNotifier>(
-      builder: (context, translationService, authNotifier, child) {
-        final isLoggedIn = authNotifier.isLoggedIn;
-        final userInfo = authNotifier.userInfo;
-        return Container(
+    final translationService =
+        Provider.of<TranslationService>(context, listen: true);
+    final authNotifier = Provider.of<AuthNotifier>(context, listen: true);
+    final isLoggedIn = authNotifier.isLoggedIn;
+    final userInfo = authNotifier.userInfo;
+
+    return Container(
       padding: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
-        vertical: 12
+        vertical: 12,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -48,14 +50,13 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       child: SafeArea(
-      child: Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-            // Drapeau du pays sélectionné avec menu déroulant
+          children: [
             Consumer2<SettingsService, CountryNotifier>(
-        builder: (context, settingsService, countryNotifier, child) {
+              builder: (context, settingsService, countryNotifier, child) {
                 if (settingsService == null || countryNotifier == null) {
-                  return Container(
+                  return SizedBox(
                     width: isMobile ? 44 : 52,
                     height: isMobile ? 30 : 36,
                     child: const Center(child: CircularProgressIndicator()),
@@ -67,31 +68,37 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
 
                 return PopupMenuButton<String>(
                   onSelected: (String countryCode) {
-                    _onCountrySelected(context, countryCode, settingsService, countryNotifier);
+                    _onCountrySelected(
+                      context,
+                      countryCode,
+                      settingsService,
+                      countryNotifier,
+                    );
                   },
-                  itemBuilder: (BuildContext context) => _buildLanguageMenuItems(),
-                  child: isMobile 
-                    ? Text(
-                        displayFlag,
-                        style: TextStyle(fontSize: 20),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            displayFlag,
-                            style: TextStyle(fontSize: 22),
-                          ),
-                          SizedBox(width: 4),
-                          Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ],
-                      ),
-                  offset: Offset(0, 40), // Position du menu
+                  itemBuilder: (BuildContext context) =>
+                      _buildLanguageMenuItems(),
+                  child: isMobile
+                      ? Text(
+                          displayFlag,
+                          style: const TextStyle(fontSize: 20),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              displayFlag,
+                              style: const TextStyle(fontSize: 22),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ],
+                        ),
+                  offset: const Offset(0, 40),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -100,8 +107,6 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 );
               },
             ),
-            
-            // Icônes sociales et bouton Connexion / Avatar
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -111,7 +116,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                       : 24.0;
                   final double actionWidth = isLoggedIn
                       ? (isMobile ? 40.0 : 44.0)
-                      : (availableWidth < 360 ? 96.0 : (isMobile ? 116.0 : 140.0));
+                      : (availableWidth < 360
+                          ? 96.0
+                          : (isMobile ? 116.0 : 140.0));
 
                   final double rawIconsWidth =
                       availableWidth - spacing - actionWidth;
@@ -156,11 +163,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 },
               ),
             ),
-        ],
+          ],
+        ),
       ),
-      ),
-    );
-      },
     );
   }
 

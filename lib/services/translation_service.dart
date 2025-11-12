@@ -53,6 +53,51 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg01': 'Accueil Wishlist Projet Newsletter Abonnement Connexion',
       'FRONTPAGE_Msg02': 'Comparez les prix IKEA dans plusieurs pays en un clic',
       'FRONTPAGE_Msg03': 'JIRIG vous aide à économiser sur vos achats IKEA à l\'international',
+      'PODIUM_ENLARGE': 'Agrandir',
+      'LOGIN_WELCOME_TITLE': 'Bienvenue sur Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Connectez-vous et explorez toutes les fonctionnalités de notre plateforme',
+      'LOGIN_TITLE': 'Connexion',
+      'LOGIN_SUBTITLE': 'Accédez à votre compte',
+      'LOGIN_EMAIL_LABEL': 'Adresse email',
+      'LOGIN_EMAIL_PLACEHOLDER': 'votre@email.com',
+      'LOGIN_CODE_LABEL': 'Code de vérification',
+      'LOGIN_CODE_PLACEHOLDER': 'Entrez le code reçu par e-mail',
+      'LOGIN_ACTION_SEND_CODE': 'Envoi du code',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Valider le code',
+      'LOGIN_LOADING_SENDING_CODE': 'Envoi du code...',
+      'LOGIN_LOADING_CONNECTING': 'Connexion...',
+      'LOGIN_SEPARATOR_TEXT': 'Ou continuer avec',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Continuer avec Google',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Continuer avec Facebook',
+      'LOGIN_TERMS_PREFIX': 'En vous connectant, vous acceptez nos',
+      'LOGIN_TERMS_LINK': 'Conditions d\'utilisation',
+      'LOGIN_AND_OUR': 'et notre',
+      'LOGIN_PRIVACY_LINK': 'Politique de confidentialité',
+      'LOGIN_CODE_SENT_TITLE': 'Code envoyé',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Copiez ce code ou ouvrez votre boîte mail pour le récupérer.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Code envoyé par email',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Copier',
+      'LOGIN_CODE_SENT_FOOTER':
+          'Vous pouvez aussi ouvrir votre messagerie pour retrouver ce message.',
+      'LOGIN_OPEN_MAIL': 'Ouvrir ma boîte mail',
+      'LOGIN_CODE_COPIED_BUTTON': 'J\'ai copié le code',
+      'LOGIN_RESEND_CODE': 'Renvoyer un code',
+      'LOGIN_SNACKBAR_COPIED': 'Code copié dans le presse-papiers',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Veuillez entrer votre adresse email',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Adresse email invalide',
+      'LOGIN_ERROR_EMPTY_CODE': 'Veuillez entrer le code reçu par email',
+      'LOGIN_ERROR_GENERIC': 'Erreur lors de la connexion. Veuillez réessayer.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Code invalide. Veuillez vérifier le code reçu par email et réessayer.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Code invalide ou erreur de connexion. Veuillez vérifier le code et réessayer.',
+      'LOGIN_MESSAGE_RETURN_APP': 'Après la connexion, revenez dans cette application.',
+      'LOGIN_ERROR_GOOGLE': 'Erreur lors de la connexion avec Google',
+      'LOGIN_ERROR_FACEBOOK': 'Erreur lors de la connexion avec Facebook',
+      'LOGIN_SUCCESS_TITLE': 'Connexion réussie !',
+      'LOGIN_SUCCESS_MESSAGE': 'Vous allez être redirigé...',
       // Clés pour le titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Trouvez vos articles ',
       'SELECT_COUNTRY_TITLE_PART2': ' moins chers avec ',
@@ -99,6 +144,16 @@ class TranslationService extends ChangeNotifier {
       'CURRENT': 'Actuel',
       'PROFIT': 'Bénéfice',
       'ADD_ITEM': 'Ajouter',
+      'WISHLIST_COUNTRY_MODAL_TITLE': 'Ajouter des pays',
+      'WISHLIST_COUNTRY_MODAL_AVAILABLE': 'Pays disponibles',
+      'WISHLIST_COUNTRY_MODAL_HELP':
+          'Cliquez pour activer/désactiver les pays dans votre wishlist',
+      'WISHLIST_COUNTRY_MODAL_CANCEL': 'Annuler',
+      'WISHLIST_COUNTRY_MODAL_SAVE': 'Modifier',
+      'WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON': 'Ajouter/Supprimer un pays',
+      'WISHLIST_COUNTRY_SIDEBAR_CLOSE': 'Fermer',
+      'WISHLIST_COUNTRY_EMPTY': 'Aucun pays disponible',
+      'WISHLIST_COUNTRY_PRICE_UNAVAILABLE': 'Indisponible',
       // Wishlist - dialogs
       'CONFIRM_TITLE': 'Confirmation',
       'CONFIRM_DELETE_ITEM': 'Voulez-vous vraiment supprimer cet article ?',
@@ -140,6 +195,52 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg01': 'Home Wishlist Project Newsletter Subscription Login',
       'FRONTPAGE_Msg02': 'Compare IKEA prices in multiple countries with one click',
       'FRONTPAGE_Msg03': 'JIRIG helps you save on your international IKEA purchases',
+      'PODIUM_ENLARGE': 'Enlarge',
+      'LOGIN_WELCOME_TITLE': 'Welcome to Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Sign in and explore all the features of our platform',
+      'LOGIN_TITLE': 'Sign In',
+      'LOGIN_SUBTITLE': 'Access your account',
+      'LOGIN_EMAIL_LABEL': 'Email address',
+      'LOGIN_EMAIL_PLACEHOLDER': 'your@email.com',
+      'LOGIN_CODE_LABEL': 'Verification code',
+      'LOGIN_CODE_PLACEHOLDER': 'Enter the code received by email',
+      'LOGIN_ACTION_SEND_CODE': 'Send the code',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Validate the code',
+      'LOGIN_LOADING_SENDING_CODE': 'Sending the code...',
+      'LOGIN_LOADING_CONNECTING': 'Signing in...',
+      'LOGIN_SEPARATOR_TEXT': 'Or continue with',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Continue with Google',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Continue with Facebook',
+      'LOGIN_TERMS_PREFIX': 'By signing in, you agree to our',
+      'LOGIN_TERMS_LINK': 'Terms of Use',
+      'LOGIN_AND_OUR': 'and our',
+      'LOGIN_PRIVACY_LINK': 'Privacy Policy',
+      'LOGIN_CODE_SENT_TITLE': 'Code sent',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Copy this code or open your mailbox to retrieve it.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Code sent by email',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Copy',
+      'LOGIN_CODE_SENT_FOOTER':
+          'You can also open your mailbox to find this message.',
+      'LOGIN_OPEN_MAIL': 'Open my mailbox',
+      'LOGIN_CODE_COPIED_BUTTON': 'I copied the code',
+      'LOGIN_RESEND_CODE': 'Send a new code',
+      'LOGIN_SNACKBAR_COPIED': 'Code copied to the clipboard',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Please enter your email address',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Invalid email address',
+      'LOGIN_ERROR_EMPTY_CODE': 'Please enter the code received by email',
+      'LOGIN_ERROR_GENERIC':
+          'An error occurred while signing in. Please try again.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Invalid code. Please check the code received by email and try again.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Invalid code or connection error. Please check the code and try again.',
+      'LOGIN_MESSAGE_RETURN_APP': 'After signing in, return to this app.',
+      'LOGIN_ERROR_GOOGLE': 'An error occurred while signing in with Google',
+      'LOGIN_ERROR_FACEBOOK': 'An error occurred while signing in with Facebook',
+      'LOGIN_SUCCESS_TITLE': 'Sign-in successful!',
+      'LOGIN_SUCCESS_MESSAGE': 'You will be redirected shortly...',
       // Clés pour le titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Find your articles ',
       'SELECT_COUNTRY_TITLE_PART2': ' cheaper with ',
@@ -186,6 +287,16 @@ class TranslationService extends ChangeNotifier {
       'CURRENT': 'Current',
       'PROFIT': 'Profit',
       'ADD_ITEM': 'Add',
+      'WISHLIST_COUNTRY_MODAL_TITLE': 'Add countries',
+      'WISHLIST_COUNTRY_MODAL_AVAILABLE': 'Available countries',
+      'WISHLIST_COUNTRY_MODAL_HELP':
+          'Tap to enable or disable countries in your wishlist',
+      'WISHLIST_COUNTRY_MODAL_CANCEL': 'Cancel',
+      'WISHLIST_COUNTRY_MODAL_SAVE': 'Update',
+      'WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON': 'Add/Remove a country',
+      'WISHLIST_COUNTRY_SIDEBAR_CLOSE': 'Close',
+      'WISHLIST_COUNTRY_EMPTY': 'No countries available',
+      'WISHLIST_COUNTRY_PRICE_UNAVAILABLE': 'Unavailable',
       // Wishlist - dialogs
       'CONFIRM_TITLE': 'Confirmation',
       'CONFIRM_DELETE_ITEM': 'Are you sure you want to delete this item?',
@@ -227,6 +338,55 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg01': 'Startseite Wunschliste Projekt Newsletter Abonnement Anmeldung',
       'FRONTPAGE_Msg02': 'Vergleichen Sie IKEA-Preise in mehreren Ländern mit einem Klick',
       'FRONTPAGE_Msg03': 'JIRIG hilft Ihnen bei Ihren internationalen IKEA-Einkäufen zu sparen',
+      'PODIUM_ENLARGE': 'Vergrößern',
+      'LOGIN_WELCOME_TITLE': 'Willkommen bei Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Melden Sie sich an und entdecken Sie alle Funktionen unserer Plattform',
+      'LOGIN_TITLE': 'Anmeldung',
+      'LOGIN_SUBTITLE': 'Greifen Sie auf Ihr Konto zu',
+      'LOGIN_EMAIL_LABEL': 'E-Mail-Adresse',
+      'LOGIN_EMAIL_PLACEHOLDER': 'ihre@email.com',
+      'LOGIN_CODE_LABEL': 'Bestätigungscode',
+      'LOGIN_CODE_PLACEHOLDER': 'Geben Sie den per E-Mail erhaltenen Code ein',
+      'LOGIN_ACTION_SEND_CODE': 'Code senden',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Code bestätigen',
+      'LOGIN_LOADING_SENDING_CODE': 'Code wird gesendet...',
+      'LOGIN_LOADING_CONNECTING': 'Anmeldung läuft...',
+      'LOGIN_SEPARATOR_TEXT': 'Oder fortfahren mit',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Mit Google fortfahren',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Mit Facebook fortfahren',
+      'LOGIN_TERMS_PREFIX': 'Mit Ihrer Anmeldung akzeptieren Sie unsere',
+      'LOGIN_TERMS_LINK': 'Nutzungsbedingungen',
+      'LOGIN_AND_OUR': 'und unsere',
+      'LOGIN_PRIVACY_LINK': 'Datenschutzerklärung',
+      'LOGIN_CODE_SENT_TITLE': 'Code gesendet',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Kopieren Sie diesen Code oder öffnen Sie Ihr Postfach, um ihn abzurufen.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Per E-Mail gesendeter Code',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Kopieren',
+      'LOGIN_CODE_SENT_FOOTER':
+          'Sie können auch Ihr Postfach öffnen, um diese Nachricht zu finden.',
+      'LOGIN_OPEN_MAIL': 'Mein Postfach öffnen',
+      'LOGIN_CODE_COPIED_BUTTON': 'Ich habe den Code kopiert',
+      'LOGIN_RESEND_CODE': 'Neuen Code senden',
+      'LOGIN_SNACKBAR_COPIED': 'Code in die Zwischenablage kopiert',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Bitte geben Sie Ihre E-Mail-Adresse ein',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Ungültige E-Mail-Adresse',
+      'LOGIN_ERROR_EMPTY_CODE':
+          'Bitte geben Sie den per E-Mail erhaltenen Code ein',
+      'LOGIN_ERROR_GENERIC':
+          'Beim Anmelden ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Ungültiger Code. Bitte überprüfen Sie den per E-Mail erhaltenen Code und versuchen Sie es erneut.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Ungültiger Code oder Verbindungsfehler. Bitte überprüfen Sie den Code und versuchen Sie es erneut.',
+      'LOGIN_MESSAGE_RETURN_APP': 'Kehren Sie nach der Anmeldung zu dieser App zurück.',
+      'LOGIN_ERROR_GOOGLE':
+          'Beim Anmelden mit Google ist ein Fehler aufgetreten',
+      'LOGIN_ERROR_FACEBOOK':
+          'Beim Anmelden mit Facebook ist ein Fehler aufgetreten',
+      'LOGIN_SUCCESS_TITLE': 'Anmeldung erfolgreich!',
+      'LOGIN_SUCCESS_MESSAGE': 'Sie werden in Kürze weitergeleitet...',
       // Clés pour le titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Finden Sie Ihre Artikel ',
       'SELECT_COUNTRY_TITLE_PART2': ' günstiger mit ',
@@ -260,6 +420,16 @@ class TranslationService extends ChangeNotifier {
       'CURRENT': 'Aktuell',
       'PROFIT': 'Gewinn',
       'ADD_ITEM': 'Hinzufügen',
+      'WISHLIST_COUNTRY_MODAL_TITLE': 'Länder hinzufügen',
+      'WISHLIST_COUNTRY_MODAL_AVAILABLE': 'Verfügbare Länder',
+      'WISHLIST_COUNTRY_MODAL_HELP':
+          'Tippen Sie, um Länder in Ihrer Wunschliste zu aktivieren oder zu deaktivieren',
+      'WISHLIST_COUNTRY_MODAL_CANCEL': 'Abbrechen',
+      'WISHLIST_COUNTRY_MODAL_SAVE': 'Speichern',
+      'WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON': 'Land hinzufügen/entfernen',
+      'WISHLIST_COUNTRY_SIDEBAR_CLOSE': 'Schließen',
+      'WISHLIST_COUNTRY_EMPTY': 'Keine Länder verfügbar',
+      'WISHLIST_COUNTRY_PRICE_UNAVAILABLE': 'Nicht verfügbar',
       // Wishlist - dialogs
       'CONFIRM_TITLE': 'Bestätigung',
       'CONFIRM_DELETE_ITEM': 'Möchten Sie diesen Artikel wirklich löschen?',
@@ -301,7 +471,57 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg01': 'Inicio Lista de deseos Proyecto Newsletter Suscripción Iniciar sesión',
       'FRONTPAGE_Msg02': 'Compara los precios de IKEA en varios países con un clic',
       'FRONTPAGE_Msg03': 'JIRIG te ayuda a ahorrar en tus compras internacionales de IKEA',
-      // Clés pour le titre de la page de sélection de pays
+      'PODIUM_ENLARGE': 'Ampliar',
+      'LOGIN_WELCOME_TITLE': 'Bienvenido a Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Inicia sesión y explora todas las funciones de nuestra plataforma',
+      'LOGIN_TITLE': 'Iniciar sesión',
+      'LOGIN_SUBTITLE': 'Accede a tu cuenta',
+      'LOGIN_EMAIL_LABEL': 'Correo electrónico',
+      'LOGIN_EMAIL_PLACEHOLDER': 'tu@email.com',
+      'LOGIN_CODE_LABEL': 'Código de verificación',
+      'LOGIN_CODE_PLACEHOLDER': 'Introduce el código recibido por correo',
+      'LOGIN_ACTION_SEND_CODE': 'Enviar el código',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Validar el código',
+      'LOGIN_LOADING_SENDING_CODE': 'Enviando el código...',
+      'LOGIN_LOADING_CONNECTING': 'Conectando...',
+      'LOGIN_SEPARATOR_TEXT': 'O continuar con',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Continuar con Google',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Continuar con Facebook',
+      'LOGIN_TERMS_PREFIX': 'Al iniciar sesión aceptas nuestros',
+      'LOGIN_TERMS_LINK': 'Términos de uso',
+      'LOGIN_AND_OUR': 'y nuestra',
+      'LOGIN_PRIVACY_LINK': 'Política de privacidad',
+      'LOGIN_CODE_SENT_TITLE': 'Código enviado',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Copia este código u abre tu buzón para recuperarlo.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Código enviado por correo',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Copiar',
+      'LOGIN_CODE_SENT_FOOTER':
+          'También puedes abrir tu buzón para encontrar este mensaje.',
+      'LOGIN_OPEN_MAIL': 'Abrir mi buzón',
+      'LOGIN_CODE_COPIED_BUTTON': 'He copiado el código',
+      'LOGIN_RESEND_CODE': 'Enviar un nuevo código',
+      'LOGIN_SNACKBAR_COPIED': 'Código copiado al portapapeles',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Introduce tu correo electrónico',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Correo electrónico no válido',
+      'LOGIN_ERROR_EMPTY_CODE':
+          'Introduce el código recibido por correo electrónico',
+      'LOGIN_ERROR_GENERIC':
+          'Se produjo un error al iniciar sesión. Inténtalo de nuevo.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Código no válido. Verifica el código recibido por correo e inténtalo de nuevo.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Código no válido o error de conexión. Verifica el código e inténtalo de nuevo.',
+      'LOGIN_MESSAGE_RETURN_APP':
+          'Después de iniciar sesión, vuelve a esta aplicación.',
+      'LOGIN_ERROR_GOOGLE':
+          'Se produjo un error al iniciar sesión con Google',
+      'LOGIN_ERROR_FACEBOOK':
+          'Se produjo un error al iniciar sesión con Facebook',
+      'LOGIN_SUCCESS_TITLE': '¡Inicio de sesión exitoso!',
+      'LOGIN_SUCCESS_MESSAGE': 'Serás redirigido en unos instantes...',
+      // Clés para el titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Encuentra tus artículos ',
       'SELECT_COUNTRY_TITLE_PART2': ' más baratos con ',
       // Textes fixes pour les éléments non traduits
@@ -312,7 +532,7 @@ class TranslationService extends ChangeNotifier {
       'SELECT_COUNTRY_FINISH_BUTTON': 'Validar',
       'SELECT_COUNTRY_FOOTER_TEXT': 'Al hacer clic en Validar, aceptas nuestros términos de uso. ',
       'SELECT_COUNTRY_TERMS_LINK': 'Condiciones de uso',
-      // Clés pour la page d'accueil
+      // Clés para la page d'accueil
       'FRONTPAGE_Msg77': 'Encuentra tus artículos',
       'FRONTPAGE_Msg78': 'más baratos con Jirig',
       'FRONTPAGE_Msg88': 'Suscripción Premium',
@@ -334,6 +554,16 @@ class TranslationService extends ChangeNotifier {
       'CURRENT': 'Actual',
       'PROFIT': 'Beneficio',
       'ADD_ITEM': 'Añadir',
+      'WISHLIST_COUNTRY_MODAL_TITLE': 'Agregar países',
+      'WISHLIST_COUNTRY_MODAL_AVAILABLE': 'Países disponibles',
+      'WISHLIST_COUNTRY_MODAL_HELP':
+          'Pulsa para activar o desactivar países en tu lista de deseos',
+      'WISHLIST_COUNTRY_MODAL_CANCEL': 'Cancelar',
+      'WISHLIST_COUNTRY_MODAL_SAVE': 'Actualizar',
+      'WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON': 'Agregar/Quitar un país',
+      'WISHLIST_COUNTRY_SIDEBAR_CLOSE': 'Cerrar',
+      'WISHLIST_COUNTRY_EMPTY': 'No hay países disponibles',
+      'WISHLIST_COUNTRY_PRICE_UNAVAILABLE': 'No disponible',
       // Wishlist - dialogs
       'CONFIRM_TITLE': 'Confirmación',
       'CONFIRM_DELETE_ITEM': '¿Seguro que desea eliminar este artículo?',
@@ -375,6 +605,55 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg01': 'Home Lista desideri Progetto Newsletter Abbonamento Accedi',
       'FRONTPAGE_Msg02': 'Confronta i prezzi IKEA in diversi paesi con un clic',
       'FRONTPAGE_Msg03': 'JIRIG ti aiuta a risparmiare sui tuoi acquisti internazionali IKEA',
+      'PODIUM_ENLARGE': 'Ingrandire',
+      'LOGIN_WELCOME_TITLE': 'Benvenuto su Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Accedi ed esplora tutte le funzionalità della nostra piattaforma',
+      'LOGIN_TITLE': 'Accesso',
+      'LOGIN_SUBTITLE': 'Accedi al tuo account',
+      'LOGIN_EMAIL_LABEL': 'Indirizzo email',
+      'LOGIN_EMAIL_PLACEHOLDER': 'tua@email.com',
+      'LOGIN_CODE_LABEL': 'Codice di verifica',
+      'LOGIN_CODE_PLACEHOLDER': 'Inserisci il codice ricevuto via email',
+      'LOGIN_ACTION_SEND_CODE': 'Invia il codice',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Convalida il codice',
+      'LOGIN_LOADING_SENDING_CODE': 'Invio del codice...',
+      'LOGIN_LOADING_CONNECTING': 'Accesso in corso...',
+      'LOGIN_SEPARATOR_TEXT': 'Oppure continua con',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Continua con Google',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Continua con Facebook',
+      'LOGIN_TERMS_PREFIX': 'Accedendo accetti i nostri',
+      'LOGIN_TERMS_LINK': 'Termini di utilizzo',
+      'LOGIN_AND_OUR': 'e la nostra',
+      'LOGIN_PRIVACY_LINK': 'Informativa sulla privacy',
+      'LOGIN_CODE_SENT_TITLE': 'Codice inviato',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Copia questo codice o apri la tua casella di posta per recuperarlo.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Codice inviato via email',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Copia',
+      'LOGIN_CODE_SENT_FOOTER':
+          'Puoi anche aprire la casella di posta per trovare questo messaggio.',
+      'LOGIN_OPEN_MAIL': 'Apri la mia casella di posta',
+      'LOGIN_CODE_COPIED_BUTTON': 'Ho copiato il codice',
+      'LOGIN_RESEND_CODE': 'Invia un nuovo codice',
+      'LOGIN_SNACKBAR_COPIED': 'Codice copiato negli appunti',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Inserisci il tuo indirizzo email',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Indirizzo email non valido',
+      'LOGIN_ERROR_EMPTY_CODE':
+          'Inserisci il codice ricevuto via email',
+      'LOGIN_ERROR_GENERIC':
+          'Si è verificato un errore durante l\'accesso. Riprova.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Codice non valido. Controlla il codice ricevuto via email e riprova.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Codice non valido o errore di connessione. Controlla il codice e riprova.',
+      'LOGIN_MESSAGE_RETURN_APP': 'Dopo l\'accesso, torna a questa applicazione.',
+      'LOGIN_ERROR_GOOGLE':
+          'Si è verificato un errore durante l\'accesso con Google',
+      'LOGIN_ERROR_FACEBOOK':
+          'Si è verificato un errore durante l\'accesso con Facebook',
+      'LOGIN_SUCCESS_TITLE': 'Accesso riuscito!',
+      'LOGIN_SUCCESS_MESSAGE': 'Verrai reindirizzato a breve...',
       // Clés pour le titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Trova i tuoi articoli ',
       'SELECT_COUNTRY_TITLE_PART2': ' più economici con ',
@@ -427,7 +706,7 @@ class TranslationService extends ChangeNotifier {
       'YOUR_POSITION': 'La tua posizione',
       'IKEA_STORES': 'Negozi IKEA',
       'IKEA_STORES_NEARBY': 'Negozi IKEA nelle vicinanze',
-      'SEARCH_STORE_PLACEHOLDER': 'Cerca un negozio (nome, paese, città)',
+      'SEARCH_STORE_PLACEHOLDER': 'Cerca un negozio (nome, paese, stad)',
       'SEARCH_LOCATION_PLACEHOLDER': 'Cerca una città, indirizzo o codice postale...',
       // Modale di ricerca - titolo
       'FRONTPAGE_Msg05': 'Cerca un articolo',
@@ -450,7 +729,57 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg01': 'Início Lista de desejos Projeto Newsletter Assinatura Login',
       'FRONTPAGE_Msg02': 'Compare preços IKEA em vários países com um clique',
       'FRONTPAGE_Msg03': 'JIRIG te ajuda a economizar em suas compras internacionais IKEA',
-      // Clés pour le titre de la page de sélection de pays
+      'PODIUM_ENLARGE': 'Ampliar',
+      'LOGIN_WELCOME_TITLE': 'Bem-vindo ao Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Faça login e explore todos os recursos da nossa plataforma',
+      'LOGIN_TITLE': 'Entrar',
+      'LOGIN_SUBTITLE': 'Acesse sua conta',
+      'LOGIN_EMAIL_LABEL': 'Endereço de e-mail',
+      'LOGIN_EMAIL_PLACEHOLDER': 'seu@email.com',
+      'LOGIN_CODE_LABEL': 'Código de verificação',
+      'LOGIN_CODE_PLACEHOLDER': 'Digite o código recebido por e-mail',
+      'LOGIN_ACTION_SEND_CODE': 'Enviar código',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Validar código',
+      'LOGIN_LOADING_SENDING_CODE': 'Enviando o código...',
+      'LOGIN_LOADING_CONNECTING': 'Conectando...',
+      'LOGIN_SEPARATOR_TEXT': 'Ou continue com',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Continuar com Google',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Continuar com Facebook',
+      'LOGIN_TERMS_PREFIX': 'Ao entrar, você aceita nossos',
+      'LOGIN_TERMS_LINK': 'Termos de uso',
+      'LOGIN_AND_OUR': 'e nossa',
+      'LOGIN_PRIVACY_LINK': 'Política de privacidade',
+      'LOGIN_CODE_SENT_TITLE': 'Código enviado',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Copie este código ou abra sua caixa de entrada para recuperá-lo.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Código enviado por e-mail',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Copiar',
+      'LOGIN_CODE_SENT_FOOTER':
+          'Você também pode abrir sua caixa de entrada para encontrar esta mensagem.',
+      'LOGIN_OPEN_MAIL': 'Abrir minha caixa de entrada',
+      'LOGIN_CODE_COPIED_BUTTON': 'Copiei o código',
+      'LOGIN_RESEND_CODE': 'Enviar um novo código',
+      'LOGIN_SNACKBAR_COPIED': 'Código copiado para a área de transferência',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Informe seu endereço de e-mail',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Endereço de e-mail inválido',
+      'LOGIN_ERROR_EMPTY_CODE':
+          'Informe o código recebido por e-mail',
+      'LOGIN_ERROR_GENERIC':
+          'Ocorreu um erro ao fazer login. Tente novamente.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Código inválido. Verifique o código recebido por e-mail e tente novamente.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Código inválido ou erro de conexão. Verifique o código e tente novamente.',
+      'LOGIN_MESSAGE_RETURN_APP':
+          'Após entrar, volte para este aplicativo.',
+      'LOGIN_ERROR_GOOGLE':
+          'Ocorreu um erro ao entrar com o Google',
+      'LOGIN_ERROR_FACEBOOK':
+          'Ocorreu um erro ao entrar com o Facebook',
+      'LOGIN_SUCCESS_TITLE': 'Login concluído!',
+      'LOGIN_SUCCESS_MESSAGE': 'Você será redirecionado em instantes...',
+      // Clés para le titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Encontre seus artigos ',
       'SELECT_COUNTRY_TITLE_PART2': ' mais baratos com ',
       // Textes fixes pour les éléments non traduits
@@ -461,7 +790,7 @@ class TranslationService extends ChangeNotifier {
       'SELECT_COUNTRY_FINISH_BUTTON': 'Validar',
       'SELECT_COUNTRY_FOOTER_TEXT': 'Ao clicar em Validar, você aceita nossos termos de uso. ',
       'SELECT_COUNTRY_TERMS_LINK': 'Termos de uso',
-      // Clés pour la page d'accueil
+      // Clés para la page d'accueil
       'FRONTPAGE_Msg77': 'Encontre seus artigos',
       'FRONTPAGE_Msg78': 'mais baratos com Jirig',
       'FRONTPAGE_Msg88': 'Assinatura Premium',
@@ -511,19 +840,80 @@ class TranslationService extends ChangeNotifier {
       'FRONTPAGE_Msg08': 'Escanear um produto',
       // Lista de desejos - carrinho vazio
       'EMPTY_CART_TITLE': 'Carrinho vazio',
-      'EMPTY_CART_MESSAGE': 'Nenhum artigo encontrado neste carrinho',
+      'EMPTY_CART_MESSAGE': 'Nenhum artículo encontrado neste carrinho',
       // Profile detail
       'PROFILE_EDIT_BUTTON': 'Editar meu perfil',
       'PROFILE_MAIN_COUNTRY': 'País principal',
       'PROFILE_NOT_SELECTED': 'Não selecionado',
       'PROFILE_FAVORITE_COUNTRIES': 'Países favoritos',
       'PROFILE_NO_FAVORITE_COUNTRIES': 'Nenhum país favorito selecionado',
+      'WISHLIST_COUNTRY_MODAL_TITLE': 'Adicionar países',
+      'WISHLIST_COUNTRY_MODAL_AVAILABLE': 'Países disponíveis',
+      'WISHLIST_COUNTRY_MODAL_HELP':
+          'Toque para ativar ou desativar os países na sua lista de desejos',
+      'WISHLIST_COUNTRY_MODAL_CANCEL': 'Cancelar',
+      'WISHLIST_COUNTRY_MODAL_SAVE': 'Atualizar',
+      'WISHLIST_COUNTRY_SIDEBAR_MANAGE_BUTTON': 'Adicionar/Remover um país',
+      'WISHLIST_COUNTRY_SIDEBAR_CLOSE': 'Fechar',
+      'WISHLIST_COUNTRY_EMPTY': 'Nenhum país disponível',
+      'WISHLIST_COUNTRY_PRICE_UNAVAILABLE': 'Indisponível',
     },
     'nl': {
       // Clés de l'API pour la page de sélection de pays
       'FRONTPAGE_Msg01': 'Home Verlanglijst Project Nieuwsbrief Abonnement Inloggen',
       'FRONTPAGE_Msg02': 'Vergelijk IKEA-prijzen in meerdere landen met één klik',
       'FRONTPAGE_Msg03': 'JIRIG helpt je besparen op je internationale IKEA-aankopen',
+      'PODIUM_ENLARGE': 'Vergroten',
+      'LOGIN_WELCOME_TITLE': 'Welkom bij Jirig',
+      'LOGIN_WELCOME_SUBTITLE':
+          'Meld je aan en ontdek alle functies van ons platform',
+      'LOGIN_TITLE': 'Inloggen',
+      'LOGIN_SUBTITLE': 'Toegang tot je account',
+      'LOGIN_EMAIL_LABEL': 'E-mailadres',
+      'LOGIN_EMAIL_PLACEHOLDER': 'jouw@email.com',
+      'LOGIN_CODE_LABEL': 'Verificatiecode',
+      'LOGIN_CODE_PLACEHOLDER':
+          'Voer de code in die je per e-mail hebt ontvangen',
+      'LOGIN_ACTION_SEND_CODE': 'Code verzenden',
+      'LOGIN_ACTION_VALIDATE_CODE': 'Code bevestigen',
+      'LOGIN_LOADING_SENDING_CODE': 'Code wordt verzonden...',
+      'LOGIN_LOADING_CONNECTING': 'Bezig met inloggen...',
+      'LOGIN_SEPARATOR_TEXT': 'Of ga verder met',
+      'LOGIN_CONTINUE_WITH_GOOGLE': 'Ga verder met Google',
+      'LOGIN_CONTINUE_WITH_FACEBOOK': 'Ga verder met Facebook',
+      'LOGIN_TERMS_PREFIX': 'Door in te loggen ga je akkoord met onze',
+      'LOGIN_TERMS_LINK': 'Gebruiksvoorwaarden',
+      'LOGIN_AND_OUR': 'en ons',
+      'LOGIN_PRIVACY_LINK': 'Privacybeleid',
+      'LOGIN_CODE_SENT_TITLE': 'Code verzonden',
+      'LOGIN_CODE_SENT_MESSAGE':
+          'Kopieer deze code of open je mailbox om hem op te halen.',
+      'LOGIN_CODE_SENT_PLACEHOLDER': 'Code per e-mail verzonden',
+      'LOGIN_CODE_SENT_TOOLTIP': 'Kopiëren',
+      'LOGIN_CODE_SENT_FOOTER':
+          'Je kunt ook je mailbox openen om dit bericht terug te vinden.',
+      'LOGIN_OPEN_MAIL': 'Mijn mailbox openen',
+      'LOGIN_CODE_COPIED_BUTTON': 'Ik heb de code gekopieerd',
+      'LOGIN_RESEND_CODE': 'Nieuwe code verzenden',
+      'LOGIN_SNACKBAR_COPIED': 'Code gekopieerd naar het klembord',
+      'LOGIN_ERROR_EMPTY_EMAIL': 'Voer je e-mailadres in',
+      'LOGIN_ERROR_INVALID_EMAIL': 'Ongeldig e-mailadres',
+      'LOGIN_ERROR_EMPTY_CODE':
+          'Voer de code in die je per e-mail hebt ontvangen',
+      'LOGIN_ERROR_GENERIC':
+          'Er is een fout opgetreden bij het inloggen. Probeer het opnieuw.',
+      'LOGIN_ERROR_INVALID_CODE':
+          'Ongeldige code. Controleer de per e-mail ontvangen code en probeer het opnieuw.',
+      'LOGIN_ERROR_CODE_OR_CONNECTION':
+          'Ongeldige code of verbindingsfout. Controleer de code en probeer het opnieuw.',
+      'LOGIN_MESSAGE_RETURN_APP':
+          'Keer na het inloggen terug naar deze app.',
+      'LOGIN_ERROR_GOOGLE':
+          'Er is een fout opgetreden bij het inloggen met Google',
+      'LOGIN_ERROR_FACEBOOK':
+          'Er is een fout opgetreden bij het inloggen met Facebook',
+      'LOGIN_SUCCESS_TITLE': 'Inloggen geslaagd!',
+      'LOGIN_SUCCESS_MESSAGE': 'Je wordt zo meteen doorgestuurd...',
       // Clés pour le titre de la page de sélection de pays
       'SELECT_COUNTRY_TITLE_PART1': 'Vind je artikelen ',
       'SELECT_COUNTRY_TITLE_PART2': ' goedkoper met ',
@@ -576,7 +966,7 @@ class TranslationService extends ChangeNotifier {
       'IKEA_STORES': 'IKEA Winkels',
       'IKEA_STORES_NEARBY': 'IKEA Winkels in de buurt',
       'SEARCH_STORE_PLACEHOLDER': 'Zoek een winkel (naam, land, stad)',
-      'SEARCH_LOCATION_PLACEHOLDER': 'Zoek een stad, adres of postcode...',
+      'SEARCH_LOCATION_PLACEHOLDER': 'Zoek een stad, indirizzo of postcode...',
       // Zoekmodaal - titel
       'FRONTPAGE_Msg05': 'Zoek een artikel',
       // Zoekmodaal - landselectie
@@ -598,80 +988,74 @@ class TranslationService extends ChangeNotifier {
   /// Charger les traductions pour une langue
   Future<void> loadTranslations(String language) async {
     if (_currentLanguage == language && _translations.isNotEmpty) {
-      return; // Déjà chargé
+      return;
     }
 
     _isLoading = true;
     _currentLanguage = language;
-    
-    // Notifier immédiatement le changement de langue
-    notifyListeners();
-    print('🌍 TRANSLATION SERVICE: Changement de langue vers $language');
-    
-    // ✅ Sauvegarder la langue dans le profil si elle est différente
+
     await _saveLanguageToProfileIfDifferent(language);
 
     try {
-      print('🌍 TRANSLATION SERVICE: Chargement des traductions pour $language');
-      
-      // Utiliser uniquement l'API
       final apiTranslations = await _apiService.getTranslations(language);
-      
+
       if (apiTranslations.isNotEmpty) {
-        // Convertir les traductions de l'API
         _translations = Map<String, String>.from(apiTranslations);
-        // 🔎 Debug: vérifier s'il existe des clés dont la traduction vaut exactement "Trouvez Votre Produit"
+
         try {
           final matchedKeys = <String>[];
           apiTranslations.forEach((key, value) {
             final text = (value ?? '').toString();
-            final normalized = text.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+            final normalized =
+                text.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
             if (normalized == 'trouvez votre produit') {
               matchedKeys.add(key.toString());
             }
           });
           if (matchedKeys.isNotEmpty) {
-            print('🔎 TRANSLATION SERVICE: Clés avec traduction = "Trouvez Votre Produit": $matchedKeys');
+            print(
+                '🔎 TRANSLATION SERVICE: Clés avec traduction = "Trouvez Votre Produit": $matchedKeys');
           } else {
-            print('🔎 TRANSLATION SERVICE: Aucune clé dont la traduction est exactement "Trouvez Votre Produit"');
+            print(
+                '🔎 TRANSLATION SERVICE: Aucune clé dont la traduction est exactement "Trouvez Votre Produit"');
           }
         } catch (e) {
-          print('⚠️ TRANSLATION SERVICE: Debug recherche "Trouvez Votre Produit" a échoué: $e');
+          print(
+              '⚠️ TRANSLATION SERVICE: Debug recherche "Trouvez Votre Produit" a échoué: $e');
         }
-        
-        // Notifier immédiatement après le chargement
-        notifyListeners();
+
         print('✅ TRANSLATION SERVICE: Traductions chargées depuis l\'API');
       } else {
         throw Exception('Aucune traduction reçue de l\'API');
       }
     } catch (e) {
       print('❌ TRANSLATION SERVICE: Erreur API - aucune traduction disponible: $e');
-      // Pas de fallback - laisser les traductions vides
       _translations = {};
-      rethrow; // Relancer l'erreur pour que l'utilisateur soit informé
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    // Notifier une dernière fois pour indiquer que le chargement est terminé
-    notifyListeners();
-    print('✅ TRANSLATION SERVICE: Traductions chargées pour $language');
   }
 
   /// Obtenir une traduction
   String translate(String key) {
-    // D'abord essayer les traductions de l'API
     if (_translations.containsKey(key)) {
-      return _translations[key]!;
+      final value = _translations[key];
+      if (value != null) {
+        final normalizedValue = value.trim();
+        if (normalizedValue.isNotEmpty &&
+            normalizedValue.toLowerCase() != key.toLowerCase()) {
+          return normalizedValue;
+        }
+      }
     }
-    
-    // Sinon, essayer les traductions par défaut
+
     final defaultTranslations = _defaultTranslations[_currentLanguage];
     if (defaultTranslations != null && defaultTranslations.containsKey(key)) {
       return defaultTranslations[key]!;
     }
-    
-    // En dernier recours, retourner la clé
+
     return key;
   }
 

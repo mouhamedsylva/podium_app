@@ -70,11 +70,15 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       if (!_emailFocusNode.hasFocus && !_isLoading) {
         final text = _emailController.text.trim();
         final isValid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text);
+        final translationService =
+            Provider.of<TranslationService>(context, listen: false);
         if (mounted) {
           setState(() {
             _isEmailValid = isValid || text.isEmpty;
             _showEmailError = text.isNotEmpty && !isValid;
-            _emailValidationMessage = _showEmailError ? 'Adresse email invalide' : '';
+            _emailValidationMessage = _showEmailError
+                ? translationService.translate('LOGIN_ERROR_INVALID_EMAIL')
+                : '';
           });
         }
       }
@@ -212,10 +216,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   /// Connexion avec email (étape 1: demande du code)
   Future<void> _loginWithEmail() async {
+    final translationService =
+        Provider.of<TranslationService>(context, listen: false);
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       setState(() {
-        _errorMessage = 'Veuillez entrer votre adresse email';
+        _errorMessage =
+            translationService.translate('LOGIN_ERROR_EMPTY_EMAIL');
         _showEmailError = false;
         _emailValidationMessage = '';
       });
@@ -225,7 +232,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     if (!emailValid) {
       setState(() {
         _showEmailError = true;
-        _emailValidationMessage = 'Adresse email invalide';
+        _emailValidationMessage =
+            translationService.translate('LOGIN_ERROR_INVALID_EMAIL');
         _errorMessage = '';
       });
       return; // ❌ Ne pas passer à la suite ni ouvrir le modal
@@ -295,7 +303,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         // Étape 2 : validation du code
         if (_codeController.text.trim().isEmpty) {
           setState(() {
-            _errorMessage = 'Veuillez entrer le code reçu par email';
+            _errorMessage =
+                translationService.translate('LOGIN_ERROR_EMPTY_CODE');
           });
           return;
         }
@@ -316,7 +325,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             _isLoading = false;
             _errorMessage = response?['message'] ?? 
                            response?['error'] ?? 
-                           'Code invalide. Veuillez vérifier le code reçu par email et réessayer.';
+                           translationService.translate('LOGIN_ERROR_INVALID_CODE');
           });
           print('❌ Code invalide ou connexion échouée: ${response?['message'] ?? response?['error']}');
           print('❌ Réponse complète: $response');
@@ -367,7 +376,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       print('❌ Erreur de connexion: $e');
-      String errorMsg = 'Erreur lors de la connexion. Veuillez réessayer.';
+      String errorMsg =
+          translationService.translate('LOGIN_ERROR_GENERIC');
       
       // ✅ Extraire le message d'erreur de la réponse si disponible
       if (e is DioException && e.response != null) {
@@ -375,7 +385,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         if (errorData is Map) {
           errorMsg = errorData['message'] ?? 
                     errorData['error'] ?? 
-                    'Code invalide ou erreur de connexion. Veuillez vérifier le code et réessayer.';
+                    translationService
+                        .translate('LOGIN_ERROR_CODE_OR_CONNECTION');
         }
       }
       
@@ -392,11 +403,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   /// Connexion avec Google - Basée sur SNAL google.get.ts
   Future<void> _loginWithGoogle() async {
     print('🔐 Connexion avec Google');
+    final translationService =
+        Provider.of<TranslationService>(context, listen: false);
     try {
       // Sauvegarder le callBackUrl pour le récupérer après OAuth
       final callBackUrl = widget.callBackUrl ?? '/wishlist';
       await LocalStorageService.saveCallBackUrl(callBackUrl);
-      
+
       // URL de connexion Google basée sur SNAL (directement)
       String authUrl = 'https://jirig.be/api/auth/google';
 
@@ -408,16 +421,17 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         Uri.parse(authUrl),
         mode: LaunchMode.externalApplication,
       );
-      
+
       // Afficher un message à l'utilisateur
       setState(() {
-        _errorMessage = 'Après la connexion sur Jirig, revenez à cette application';
+        _errorMessage =
+            translationService.translate('LOGIN_MESSAGE_RETURN_APP');
       });
-      
     } catch (e) {
       print('❌ Erreur connexion Google: $e');
       setState(() {
-        _errorMessage = 'Erreur lors de la connexion avec Google';
+        _errorMessage =
+            translationService.translate('LOGIN_ERROR_GOOGLE');
       });
     }
   }
@@ -425,11 +439,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   /// Connexion avec Facebook - Basée sur SNAL facebook.get.ts
   Future<void> _loginWithFacebook() async {
     print('🔐 Connexion avec Facebook');
+    final translationService =
+        Provider.of<TranslationService>(context, listen: false);
     try {
       // Sauvegarder le callBackUrl pour le récupérer après OAuth
       final callBackUrl = widget.callBackUrl ?? '/wishlist';
       await LocalStorageService.saveCallBackUrl(callBackUrl);
-      
+
       // URL de connexion Facebook basée sur SNAL (directement)
       String authUrl = 'https://jirig.be/api/auth/facebook';
 
@@ -441,21 +457,24 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         Uri.parse(authUrl),
         mode: LaunchMode.externalApplication,
       );
-      
+
       // Afficher un message à l'utilisateur
       setState(() {
-        _errorMessage = 'Après la connexion sur SNAL, revenez à cette application';
+        _errorMessage =
+            translationService.translate('LOGIN_MESSAGE_RETURN_APP');
       });
-      
     } catch (e) {
       print('❌ Erreur connexion Facebook: $e');
       setState(() {
-        _errorMessage = 'Erreur lors de la connexion avec Facebook';
+        _errorMessage =
+            translationService.translate('LOGIN_ERROR_FACEBOOK');
       });
     }
   }
 
   void _openCodeModal({String? code}) {
+    final translationService =
+        Provider.of<TranslationService>(context, listen: false);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -496,7 +515,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Code envoyé',
+                  translationService.translate('LOGIN_CODE_SENT_TITLE'),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -506,7 +525,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Copiez ce code ou ouvrez votre boîte mail pour le récupérer.',
+                  translationService.translate('LOGIN_CODE_SENT_MESSAGE'),
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[600],
@@ -523,41 +542,84 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     border: Border.all(color: Colors.grey[300]!),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: SelectableText(
-                          hasCode ? displayedCode : 'Code envoyé par email',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: hasCode ? 4 : 0,
-                            color: hasCode ? Colors.black : Colors.grey[500],
-                          ),
-                          textAlign: TextAlign.center,
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.lock_outline,
+                          color: primaryColor,
+                          size: 22,
                         ),
                       ),
-                      IconButton(
-                        onPressed: hasCode ? () => _copyCode(displayedCode) : null,
-                        icon: const Icon(Icons.copy_rounded),
-                        tooltip: 'Copier',
-                        color: hasCode ? Colors.black : Colors.grey[400],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              hasCode
+                                  ? displayedCode
+                                  : translationService
+                                      .translate('LOGIN_CODE_SENT_PLACEHOLDER'),
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.2,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              translationService
+                                  .translate('LOGIN_CODE_SENT_PLACEHOLDER'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Tooltip(
+                        message: translationService
+                            .translate('LOGIN_CODE_SENT_TOOLTIP'),
+                        child: IconButton(
+                          icon: const Icon(Icons.copy, color: Color(0xFF0051BA)),
+                          onPressed: hasCode
+                              ? () {
+                                  _copyCode(displayedCode);
+                                }
+                              : null,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Vous pouvez aussi ouvrir votre messagerie pour retrouver ce message.',
+                  translationService.translate('LOGIN_CODE_SENT_FOOTER'),
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
+                    fontSize: 13,
+                    color: Colors.grey[600],
                   ),
                   textAlign: TextAlign.center,
                 ),
-                TextButton.icon(
-                  onPressed: () => _openMailApp(),
-                  icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('Ouvrir ma boîte mail'),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _openMailApp,
+                    icon: const Icon(Icons.open_in_new),
+                    label: Text(
+                      translationService.translate('LOGIN_OPEN_MAIL'),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -574,9 +636,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: const Text(
-                      'J\'ai copié le code',
-                      style: TextStyle(
+                    child: Text(
+                      translationService.translate('LOGIN_CODE_COPIED_BUTTON'),
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -590,7 +652,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     _loginWithEmail();
                   },
                   child: Text(
-                    'Renvoyer un code',
+                    translationService.translate('LOGIN_RESEND_CODE'),
                     style: TextStyle(
                       color: primaryColor,
                       fontWeight: FontWeight.w600,
@@ -610,10 +672,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     if (!mounted) return;
     Navigator.of(context).pop();
     if (!mounted) return;
+    final translationService =
+        Provider.of<TranslationService>(context, listen: false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Code copié dans le presse-papiers'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(
+          translationService.translate('LOGIN_SNACKBAR_COPIED'),
+        ),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -649,11 +715,103 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final translationService = Provider.of<TranslationService>(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isMobile = screenWidth < 768;
     final isTablet = screenWidth >= 768 && screenWidth < 1024;
     final isDesktop = screenWidth >= 1024;
+
+    final welcomeTitle = translationService.translate('LOGIN_WELCOME_TITLE');
+    final welcomeSubtitle =
+        translationService.translate('LOGIN_WELCOME_SUBTITLE');
+    final loginTitle = translationService.translate('LOGIN_TITLE');
+    final loginSubtitle = translationService.translate('LOGIN_SUBTITLE');
+    final emailLabel = translationService.translate('LOGIN_EMAIL_LABEL');
+    final emailPlaceholder =
+        translationService.translate('LOGIN_EMAIL_PLACEHOLDER');
+    final codeLabel = translationService.translate('LOGIN_CODE_LABEL');
+    final codePlaceholder =
+        translationService.translate('LOGIN_CODE_PLACEHOLDER');
+    final sendCodeLabel =
+        translationService.translate('LOGIN_ACTION_SEND_CODE');
+    final validateCodeLabel =
+        translationService.translate('LOGIN_ACTION_VALIDATE_CODE');
+    final sendingCodeLabel =
+        translationService.translate('LOGIN_LOADING_SENDING_CODE');
+    final connectingLabel =
+        translationService.translate('LOGIN_LOADING_CONNECTING');
+    final separatorText =
+        translationService.translate('LOGIN_SEPARATOR_TEXT');
+    final continueWithGoogleText =
+        translationService.translate('LOGIN_CONTINUE_WITH_GOOGLE');
+    final continueWithFacebookText =
+        translationService.translate('LOGIN_CONTINUE_WITH_FACEBOOK');
+    final termsPrefix = translationService.translate('LOGIN_TERMS_PREFIX');
+    final termsLink = translationService.translate('LOGIN_TERMS_LINK');
+    final andOurText = translationService.translate('LOGIN_AND_OUR');
+    final privacyLink = translationService.translate('LOGIN_PRIVACY_LINK');
+
+    final Widget termsBlock = Column(
+      children: [
+        Text(
+          termsPrefix,
+          style: TextStyle(
+            fontSize: isMobile ? 10 : 12,
+            color: Colors.grey[600],
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            GestureDetector(
+              onTap: () {
+                TermsOfUseModal.show(
+                  context,
+                  translationService: translationService,
+                );
+              },
+              child: Text(
+                termsLink,
+                style: TextStyle(
+                  fontSize: isMobile ? 10 : 12,
+                  color: const Color(0xFF0051BA),
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+            Text(
+              andOurText,
+              style: TextStyle(
+                fontSize: isMobile ? 10 : 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                PrivacyPolicyModal.show(
+                  context,
+                  translationService: translationService,
+                );
+              },
+              child: Text(
+                privacyLink,
+                style: TextStyle(
+                  fontSize: isMobile ? 10 : 12,
+                  color: const Color(0xFF0051BA),
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -774,7 +932,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                   mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        'Bienvenue sur Jirig',
+                                        welcomeTitle,
                                         style: TextStyle(
                                           fontSize: isDesktop ? 36 : 28,
                                           fontWeight: FontWeight.bold,
@@ -784,7 +942,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       ),
                                       SizedBox(height: isDesktop ? 24 : 16),
                                       Text(
-                                        'Connectez-vous et explorez toutes les fonctionnalités de notre plateforme',
+                                        welcomeSubtitle,
                                         style: TextStyle(
                                           fontSize: isDesktop ? 20 : 16,
                                           color: Colors.white.withOpacity(0.9),
@@ -933,21 +1091,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         position: _formSlideAnimation,
                                         child: Column(
                                           children: [
-                                  Text(
-                                    'Connexion',
-                                    style: TextStyle(
-                                      fontSize: isMobile ? 20 : 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey[900],
-                                    ),
-                                  ),
-                                  SizedBox(height: isMobile ? 6 : 8),
-                                  Text(
-                                    'Accédez à votre compte',
-                                    style: TextStyle(
-                                      fontSize: isMobile ? 13 : 15,
-                                      color: Colors.grey[600],
-                                    ),
+                                            Text(
+                                              loginTitle,
+                                              style: TextStyle(
+                                                fontSize: isMobile ? 20 : 24,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.grey[900],
+                                              ),
+                                            ),
+                                            SizedBox(height: isMobile ? 6 : 8),
+                                            Text(
+                                              loginSubtitle,
+                                              style: TextStyle(
+                                                fontSize: isMobile ? 13 : 15,
+                                                color: Colors.grey[600],
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -957,7 +1115,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                     Column(
                                       children: [
                                         Text(
-                                          'Connexion',
+                                          loginTitle,
                                           style: TextStyle(
                                             fontSize: isMobile ? 20 : 24,
                                             fontWeight: FontWeight.bold,
@@ -966,7 +1124,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         ),
                                         SizedBox(height: isMobile ? 6 : 8),
                                         Text(
-                                          'Accédez à votre compte',
+                                          loginSubtitle,
                                           style: TextStyle(
                                             fontSize: isMobile ? 13 : 15,
                                             color: Colors.grey[600],
@@ -987,7 +1145,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Adresse email',
+                                                emailLabel,
                                                 style: TextStyle(
                                                   fontSize: isMobile ? 13 : 14,
                                                   fontWeight: FontWeight.w500,
@@ -1001,7 +1159,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                                 onChanged: _onEmailChanged,
                                                 focusNode: _emailFocusNode,
                                                 decoration: InputDecoration(
-                                                  hintText: 'votre@email.com',
+                                                  hintText: emailPlaceholder,
                                                   hintStyle: TextStyle(color: Colors.grey[400]),
                                                   prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[600]),
                                                   border: OutlineInputBorder(
@@ -1033,7 +1191,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Adresse email',
+                                          emailLabel,
                                           style: TextStyle(
                                             fontSize: isMobile ? 13 : 14,
                                             fontWeight: FontWeight.w500,
@@ -1047,7 +1205,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           onChanged: _onEmailChanged,
                                           focusNode: _emailFocusNode,
                                           decoration: InputDecoration(
-                                            hintText: 'votre@email.com',
+                                            hintText: emailPlaceholder,
                                             hintStyle: TextStyle(color: Colors.grey[400]),
                                             prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[600]),
                                             border: OutlineInputBorder(
@@ -1079,7 +1237,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Code de vérification',
+                                          codeLabel,
                                           style: TextStyle(
                                             fontSize: isMobile ? 13 : 14,
                                             fontWeight: FontWeight.w500,
@@ -1090,7 +1248,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         TextField(
                                           controller: _codeController,
                                           decoration: InputDecoration(
-                                            hintText: 'Entrez le code reçu par e-mail',
+                                            hintText: codePlaceholder,
                                             hintStyle: TextStyle(color: Colors.grey[400]),
                                             prefixIcon: Icon(Icons.pin_outlined, color: Colors.grey[600]),
                                             border: OutlineInputBorder(
@@ -1170,8 +1328,10 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                                 ),
                                                 SizedBox(width: 12),
                                                 Text(
-                                                  _awaitingCode ? 'Connexion...' : 'Envoi du code...',
-                                                  style: TextStyle(
+                                                  _awaitingCode
+                                                      ? connectingLabel
+                                                      : sendingCodeLabel,
+                                                  style: const TextStyle(
                                                     fontSize: 16,
                                                     fontWeight: FontWeight.w600,
                                                   ),
@@ -1184,7 +1344,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     Icon(Icons.fingerprint, size: isMobile ? 20 : 22),
                                                 SizedBox(width: 8),
                                                 Text(
-                                                  _awaitingCode ? 'Valider le code' : 'Envoi du code',
+                                                  _awaitingCode
+                                                      ? validateCodeLabel
+                                                      : sendCodeLabel,
                                                   style: TextStyle(
                                                     fontSize: isMobile ? 14 : 16,
                                                     fontWeight: FontWeight.w600,
@@ -1202,7 +1364,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       Padding(
                                         padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16),
                                         child: Text(
-                                          'Ou continuer avec',
+                                          separatorText,
                                           style: TextStyle(
                                             fontSize: isMobile ? 12 : 14,
                                             color: Colors.grey[600],
@@ -1237,7 +1399,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                               SizedBox(width: isMobile ? 8 : 12),
                                               Flexible(
                                                 child: Text(
-                                                  'Continuer avec Google',
+                                                  continueWithGoogleText,
                                                   style: TextStyle(
                                                     fontSize: isMobile ? 14 : 16,
                                                     fontWeight: FontWeight.w500,
@@ -1270,7 +1432,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                               SizedBox(width: isMobile ? 8 : 12),
                                               Flexible(
                                                 child: Text(
-                                                  'Continuer avec Facebook',
+                                                  continueWithFacebookText,
                                                   style: TextStyle(
                                                     fontSize: isMobile ? 14 : 16,
                                                     fontWeight: FontWeight.w500,
@@ -1289,132 +1451,10 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                   if (_animationsInitialized)
                                     FadeTransition(
                                       opacity: _buttonsController,
-                                      child: Column(
-                                        children: [
-                                  Text(
-                                    'En vous connectant, vous acceptez nos',
-                                    style: TextStyle(
-                                      fontSize: isMobile ? 10 : 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  SizedBox(height: 4),
-                                  Wrap(
-                                    alignment: WrapAlignment.center,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    spacing: 4,
-                                    runSpacing: 4,
-                                    children: [
-                                      Consumer<TranslationService>(
-                                        builder: (context, translationService, child) {
-                                          return GestureDetector(
-                                            onTap: () {
-                                              TermsOfUseModal.show(context, translationService: translationService);
-                                            },
-                                            child: Text(
-                                              'Conditions d\'utilisation',
-                                              style: TextStyle(
-                                                fontSize: isMobile ? 10 : 12,
-                                                color: Color(0xFF0051BA),
-                                                decoration: TextDecoration.underline,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      Text(
-                                        'et notre',
-                                        style: TextStyle(
-                                          fontSize: isMobile ? 10 : 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      Consumer<TranslationService>(
-                                        builder: (context, translationService, child) {
-                                          return GestureDetector(
-                                            onTap: () {
-                                              PrivacyPolicyModal.show(context, translationService: translationService);
-                                            },
-                                            child: Text(
-                                              'Politique de confidentialité',
-                                              style: TextStyle(
-                                                fontSize: isMobile ? 10 : 12,
-                                                color: Color(0xFF0051BA),
-                                                decoration: TextDecoration.underline,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                                      ),
+                                      child: termsBlock,
                                     )
                                   else
-                                    Column(
-                                      children: [
-                                        Text(
-                                          'En vous connectant, vous acceptez nos',
-                                          style: TextStyle(
-                                            fontSize: isMobile ? 10 : 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        SizedBox(height: 4),
-                                        Wrap(
-                                          alignment: WrapAlignment.center,
-                                          crossAxisAlignment: WrapCrossAlignment.center,
-                                          spacing: 4,
-                                          runSpacing: 4,
-                                          children: [
-                                            Consumer<TranslationService>(
-                                              builder: (context, translationService, child) {
-                                                return GestureDetector(
-                                                  onTap: () {
-                                                    TermsOfUseModal.show(context, translationService: translationService);
-                                                  },
-                                                  child: Text(
-                                                    'Conditions d\'utilisation',
-                                                    style: TextStyle(
-                                                      fontSize: isMobile ? 10 : 12,
-                                                      color: Color(0xFF0051BA),
-                                                      decoration: TextDecoration.underline,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                            Text(
-                                              'et notre',
-                                              style: TextStyle(
-                                                fontSize: isMobile ? 10 : 12,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ),
-                                            Consumer<TranslationService>(
-                                              builder: (context, translationService, child) {
-                                                return GestureDetector(
-                                                  onTap: () {
-                                                    PrivacyPolicyModal.show(context, translationService: translationService);
-                                                  },
-                                                  child: Text(
-                                                    'Politique de confidentialité',
-                                                    style: TextStyle(
-                                                      fontSize: isMobile ? 10 : 12,
-                                                      color: Color(0xFF0051BA),
-                                                      decoration: TextDecoration.underline,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                          ],
-                        ),
-                                      ],
-                                    ),
+                                    termsBlock,
                                 ],
                               ),
                             ),
@@ -1522,12 +1562,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   /// Afficher un popup de succès avec check vert
   Future<void> _showSuccessPopup() async {
+    final translationService =
+        Provider.of<TranslationService>(context, listen: false);
     return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         // Fermer automatiquement après 2 secondes
-        Future.delayed(Duration(seconds: 2), () {
+        Future.delayed(const Duration(seconds: 2), () {
           if (Navigator.canPop(context)) {
             Navigator.pop(context);
           }
@@ -1538,7 +1580,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             borderRadius: BorderRadius.circular(20),
           ),
           child: Container(
-            padding: EdgeInsets.all(32),
+            padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -1549,7 +1591,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 // Icône de succès avec animation
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
-                  duration: Duration(milliseconds: 500),
+                  duration: const Duration(milliseconds: 500),
                   curve: Curves.elasticOut,
                   builder: (context, value, child) {
                     return Transform.scale(
@@ -1557,11 +1599,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                       child: Container(
                         width: 80,
                         height: 80,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Color(0xFF4CAF50),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.check,
                           color: Colors.white,
                           size: 50,
@@ -1570,21 +1612,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     );
                   },
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 // Titre
                 Text(
-                  'Connexion réussie !',
-                  style: TextStyle(
+                  translationService.translate('LOGIN_SUCCESS_TITLE'),
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 // Message
                 Text(
-                  'Vous allez être redirigé...',
+                  translationService.translate('LOGIN_SUCCESS_MESSAGE'),
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.grey[600],

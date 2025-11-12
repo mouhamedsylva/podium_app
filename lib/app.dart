@@ -40,9 +40,9 @@ class _JirigAppState extends State<JirigApp> {
 
   // ✅ Déterminer la route initiale depuis SharedPreferences (mobile-first)
   Future<String> _getInitialLocation() async {
-    final startupRoute = await RoutePersistenceService.getStartupRoute();
-    print('🔄 Route initiale: $startupRoute');
-    return startupRoute;
+    final lastRoute = await RoutePersistenceService.getStartupRoute();
+    print('🔄 Route de démarrage ciblée: $lastRoute');
+    return '/splash';
   }
 
   // Helper pour créer des transitions de page personnalisées

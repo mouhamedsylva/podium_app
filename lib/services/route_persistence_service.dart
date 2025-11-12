@@ -52,19 +52,21 @@ class RoutePersistenceService {
   static Future<String> getStartupRoute() async {
     try {
       final currentRoute = await getCurrentRoute();
-      
-      // Si on a une route sauvegardée et qu'elle n'est pas la racine
-      if (currentRoute != null && currentRoute.isNotEmpty && currentRoute != '/') {
+
+      if (currentRoute != null &&
+          currentRoute.isNotEmpty &&
+          currentRoute != '/' &&
+          currentRoute != '/splash' &&
+          isValidRoute(currentRoute)) {
         print('🚀 Route de démarrage depuis SharedPreferences: $currentRoute');
         return currentRoute;
       }
-      
-      // Fallback vers la route racine
-      print('🚀 Route de démarrage par défaut: /');
-      return '/';
+
+      print('🚀 Route de démarrage par défaut: /country-selection');
+      return '/country-selection';
     } catch (e) {
       print('❌ Erreur lors de la récupération de la route de démarrage: $e');
-      return '/';
+      return '/country-selection';
     }
   }
 
@@ -128,16 +130,14 @@ class RoutePersistenceService {
 
   /// ✅ Vérifier si une route est valide pour la restauration
   static bool isValidRoute(String route) {
-    // Liste des routes valides de votre app
     const validRoutes = [
       '/',
-      '/splash',
       '/country-selection',
       '/home',
       '/product-search',
-      '/scanner',
       '/wishlist',
       '/profile',
+      '/login',
     ];
     
     // Vérifier si c'est une route de podium (format: /podium/:code)

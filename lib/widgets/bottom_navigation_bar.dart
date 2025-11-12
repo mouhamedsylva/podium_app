@@ -6,10 +6,12 @@ import '../services/auth_notifier.dart';
 
 class CustomBottomNavigationBar extends StatefulWidget {
   final int currentIndex;
-  
+  final VoidCallback? onScannerPressed;
+
   const CustomBottomNavigationBar({
     super.key,
     this.currentIndex = 0,
+    this.onScannerPressed,
   });
 
   @override
@@ -60,7 +62,7 @@ class _CustomBottomNavigationBarState extends State<CustomBottomNavigationBar> {
             context: context,
             icon: Icons.qr_code_scanner,
             isSelected: widget.currentIndex == 2,
-            onTap: () => _openScanner(context),
+            onTap: () => _handleScannerTap(context),
           ),
           _buildNavItem(
             context: context,
@@ -85,7 +87,12 @@ class _CustomBottomNavigationBarState extends State<CustomBottomNavigationBar> {
     }
   }
 
-  void _openScanner(BuildContext context) {
+  void _handleScannerTap(BuildContext context) {
+    if (widget.onScannerPressed != null) {
+      widget.onScannerPressed!.call();
+      return;
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
