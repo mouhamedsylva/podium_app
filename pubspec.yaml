@@ -162,12 +162,12 @@ flutter_launcher_icons:
   ios: true
 
   # Chemin du logo
-  image_path: "assets/images/logo-tiaka-rv-optimized.png"
+  image_path: "assets/images/jirig.png"
 
   # Icône adaptative (Android 8+)
-  adaptive_icon_foreground: "assets/images/logo-tiaka-rv-optimized.png"
-  adaptive_icon_background: "#FFFFFF"
-  # adaptive_icon_background: "#1FB5CE"
+  adaptive_icon_foreground: "assets/images/jirig.png"
+  adaptive_icon_background: "#35B0D9"
+  # adaptive_icon_background: "#35B0D9"
   # adaptive_icon_padding: 0
 
   remove_alpha_ios: true
