@@ -230,14 +230,14 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
               ),
               child: Row(
                 children: [
-                  // Drapeau
+                  // Drapeau - ✅ Augmenter la taille pour une meilleure visibilité sur mobile
                   Container(
-                    width: isVerySmallMobile ? 20 : (isSmallMobile ? 21 : 22),
-                    height: isVerySmallMobile ? 14 : (isSmallMobile ? 14.5 : 15),
+                    width: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : (isMobile ? 40 : 28)),
+                    height: isVerySmallMobile ? 22 : (isSmallMobile ? 25 : (isMobile ? 28 : 20)),
                     child: _buildFlagImage(_selectedCountry!),
                   ),
                   
-                  SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
+                  SizedBox(width: isVerySmallMobile ? 10 : (isSmallMobile ? 12 : 14)),
                   
                   // Nom du pays
                   Expanded(
@@ -497,6 +497,52 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
     );
   }
 
+  List<TextSpan> _buildTitleTextSpans(String text) {
+    final spans = <TextSpan>[];
+    final words = text.split(' ');
+    
+    for (var i = 0; i < words.length; i++) {
+      final word = words[i];
+      final cleanWord = word.replaceAll(RegExp(r'[^\w]'), '');
+      
+      TextSpan span;
+      if (cleanWord.toUpperCase() == 'IKEA') {
+        // Mettre "IKEA" en couleur ambre
+        span = TextSpan(
+          text: word,
+          style: TextStyle(
+            color: Colors.amber[700],
+            fontWeight: FontWeight.bold,
+          ),
+        );
+      } else if (cleanWord.toLowerCase() == 'jirig') {
+        // Mettre "Jirig" en couleur bleue
+        span = TextSpan(
+          text: word,
+          style: const TextStyle(
+            color: Color(0xFF2196F3),
+            fontWeight: FontWeight.bold,
+          ),
+        );
+      } else {
+        // Texte normal
+        span = TextSpan(
+          text: word,
+          style: const TextStyle(color: Colors.black),
+        );
+      }
+      
+      spans.add(span);
+      
+      // Ajouter un espace après chaque mot sauf le dernier
+      if (i < words.length - 1) {
+        spans.add(const TextSpan(text: ' '));
+      }
+    }
+    
+    return spans;
+  }
+
   Widget _buildTitle({bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false, required TranslationService translationService}) {
     return FadeTransition(
       opacity: _fadeInAnimation,
@@ -511,22 +557,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
               color: Colors.black,
               height: 1.4,
             ),
-            children: [
-              TextSpan(text: translationService.translate('SELECT_COUNTRY_TITLE_PART1')),
-              TextSpan(
-                text: 'IKEA',
-                style: TextStyle(
-                  color: Colors.amber[700],
-                ),
-              ),
-              TextSpan(text: translationService.translate('SELECT_COUNTRY_TITLE_PART2')),
-              TextSpan(
-                text: 'Jirig',
-                style: TextStyle(
-                  color: Color(0xFF2196F3),
-                ),
-              ),
-            ],
+            children: _buildTitleTextSpans(translationService.translate('ONBOARDING_Msg01')),
           ),
         ),
       ),
@@ -583,7 +614,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
           children: [
             Center(
               child: Text(
-                translationService.translate('SELECT_COUNTRY_ORIGIN_COUNTRY'),
+                translationService.translate('ONBOARDING_Msg03'),
                 style: TextStyle(
                   fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
                   fontWeight: FontWeight.bold,
@@ -794,6 +825,17 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
     // Utiliser l'image du drapeau depuis l'API ou les assets locaux
     final flagPath = country.flagImagePath;
     
+    // Obtenir la taille de l'écran pour adapter la taille du drapeau
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final isVerySmallMobile = screenWidth < 361;
+    final isSmallMobile = screenWidth < 431;
+    final isMobile = screenWidth < 768;
+    
+    // ✅ Taille adaptative du drapeau selon l'écran (plus grand sur mobile)
+    final flagWidth = isVerySmallMobile ? 32.0 : (isSmallMobile ? 36.0 : (isMobile ? 40.0 : 28.0));
+    final flagHeight = isVerySmallMobile ? 22.0 : (isSmallMobile ? 25.0 : (isMobile ? 28.0 : 20.0));
+    
     // Si le chemin commence par /img/ ou /public/, c'est une image depuis SNAL
     if (flagPath.startsWith('/img/') || flagPath.startsWith('/public/')) {
       // Utiliser le proxy pour charger l'image depuis SNAL
@@ -803,36 +845,37 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
         borderRadius: BorderRadius.circular(4),
         child: Image.network(
           imageUrl,
-          width: 28,
-          height: 20,
+          width: flagWidth,
+          height: flagHeight,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             // Fallback vers les assets locaux
-            return _buildLocalFlagImage(country.sPays);
+            return _buildLocalFlagImage(country.sPays, flagWidth, flagHeight);
           },
         ),
       );
     } else {
       // Utiliser les assets locaux
-      return _buildLocalFlagImage(country.sPays);
+      return _buildLocalFlagImage(country.sPays, flagWidth, flagHeight);
     }
   }
   
-  Widget _buildLocalFlagImage(String countryCode) {
+  Widget _buildLocalFlagImage(String countryCode, double width, double height) {
     // Charger depuis les assets locaux
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: Image.asset(
         'assets/img/flags/${countryCode.toUpperCase()}.PNG',
-        width: 28,
-        height: 20,
+        width: width,
+        height: height,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          // Fallback vers un emoji
+          // Fallback vers un emoji - ✅ Taille adaptative selon l'écran
+          final emojiSize = width * 0.65; // Proportionnel à la largeur du drapeau
           return Center(
             child: Text(
               _getCountryFlagEmoji(countryCode),
-              style: const TextStyle(fontSize: 18),
+              style: TextStyle(fontSize: emojiSize),
             ),
           );
         },
@@ -896,7 +939,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
               child: GestureDetector(
                 onTap: () => setState(() => _termsAccepted = !_termsAccepted),
                 child: Text(
-                  translationService.translate('SELECT_COUNTRY_ACCEPT_TERMS').replaceAll('\t', ' ').trim(),
+                  translationService.translate('ONBOARDING_Msg05').replaceAll('\t', ' ').trim(),
                   style: const TextStyle(
                     fontSize: 12,
                     color: Colors.black87,
@@ -921,7 +964,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                   elevation: 0,
                 ),
                 child: Text(
-                  translationService.translate('SELECT_COUNTRY_VIEW_TERMS'),
+                  translationService.translate('ONBOARDING_Msg09'),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -982,7 +1025,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                     ),
                   )
                 : Text(
-                    translationService.translate('SELECT_COUNTRY_FINISH_BUTTON'),
+                    translationService.translate('ONBOARDING_Msg07'),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -1010,7 +1053,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
           ),
           children: [
             TextSpan(
-              text: translationService.translate('SELECT_COUNTRY_FOOTER_TEXT').replaceAll('\t', ' ').trim(),
+              text: translationService.translate('ONBOARDING_Msg08').replaceAll('\t', ' ').trim(),
             ),
             WidgetSpan(
               alignment: PlaceholderAlignment.baseline,
@@ -1018,7 +1061,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
               child: GestureDetector(
                 onTap: () => _showTermsDialog(translationService: translationService),
                 child: Text(
-                  translationService.translate('SELECT_COUNTRY_TERMS_LINK'),
+                  translationService.translate('ONBOARDING_Msg09'),
                   style: const TextStyle(
                     color: Color(0xFF2196F3),
                     fontSize: 11,

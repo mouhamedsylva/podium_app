@@ -97,12 +97,26 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Mettre à jour l'état après déconnexion
+  /// Mettre à jour l'état après déconnexion (nettoyage local uniquement, sans endpoint backend)
   Future<void> onLogout() async {
     print('🔐 AuthNotifier: onLogout appelé');
-    await LocalStorageService.clearProfile();
-    _isLoggedIn = false;
-    _userInfo = null;
+    
+    try {
+      // Nettoyer le profil local (supprime email et infos utilisateur)
+      await LocalStorageService.clearProfile();
+      
+      // Mettre à jour l'état local
+      _isLoggedIn = false;
+      _userInfo = null;
+      
+      print('✅ Déconnexion réussie - Profil local nettoyé');
+    } catch (e) {
+      print('❌ Erreur lors de la déconnexion: $e');
+      // En cas d'erreur, forcer quand même la déconnexion
+      _isLoggedIn = false;
+      _userInfo = null;
+    }
+    
     notifyListeners();
   }
 

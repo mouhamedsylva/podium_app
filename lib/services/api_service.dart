@@ -154,20 +154,28 @@ class ApiService {
           profile = null;
         }
 
-        // ✅ RÉCUPÉRER LES VRAIES VALEURS DEPUIS LES COOKIES
+        // ✅ RÉCUPÉRER LES VRAIES VALEURS DEPUIS LE LOCALSTORAGE
         // SNAL gère les identifiants côté serveur via les cookies
+        // CRITIQUE: Le LocalStorage est toujours la source de vérité après connexion
         if (profile != null) {
           final iProfile = profile['iProfile']?.toString() ?? '0';
           final iBasket = profile['iBasket']?.toString() ?? '0';
           final sPaysLangue = profile['sPaysLangue']?.toString() ?? '';
           final sPaysFav = profile['sPaysFav']?.toString() ?? '';
+          final sEmail = profile['sEmail']?.toString() ?? '';
 
           // ✅ UTILISER LES VRAIES VALEURS directement depuis le localStorage
+          // Si l'utilisateur est connecté (a un email), utiliser les vrais identifiants
           String finalIProfile = iProfile;
           String finalIBasket = iBasket;
 
           // Si ce sont des identifiants par défaut, utiliser '0' (comme le proxy) et non des chaînes vides
-          if (iProfile.isEmpty || iProfile == '0' || iProfile.startsWith('guest_')) {
+          // MAIS si l'utilisateur est connecté, forcer l'utilisation des vrais identifiants
+          if (sEmail.isNotEmpty && iProfile.isNotEmpty && !iProfile.startsWith('guest_')) {
+            // Utilisateur connecté : utiliser les vrais identifiants
+            finalIProfile = iProfile;
+            finalIBasket = iBasket;
+          } else if (iProfile.isEmpty || iProfile == '0' || iProfile.startsWith('guest_')) {
             finalIProfile = '0';
           }
           if (iBasket.isEmpty || iBasket == '0' || iBasket.startsWith('basket_')) {
@@ -175,7 +183,10 @@ class ApiService {
           }
 
           if (finalIProfile != '0' && finalIBasket != '0') {
-            print('✅ Vrais identifiants utilisés directement: iProfile=$finalIProfile, iBasket=$finalIBasket');
+            print('✅ Vrais identifiants utilisés directement depuis LocalStorage: iProfile=$finalIProfile, iBasket=$finalIBasket');
+            if (sEmail.isNotEmpty) {
+              print('   👤 Utilisateur connecté: $sEmail');
+            }
           } else {
             print('⚠️ Identifiants par défaut détectés, envoi de iProfile=0 / iBasket=0 (comme proxy web)...');
           }
@@ -1073,6 +1084,104 @@ class ApiService {
     }
   }
 
+  /// Récupérer tous les baskets de l'utilisateur (comme SNAL-Project getAllBasket4User)
+  /// Implémentation conforme à SNAL-Project: /api/get-basket-user
+  /// L'endpoint utilise getGuestProfile() pour récupérer l'iProfile depuis le cookie
+  /// et appelle la procédure stockée proc_basket_list_by_user
+  Future<Map<String, dynamic>?> getAllBasket4User() async {
+    try {
+      // ✅ CRITIQUE: Vérifier le profil avant d'appeler l'API
+      final profileData = await LocalStorageService.getProfile();
+      final iProfile = profileData?['iProfile']?.toString() ?? '';
+      final sEmail = profileData?['sEmail']?.toString() ?? '';
+      
+      print('📦 getAllBasket4User - Récupération de tous les baskets...');
+      print('🔍 Profil utilisé pour l\'appel:');
+      print('   iProfile: $iProfile');
+      print('   sEmail: $sEmail');
+      print('   Est connecté: ${sEmail.isNotEmpty}');
+      print('   ⚠️ L\'intercepteur ajoutera automatiquement le GuestProfile dans les headers/cookies');
+      print('   ⚠️ Le backend SNAL utilise getGuestProfile() pour récupérer l\'iProfile depuis le cookie');
+      
+      // ✅ Appel GET simple comme SNAL-Project (ligne 230 de useInfoUser.ts)
+      final response = await _dio!.get('/get-basket-user');
+
+      print('📡 Status Code: ${response.statusCode}');
+      print('📡 Réponse complète: ${response.data}');
+      
+      // ✅ Gérer la réponse comme SNAL-Project
+      // SNAL retourne: { success: true, data: recordset } ou { error: "..." }
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+        
+        // Vérifier si c'est une erreur
+        if (responseData is Map<String, dynamic> && responseData.containsKey('error')) {
+          print('❌ Erreur retournée par le backend: ${responseData['error']}');
+          return {
+            'success': false,
+            'error': responseData['error'],
+            'data': [],
+          };
+        }
+        
+        // Vérifier si c'est un succès avec data
+        if (responseData is Map<String, dynamic> && responseData['success'] == true) {
+          final basketsData = responseData['data'] as List? ?? [];
+          print('✅ Baskets récupérés avec succès: ${basketsData.length} baskets');
+          print('📋 Détails des baskets:');
+          for (var i = 0; i < basketsData.length && i < 3; i++) {
+            final basket = basketsData[i] as Map<String, dynamic>;
+            print('   Basket ${i + 1}: iBasket=${basket['iBasket']}, sBasketName=${basket['sBasketName']}');
+          }
+          return responseData;
+        }
+        
+        // Si la réponse est directement un tableau (format alternatif)
+        if (responseData is List) {
+          print('✅ Baskets récupérés (format List): ${responseData.length} baskets');
+          return {
+            'success': true,
+            'data': responseData,
+          };
+        }
+        
+        print('⚠️ Format de réponse inattendu: ${responseData.runtimeType}');
+        return responseData;
+      } else {
+        print('❌ Status code non-200: ${response.statusCode}');
+        print('❌ Réponse: ${response.data}');
+        return {
+          'success': false,
+          'error': 'Erreur HTTP ${response.statusCode}',
+          'data': [],
+        };
+      }
+    } catch (e) {
+      print('❌ Erreur getAllBasket4User: $e');
+      if (e is DioException) {
+        print('❌ DioException - Type: ${e.type}');
+        print('❌ DioException - Message: ${e.message}');
+        print('❌ DioException - Response Status: ${e.response?.statusCode}');
+        print('❌ DioException - Response Data: ${e.response?.data}');
+        
+        // ✅ Gérer les erreurs HTTP comme SNAL
+        if (e.response != null && e.response!.data is Map) {
+          final errorData = e.response!.data as Map<String, dynamic>;
+          return {
+            'success': false,
+            'error': errorData['error'] ?? errorData['message'] ?? 'Erreur lors de la récupération des baskets',
+            'data': [],
+          };
+        }
+      }
+      return {
+        'success': false,
+        'error': 'Erreur lors de la récupération des baskets: ${e.toString()}',
+        'data': [],
+      };
+    }
+  }
+
   /// Ajouter un article à la wishlist
   Future<Map<String, dynamic>?> addToWishlist({
     required String sCodeArticle,
@@ -1276,6 +1385,7 @@ class ApiService {
       print('🔍 Vérification des nouveaux identifiants dans la réponse:');
       print('   newIProfile: ${data['newIProfile']}');
       print('   newIBasket: ${data['newIBasket']}');
+      print('   iBasketMagikLink: ${data['iBasketMagikLink']}'); // ✅ Ajouté pour correspondre à SNAL
       print('   iProfile: ${data['iProfile']}');
       print('   iBasket: ${data['iBasket']}');
       print('   Toutes les clés: ${data.keys.toList()}');
@@ -1288,13 +1398,19 @@ class ApiService {
         print('   Clés disponibles: ${data.keys.toList()}');
 
         // ✅ PRIORITÉ 1: Récupérer les nouveaux identifiants depuis la réponse enrichie du proxy
-        String? newIProfile = data['newIProfile']?.toString();
-        String? newIBasket = data['newIBasket']?.toString();
+        // SNAL-Project retourne iBasketMagikLink dans la réponse (comme dans login-with-code.ts ligne 116)
+        String? newIProfile = data['newIProfile']?.toString() ?? data['iProfileEncrypted']?.toString();
+        String? newIBasket = data['newIBasket']?.toString() ?? 
+                             data['iBasketMagikLink']?.toString() ?? // ✅ PRIORITÉ: iBasketMagikLink de SNAL
+                             data['iBasket']?.toString();
 
         if (newIProfile != null && newIBasket != null) {
-          print('✅ Nouveaux identifiants récupérés depuis la réponse enrichie du proxy:');
+          print('✅ Nouveaux identifiants récupérés depuis la réponse:');
           print('   newIProfile: $newIProfile');
           print('   newIBasket: $newIBasket');
+          if (data['iBasketMagikLink'] != null) {
+            print('   ✅ iBasketMagikLink trouvé dans la réponse SNAL: ${data['iBasketMagikLink']}');
+          }
         } else {
           // ✅ PRIORITÉ 2: Extraire directement depuis les Set-Cookie headers de la réponse
           print('⚠️ Aucun identifiant dans la réponse enrichie, récupération depuis les Set-Cookie headers...');
@@ -1522,12 +1638,54 @@ class ApiService {
           await LocalStorageService.saveProfile(updatedProfile);
           print('💾 Nouveaux identifiants ET infos utilisateur sauvegardés dans le profil local');
 
-          // ✅ FORCER LA MISE À JOUR DES COOKIES
+          // ✅ FORCER LA MISE À JOUR DES COOKIES AVANT TOUTE AUTRE REQUÊTE
           await _updateCookiesWithNewIdentifiers(newIProfile, newIBasket);
 
           // ✅ CRITIQUE: Attendre que les cookies soient mis à jour avant de continuer
           print('⏳ Attente de la mise à jour des cookies...');
-          await Future.delayed(Duration(seconds: 1));
+          await Future.delayed(Duration(seconds: 2));
+
+          // ✅ VÉRIFICATION CRITIQUE: Vérifier que le cookie jar contient bien le nouveau GuestProfile
+          if (ApiConfig.useCookieManager && _cookieJar != null) {
+            try {
+              final apiUrl = Uri.parse('https://jirig.be/api/');
+              final savedCookies = await _cookieJar!.loadForRequest(apiUrl);
+              final guestProfileCookie = savedCookies.firstWhere(
+                (c) => c.name == 'GuestProfile',
+                orElse: () => Cookie('', ''),
+              );
+              
+              if (guestProfileCookie.name.isNotEmpty) {
+                // Décoder et vérifier le cookie
+                try {
+                  String decodedValue = Uri.decodeComponent(guestProfileCookie.value);
+                  if (decodedValue.contains('%')) {
+                    decodedValue = Uri.decodeComponent(decodedValue);
+                  }
+                  final guestProfile = jsonDecode(decodedValue);
+                  final cookieIProfile = guestProfile['iProfile']?.toString() ?? '';
+                  
+                  if (cookieIProfile == newIProfile) {
+                    print('✅ Cookie GuestProfile confirmé avec le bon iProfile: $cookieIProfile');
+                  } else {
+                    print('⚠️ Cookie GuestProfile a un iProfile différent: $cookieIProfile (attendu: $newIProfile)');
+                    // Réessayer la mise à jour
+                    await _updateCookiesWithNewIdentifiers(newIProfile, newIBasket);
+                    await Future.delayed(Duration(seconds: 1));
+                  }
+                } catch (e) {
+                  print('⚠️ Erreur lors de la vérification du cookie: $e');
+                }
+              } else {
+                print('⚠️ Cookie GuestProfile non trouvé dans le cookie jar après mise à jour');
+                // Réessayer la mise à jour
+                await _updateCookiesWithNewIdentifiers(newIProfile, newIBasket);
+                await Future.delayed(Duration(seconds: 1));
+              }
+            } catch (e) {
+              print('⚠️ Erreur lors de la vérification du cookie jar: $e');
+            }
+          }
 
           print('✅ Connexion réussie - identifiants et infos utilisateur mis à jour');
         } else {
@@ -1586,6 +1744,51 @@ class ApiService {
                   // Forcer la mise à jour des cookies
                   await _updateCookiesWithNewIdentifiers(apiIProfile, apiIBasket);
 
+                  // ✅ CRITIQUE: Attendre que les cookies soient mis à jour
+                  await Future.delayed(Duration(seconds: 2));
+
+                  // ✅ VÉRIFICATION CRITIQUE: Vérifier que le cookie jar contient bien le nouveau GuestProfile
+                  if (ApiConfig.useCookieManager && _cookieJar != null) {
+                    try {
+                      final apiUrl = Uri.parse('https://jirig.be/api/');
+                      final savedCookies = await _cookieJar!.loadForRequest(apiUrl);
+                      final guestProfileCookie = savedCookies.firstWhere(
+                        (c) => c.name == 'GuestProfile',
+                        orElse: () => Cookie('', ''),
+                      );
+                      
+                      if (guestProfileCookie.name.isNotEmpty) {
+                        // Décoder et vérifier le cookie
+                        try {
+                          String decodedValue = Uri.decodeComponent(guestProfileCookie.value);
+                          if (decodedValue.contains('%')) {
+                            decodedValue = Uri.decodeComponent(decodedValue);
+                          }
+                          final guestProfile = jsonDecode(decodedValue);
+                          final cookieIProfile = guestProfile['iProfile']?.toString() ?? '';
+                          
+                          if (cookieIProfile == apiIProfile) {
+                            print('✅ Cookie GuestProfile confirmé avec le bon iProfile: $cookieIProfile');
+                          } else {
+                            print('⚠️ Cookie GuestProfile a un iProfile différent: $cookieIProfile (attendu: $apiIProfile)');
+                            // Réessayer la mise à jour
+                            await _updateCookiesWithNewIdentifiers(apiIProfile, apiIBasket);
+                            await Future.delayed(Duration(seconds: 1));
+                          }
+                        } catch (e) {
+                          print('⚠️ Erreur lors de la vérification du cookie: $e');
+                        }
+                      } else {
+                        print('⚠️ Cookie GuestProfile non trouvé dans le cookie jar après mise à jour');
+                        // Réessayer la mise à jour
+                        await _updateCookiesWithNewIdentifiers(apiIProfile, apiIBasket);
+                        await Future.delayed(Duration(seconds: 1));
+                      }
+                    } catch (e) {
+                      print('⚠️ Erreur lors de la vérification du cookie jar: $e');
+                    }
+                  }
+
                   print('✅ Connexion réussie - identifiants et infos utilisateur récupérés depuis l\'API');
                 } else {
                   print('⚠️ Identifiants invalides dans la réponse API');
@@ -1607,14 +1810,74 @@ class ApiService {
     }
   }
 
-  /// Déconnexion
+  /// Déconnexion (appelle /api/auth/disconnect comme SNAL-Project)
+  Future<Map<String, dynamic>?> disconnect() async {
+    try {
+      print('🚪 Déconnexion via /api/auth/disconnect...');
+      
+      // Récupérer le profil actuel pour conserver sPaysLangue et sPaysFav
+      final currentProfile = await LocalStorageService.getProfile();
+      final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+      final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+      
+      print('📤 Appel POST /auth/disconnect');
+      print('📡 URL complète: ${_dio!.options.baseUrl}/auth/disconnect');
+      print('📋 Profil actuel: sPaysLangue=$sPaysLangue, sPaysFav=$sPaysFav');
+      
+      // Appeler l'endpoint disconnect (comme SNAL-Project)
+      final response = await _dio!.post('/auth/disconnect');
+      
+      if (response.statusCode == 200) {
+        print('✅ Réponse disconnect: ${response.data}');
+        
+        final data = response.data;
+        if (data != null && data is Map<String, dynamic>) {
+          final iProfile = data['iProfile']?.toString();
+          final iBasket = data['iBasket']?.toString();
+          final success = data['success'] == true;
+          
+          if (success && iProfile != null && iBasket != null) {
+            print('✅ Nouveaux identifiants générés: iProfile=$iProfile, iBasket=$iBasket');
+            
+            // Mettre à jour le profil avec les nouveaux identifiants anonymes (comme SNAL)
+            // ✅ CRITIQUE: Supprimer TOUTES les informations utilisateur pour que isLoggedIn() retourne false
+            await LocalStorageService.saveProfile({
+              'iProfile': iProfile,
+              'iBasket': iBasket,
+              'sPaysLangue': sPaysLangue, // Conserver la langue
+              'sPaysFav': sPaysFav, // Conserver les pays favoris
+              'sTypeAccount': 'ANONYMOUS', // Marquer comme anonyme
+              'sEmail': '', // ✅ Supprimer l'email (CRITIQUE pour isLoggedIn())
+              'sNom': '', // ✅ Supprimer le nom
+              'sPrenom': '', // ✅ Supprimer le prénom
+              'sPhoto': '', // ✅ Supprimer la photo
+            });
+            
+            print('✅ Profil mis à jour: email et infos utilisateur supprimés');
+            
+            print('✅ Profil mis à jour avec les nouveaux identifiants anonymes');
+            return data;
+          } else {
+            print('⚠️ Réponse disconnect incomplète: $data');
+          }
+        }
+        
+        return data;
+      } else {
+        print('❌ Erreur disconnect: Status ${response.statusCode}');
+        throw Exception('Erreur lors de la déconnexion: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Erreur disconnect: $e');
+      rethrow;
+    }
+  }
+
+  /// Déconnexion (méthode legacy - utilise disconnect() maintenant)
+  @Deprecated('Utilisez disconnect() à la place')
   Future<void> logout() async {
     try {
-      print('🚪 Déconnexion...');
-
-      // Supprimer les données locales
-      await LocalStorageService.clearProfile();
-
+      await disconnect();
       print('✅ Déconnexion réussie');
     } catch (e) {
       print('❌ Erreur logout: $e');

@@ -40,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   String _emailValidationMessage = '';
   bool _showEmailError = false;
   final FocusNode _emailFocusNode = FocusNode();
+  bool _oauthCheckActive = false; // Flag pour indiquer si le timer OAuth est actif
   // ✨ ANIMATIONS - Style "Elegant Entry" (6ème style de l'app)
   late AnimationController _logoController;
   late AnimationController _formController;
@@ -62,8 +63,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     // ✨ Initialiser les animations
     _initializeAnimations();
     
-    // Vérifier périodiquement si l'utilisateur est connecté (retour OAuth)
-    _startOAuthCheckTimer();
+    // ❌ NE PAS démarrer le timer OAuth automatiquement
+    // Le timer sera démarré uniquement quand l'utilisateur clique sur un bouton OAuth
 
     // Ecouter le focus pour la validation au blur
     _emailFocusNode.addListener(() {
@@ -161,10 +162,16 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   }
   
   /// Timer pour vérifier si l'utilisateur s'est connecté via OAuth dans une autre fenêtre
+  /// Ne démarre que si l'utilisateur a cliqué sur un bouton OAuth
   void _startOAuthCheckTimer() {
+    if (!_oauthCheckActive) {
+      _oauthCheckActive = true;
+      print('🔄 Démarrage du timer OAuth');
+    }
+    
     // Vérifier toutes les 2 secondes si l'utilisateur est connecté
     Future.delayed(Duration(seconds: 2), () async {
-      if (!mounted) return;
+      if (!mounted || !_oauthCheckActive) return;
       
       try {
         final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
@@ -172,6 +179,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         
         if (authNotifier.isLoggedIn) {
           print('✅ OAuth détecté - Utilisateur connecté');
+          
+          // Arrêter le timer
+          _oauthCheckActive = false;
           
           // Récupérer le callBackUrl
           final callBackUrl = await LocalStorageService.getCallBackUrl() ?? widget.callBackUrl ?? '/wishlist';
@@ -183,14 +193,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             context.go(callBackUrl);
           }
         } else {
-          // Continuer à vérifier
-          if (mounted) {
+          // Continuer à vérifier seulement si le timer est toujours actif
+          if (mounted && _oauthCheckActive) {
             _startOAuthCheckTimer();
           }
         }
       } catch (e) {
         print('⚠️ Erreur vérification OAuth: $e');
-        if (mounted) {
+        if (mounted && _oauthCheckActive) {
           _startOAuthCheckTimer();
         }
       }
@@ -199,6 +209,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   @override
   void dispose() {
+    // Arrêter le timer OAuth si actif
+    _oauthCheckActive = false;
+    
     _emailController.dispose();
     _codeController.dispose();
     // Dispose des animations
@@ -406,21 +419,38 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final translationService =
         Provider.of<TranslationService>(context, listen: false);
     try {
+      // ✅ Démarrer le timer OAuth pour vérifier la connexion
+      _startOAuthCheckTimer();
+      
       // Sauvegarder le callBackUrl pour le récupérer après OAuth
       final callBackUrl = widget.callBackUrl ?? '/wishlist';
       await LocalStorageService.saveCallBackUrl(callBackUrl);
 
-      // URL de connexion Google basée sur SNAL (directement)
-      String authUrl = 'https://jirig.be/api/auth/google';
+      // Endpoint adapté selon la plateforme :
+      //  - Web : flux classique SNAL (redirige vers le site, détecté ensuite par Flutter)
+      //  - Mobile : endpoint mobile SNAL qui renvoie un deep link jirig://auth/callback
+      final authUrl = kIsWeb
+          ? 'https://jirig.be/api/auth/google'
+          : 'https://jirig.be/api/auth/google-mobile';
 
       print('🌐 Redirection vers Google OAuth: $authUrl');
       print('📝 Note: Après la connexion sur Jirig, revenez à cette application');
 
-      // Ouvrir directement l'URL SNAL
-      await launchUrl(
-        Uri.parse(authUrl),
-        mode: LaunchMode.externalApplication,
-      );
+      final uri = Uri.parse(authUrl);
+
+      if (kIsWeb) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.platformDefault,
+          webOnlyWindowName: '_self',
+        );
+      } else {
+        // Sur mobile on laisse le navigateur externe gérer l'OAuth et le deep link
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      }
 
       // Afficher un message à l'utilisateur
       setState(() {
@@ -442,6 +472,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final translationService =
         Provider.of<TranslationService>(context, listen: false);
     try {
+      // ✅ Démarrer le timer OAuth pour vérifier la connexion
+      _startOAuthCheckTimer();
+      
       // Sauvegarder le callBackUrl pour le récupérer après OAuth
       final callBackUrl = widget.callBackUrl ?? '/wishlist';
       await LocalStorageService.saveCallBackUrl(callBackUrl);
@@ -515,7 +548,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  translationService.translate('LOGIN_CODE_SENT_TITLE'),
+                  translationService.translate('AUTH_Msg06'),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -525,7 +558,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  translationService.translate('LOGIN_CODE_SENT_MESSAGE'),
+                  translationService.translate('AUTH_Msg07'),
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[600],
@@ -645,20 +678,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _loginWithEmail();
-                  },
-                  child: Text(
-                    translationService.translate('LOGIN_RESEND_CODE'),
-                    style: TextStyle(
-                      color: primaryColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -726,15 +745,15 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final welcomeSubtitle =
         translationService.translate('LOGIN_WELCOME_SUBTITLE');
     final loginTitle = translationService.translate('LOGIN_TITLE');
-    final loginSubtitle = translationService.translate('LOGIN_SUBTITLE');
-    final emailLabel = translationService.translate('LOGIN_EMAIL_LABEL');
+    final loginSubtitle = translationService.translate('LOGINREQUIRED06');
+    final emailLabel = translationService.translate('LOGIN_EMAIL');
     final emailPlaceholder =
         translationService.translate('LOGIN_EMAIL_PLACEHOLDER');
     final codeLabel = translationService.translate('LOGIN_CODE_LABEL');
     final codePlaceholder =
         translationService.translate('LOGIN_CODE_PLACEHOLDER');
     final sendCodeLabel =
-        translationService.translate('LOGIN_ACTION_SEND_CODE');
+        translationService.translate('LOGIN_SEND_LINK');
     final validateCodeLabel =
         translationService.translate('LOGIN_ACTION_VALIDATE_CODE');
     final sendingCodeLabel =
@@ -742,15 +761,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final connectingLabel =
         translationService.translate('LOGIN_LOADING_CONNECTING');
     final separatorText =
-        translationService.translate('LOGIN_SEPARATOR_TEXT');
+        translationService.translate('AUTH_Msg01');
     final continueWithGoogleText =
-        translationService.translate('LOGIN_CONTINUE_WITH_GOOGLE');
+        translationService.translate('LOGIN_GOOGLE');
     final continueWithFacebookText =
-        translationService.translate('LOGIN_CONTINUE_WITH_FACEBOOK');
-    final termsPrefix = translationService.translate('LOGIN_TERMS_PREFIX');
-    final termsLink = translationService.translate('LOGIN_TERMS_LINK');
-    final andOurText = translationService.translate('LOGIN_AND_OUR');
-    final privacyLink = translationService.translate('LOGIN_PRIVACY_LINK');
+        translationService.translate('LOGIN_FACEBOOK');
+    final termsPrefix = translationService.translate('AUTH_Msg02');
+    final termsLink = translationService.translate('AUTH_Msg03');
+    final privacyLink = translationService.translate('AUTH_Msg04');
 
     final Widget termsBlock = Column(
       children: [
@@ -786,7 +804,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               ),
             ),
             Text(
-              andOurText,
+              ' et ',
               style: TextStyle(
                 fontSize: isMobile ? 10 : 12,
                 color: Colors.grey[600],
@@ -1280,19 +1298,19 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       padding: EdgeInsets.all(12),
                                       margin: EdgeInsets.only(bottom: 16),
                                       decoration: BoxDecoration(
-                                        color: Colors.red[50],
+                                        color: const Color(0xFFE8F4FF),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.red[200]!),
+                                        border: Border.all(color: const Color(0xFFB6DEFF)),
                                       ),
                                       child: Row(
                                         children: [
-                                          Icon(Icons.error_outline, color: Colors.red[700], size: 20),
-                                          SizedBox(width: 8),
+                                          const Icon(Icons.info_outline, color: Color(0xFF1B73D1), size: 20),
+                                          const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               _errorMessage,
-                                              style: TextStyle(
-                                                color: Colors.red[700],
+                                              style: const TextStyle(
+                                                color: Color(0xFF1B73D1),
                                                 fontSize: 14,
                                               ),
                                             ),
@@ -1305,7 +1323,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                     width: double.infinity,
                                     height: isMobile ? 44 : 48,
                                     child: ElevatedButton(
-                                      onPressed: _isLoading ? null : _loginWithEmail,
+                                      onPressed: _isLoading
+                                          ? null
+                                          : (!_awaitingCode
+                                              ? (_isEmailValid && _emailController.text.trim().isNotEmpty
+                                                  ? _loginWithEmail
+                                                  : null)
+                                              : _loginWithEmail),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Color(0xFF0051BA),
                                         foregroundColor: Colors.white,

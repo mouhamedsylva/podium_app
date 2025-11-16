@@ -36,6 +36,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
   List<Country> _allCountries = [];
   LinkedHashSet<String> _favoriteCountryCodes = LinkedHashSet<String>();
   bool _isLoadingCountries = true;
+  bool _hasExplicitlyDeselectedAll = false; // Flag pour indiquer qu'on a explicitement tout décoché
   
   // Controllers d'animation (style différent de home_screen)
   late AnimationController _heroController;
@@ -169,22 +170,87 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       final apiService = ApiService();
       await apiService.initialize();
 
+      // ✅ CRITIQUE: Charger d'abord le profil local (source de vérité)
       final localProfile = await LocalStorageService.getProfile();
-      final remoteProfile = await apiService.getProfile();
-
-      final mergedProfile = _composeProfileData(
-        base: localProfile,
-        overrides: remoteProfile.isNotEmpty ? remoteProfile : null,
-      );
-
-      if (mergedProfile['iProfile']?.toString().isNotEmpty == true ||
-          mergedProfile['iBasket']?.toString().isNotEmpty == true) {
-        await LocalStorageService.saveProfile(mergedProfile);
+      final localPaysFav = localProfile?['sPaysFav']?.toString() ?? '';
+      
+      // ✅ Ne charger le profil distant QUE si le profil local n'a pas de sPaysFav
+      // (comme SNAL qui charge depuis l'API uniquement au onMounted, pas à chaque navigation)
+      // ⚠️ Si localPaysFav est une chaîne vide explicite (''), on ne charge PAS depuis la BDD
+      // car cela signifie que l'utilisateur a tout décoché et on veut restaurer depuis sPaysLangue
+      // ⚠️ Si _hasExplicitlyDeselectedAll est true, on ne charge PAS depuis la BDD non plus
+      Map<String, dynamic>? mergedProfile = localProfile;
+      if (_hasExplicitlyDeselectedAll) {
+        print('✅ Désélection explicite détectée - Ne pas charger depuis la BDD');
+        // Réinitialiser le flag après utilisation
+        _hasExplicitlyDeselectedAll = false;
+      } else if (localPaysFav.isEmpty && localProfile?['sPaysFav'] != '') {
+        // localPaysFav est null/undefined, pas une chaîne vide explicite
+        print('📡 Profil local sans sPaysFav - Chargement depuis l\'API...');
+        final remoteProfile = await apiService.getProfile();
+        
+        if (remoteProfile.isNotEmpty) {
+          mergedProfile = _composeProfileData(
+            base: localProfile,
+            overrides: remoteProfile,
+          );
+          
+          // ✅ Sauvegarder le profil mergé uniquement si on a récupéré des données
+          if (mergedProfile['iProfile']?.toString().isNotEmpty == true ||
+              mergedProfile['iBasket']?.toString().isNotEmpty == true) {
+            await LocalStorageService.saveProfile(mergedProfile);
+          }
+        }
+      } else if (localPaysFav.isEmpty && localProfile?['sPaysFav'] == '') {
+        print('✅ Profil local avec sPaysFav vide (tout décoché) - Ne pas charger depuis la BDD');
+      } else {
+        print('✅ Utilisation du profil local (sPaysFav: $localPaysFav)');
       }
 
-      final storedProfile = await LocalStorageService.getProfile();
-      final favoritesRaw = storedProfile?['sPaysFav']?.toString() ?? '';
-      final favorites = _buildFavoriteSet(favoritesRaw, countries);
+      // ✅ Utiliser le profil mergé ou local pour récupérer sPaysFav
+      final storedProfile = mergedProfile ?? await LocalStorageService.getProfile();
+      var favoritesRaw = storedProfile?['sPaysFav']?.toString() ?? '';
+      
+      // ✅ CRITIQUE: Si sPaysFav est vide (même après avoir chargé depuis la BDD),
+      // restaurer UNIQUEMENT le pays de sPaysLangue (country_selection)
+      // (comme SNAL qui restaure le pays choisi dans country_selection au retour sur la page)
+      // ⚠️ NE PAS restaurer si _hasExplicitlyDeselectedAll est true (on vient de tout décocher)
+      if (!_hasExplicitlyDeselectedAll && (favoritesRaw.isEmpty || favoritesRaw.trim().isEmpty)) {
+        final sPaysLangue = storedProfile?['sPaysLangue']?.toString() ?? '';
+        if (sPaysLangue.isNotEmpty) {
+          // sPaysLangue est au format "BE/FR" ou "FR/FR" - extraire les 2 premiers caractères
+          final countryCodeFromLangue = sPaysLangue.split('/').first.toUpperCase();
+          if (countryCodeFromLangue.length == 2) {
+            // Vérifier que ce code pays existe dans la liste des pays disponibles
+            final countryExists = countries.any((country) => 
+              (country.sPays ?? country.code ?? '').toUpperCase() == countryCodeFromLangue
+            );
+            if (countryExists) {
+              // ✅ Restaurer UNIQUEMENT ce pays (pas plusieurs pays)
+              favoritesRaw = countryCodeFromLangue;
+              print('✅ Pays restauré depuis sPaysLangue (country_selection): $countryCodeFromLangue');
+              
+              // ✅ Sauvegarder le pays restauré dans le profil
+              final updatedProfile = Map<String, dynamic>.from(storedProfile ?? {});
+              updatedProfile['sPaysFav'] = countryCodeFromLangue;
+              await LocalStorageService.saveProfile(updatedProfile);
+              
+              // ✅ Mettre à jour mergedProfile pour éviter de recharger depuis la BDD
+              mergedProfile = updatedProfile;
+            }
+          }
+        }
+      } else if (_hasExplicitlyDeselectedAll) {
+        print('✅ Désélection explicite - Ne pas restaurer depuis sPaysLangue maintenant');
+        // Ne pas restaurer maintenant, laisser l'utilisateur voir qu'il a tout décoché
+        favoritesRaw = '';
+      }
+      
+      // ✅ Ne PAS ajouter de pays par défaut - on a déjà restauré depuis sPaysLangue si nécessaire
+      // (comme SNAL qui ne fait pas de fallback automatique)
+      final favorites = _buildFavoriteSet(favoritesRaw, countries, allowDefault: false);
+      
+      print('📊 Pays favoris finaux après _buildFavoriteSet: ${favorites.toList()}');
 
       if (mounted) {
         setState(() {
@@ -262,7 +328,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     return result;
   }
 
-  LinkedHashSet<String> _buildFavoriteSet(String favoritesRaw, List<Country> availableCountries) {
+  LinkedHashSet<String> _buildFavoriteSet(String favoritesRaw, List<Country> availableCountries, {bool allowDefault = true}) {
     final availableCodes = availableCountries
         .map((country) => (country.sPays ?? '').toUpperCase())
         .where((code) => code.length == 2)
@@ -285,7 +351,10 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       }
     }
 
-    if (favorites.isEmpty && availableCountries.isNotEmpty) {
+    // ✅ Ne PAS ajouter de pays par défaut si allowDefault est false
+    // (comme SNAL qui ne fait pas de fallback si l'utilisateur a déjà choisi des pays)
+    if (favorites.isEmpty && allowDefault && availableCountries.isNotEmpty) {
+      print('⚠️ Aucun pays favori trouvé - Ajout de pays par défaut (première initialisation)');
       for (final country in availableCountries) {
         final code = (country.sPays ?? '').toUpperCase();
         if (code.length == 2 && availableCodes.contains(code)) {
@@ -295,6 +364,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           break;
         }
       }
+    } else if (favorites.isEmpty && !allowDefault) {
+      print('✅ Aucun pays favori - L\'utilisateur n\'a pas encore choisi de pays');
     }
 
     return favorites;
@@ -438,11 +509,11 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       // ✅ Gérer les erreurs spécifiques du backend avec success, error, message
       final translationService = Provider.of<TranslationService>(context, listen: false);
       
-      // ✅ Utiliser la traduction pour le code d'erreur ou le message du backend
+      // ✅ Utiliser la traduction pour le code d'erreur en privilégiant le backend
       String errorDisplayMessage;
       if (e.errorCode.isNotEmpty) {
-        // Essayer de traduire le code d'erreur (ex: HTML_SEARCH_BADREFERENCE)
-        final translatedError = translationService.translate(e.errorCode);
+        // Essayer de traduire le code d'erreur (ex: HTML_SEARCH_BADREFERENCE) en privilégiant le backend
+        final translatedError = translationService.translateFromBackend(e.errorCode);
         // Si la traduction existe (pas le même texte que la clé), l'utiliser
         errorDisplayMessage = (translatedError != e.errorCode) 
             ? translatedError 
@@ -649,29 +720,39 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
   }
 
   Future<void> _toggleCountry(String countryCode) async {
-    if (_isLoadingCountries) return;
+    if (_isLoadingCountries) {
+      print('⚠️ _toggleCountry: _isLoadingCountries est true, retour');
+      return;
+    }
 
     final normalizedCode = countryCode.toUpperCase();
     if (normalizedCode.length != 2) {
+      print('⚠️ _toggleCountry: Code pays invalide: $countryCode');
       return;
     }
+    
     final previousFavorites = LinkedHashSet<String>.from(_favoriteCountryCodes);
     final updatedFavorites = LinkedHashSet<String>.from(_favoriteCountryCodes);
     final isCurrentlySelected = updatedFavorites.contains(normalizedCode);
+    
+    print('🔄 _toggleCountry: $normalizedCode - Actuellement sélectionné: $isCurrentlySelected');
+    print('📋 Pays sélectionnés avant: ${previousFavorites.toList()}');
 
+    // ✅ Permettre de tout décocher (comme SNAL)
+    // Le pays de sPaysLangue sera restauré au retour sur la page
     if (isCurrentlySelected) {
-      if (updatedFavorites.length <= 1) {
-        // Toujours garder au moins un pays sélectionné
-        return;
-      }
       updatedFavorites.remove(normalizedCode);
+      print('✅ Pays $normalizedCode décoché - Pays restants: ${updatedFavorites.toList()}');
     } else {
       updatedFavorites.add(normalizedCode);
+      print('✅ Pays $normalizedCode coché - Pays sélectionnés: ${updatedFavorites.toList()}');
     }
 
     final orderedFavorites = _orderedFavoritesList(updatedFavorites);
     final newFavoritesString = orderedFavorites.join(',');
 
+    // ✅ CRITIQUE: Mettre à jour l'UI IMMÉDIATEMENT, même si on a tout décoché
+    // (comme SNAL qui met à jour formData.sPaysFav immédiatement)
     if (mounted) {
       setState(() {
         _favoriteCountryCodes = LinkedHashSet<String>.from(orderedFavorites);
@@ -683,20 +764,115 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       previousProfile = await LocalStorageService.getProfile();
 
       final apiService = ApiService();
+      
+      // ✅ Si on a tout décoché (newFavoritesString est vide), restaurer immédiatement le pays de sPaysLangue
+      // (comme SNAL qui restaure le pays choisi dans country_selection)
+      if (newFavoritesString.isEmpty) {
+        print('⚠️ Tous les pays décochés - Restauration du pays de sPaysLangue');
+        
+        // ✅ Récupérer le pays de sPaysLangue (country_selection)
+        final sPaysLangue = previousProfile?['sPaysLangue']?.toString() ?? '';
+        String? countryCodeFromLangue;
+        
+        if (sPaysLangue.isNotEmpty) {
+          // sPaysLangue est au format "BE/FR" ou "FR/FR" - extraire les 2 premiers caractères
+          countryCodeFromLangue = sPaysLangue.split('/').first.toUpperCase();
+          if (countryCodeFromLangue.length == 2) {
+            // Vérifier que ce code pays existe dans la liste des pays disponibles
+            final countryExists = _allCountries.any((country) => 
+              (country.sPays ?? country.code ?? '').toUpperCase() == countryCodeFromLangue
+            );
+            if (countryExists) {
+              // ✅ Restaurer immédiatement ce pays dans l'UI
+              final restoredFavorites = LinkedHashSet<String>.from([countryCodeFromLangue!]);
+              final restoredOrderedFavorites = _orderedFavoritesList(restoredFavorites);
+              final restoredFavoritesString = restoredOrderedFavorites.join(',');
+              
+              print('✅ Pays restauré depuis sPaysLangue (country_selection): $countryCodeFromLangue');
+              
+              // ✅ Mettre à jour l'UI immédiatement
+              if (mounted) {
+                setState(() {
+                  _favoriteCountryCodes = LinkedHashSet<String>.from(restoredOrderedFavorites);
+                });
+              }
+              
+              // ✅ Sauvegarder le pays restauré dans le profil
+              final restoredProfile = _composeProfileData(
+                base: previousProfile,
+                overrides: {
+                  'sPaysFav': restoredFavoritesString,
+                },
+              );
+              await LocalStorageService.saveProfile(restoredProfile);
+              
+              // ✅ Appeler l'API pour sauvegarder le pays restauré
+              try {
+                final apiService = ApiService();
+                final updateResponse = await apiService.updateProfile({
+                  'sPaysFav': restoredFavoritesString,
+                });
+                
+                if (updateResponse.isNotEmpty) {
+                  final mergedProfile = _composeProfileData(
+                    base: restoredProfile,
+                    overrides: updateResponse,
+                  );
+                  mergedProfile['sPaysFav'] = restoredFavoritesString;
+                  await LocalStorageService.saveProfile(mergedProfile);
+                  print('✅ Pays restauré sauvegardé dans la BDD: $restoredFavoritesString');
+                }
+              } catch (e) {
+                print('⚠️ Erreur lors de la sauvegarde du pays restauré: $e');
+              }
+              
+              return; // Ne pas continuer avec la logique normale
+            }
+          }
+        }
+        
+        // ✅ Si on n'a pas pu restaurer depuis sPaysLangue, sauvegarder une chaîne vide
+        // (le pays sera restauré au retour sur la page)
+        print('⚠️ Impossible de restaurer depuis sPaysLangue - Sauvegarde d\'une chaîne vide');
+        _hasExplicitlyDeselectedAll = true;
+        
+        final emptyProfile = _composeProfileData(
+          base: previousProfile,
+          overrides: {
+            'sPaysFav': '', // Chaîne vide explicite
+          },
+        );
+        await LocalStorageService.saveProfile(emptyProfile);
+        print('✅ Profil sauvegardé avec sPaysFav vide - Le pays de sPaysLangue sera restauré au retour');
+        return; // Ne pas appeler l'API si on a tout décoché
+      }
+      
+      // ✅ Réinitialiser le flag si on a des pays sélectionnés
+      _hasExplicitlyDeselectedAll = false;
+      
+      // ✅ Appeler updateProfile qui retourne le profil mis à jour
       final updateResponse = await apiService.updateProfile({
         'sPaysFav': newFavoritesString,
       });
-      final refreshedProfile = updateResponse.isNotEmpty
-          ? updateResponse
-          : await apiService.getProfile();
 
-      if (refreshedProfile.isNotEmpty) {
+      // ✅ Utiliser directement la réponse de updateProfile (qui contient déjà le profil mis à jour)
+      // Ne pas appeler getProfile() car il peut retourner l'ancien profil depuis la session SNAL
+      if (updateResponse.isNotEmpty) {
+        // ✅ Merger avec le profil précédent mais donner la priorité au sPaysFav de la réponse
         final mergedProfile = _composeProfileData(
           base: previousProfile,
-          overrides: refreshedProfile,
+          overrides: updateResponse,
         );
+        
+        // ✅ CRITIQUE: Forcer le nouveau sPaysFav même si updateResponse ne le contient pas
+        // (comme SNAL qui met à jour directement formData.sPaysFav)
+        mergedProfile['sPaysFav'] = newFavoritesString;
+        
         await LocalStorageService.saveProfile(mergedProfile);
+        
+        print('✅ Pays favoris mis à jour: $newFavoritesString');
       } else {
+        // ✅ Fallback: Sauvegarder directement le nouveau sPaysFav
         final fallbackProfile = _composeProfileData(
           base: previousProfile,
           overrides: {
@@ -704,6 +880,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           },
         );
         await LocalStorageService.saveProfile(fallbackProfile);
+        
+        print('✅ Pays favoris sauvegardés (fallback): $newFavoritesString');
       }
     } catch (e) {
       print('❌ Erreur lors de la mise à jour des pays favoris: $e');
@@ -822,28 +1000,45 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     }
 
     final orderedFavorites = _orderedFavoritesList(_favoriteCountryCodes);
-    var selectedCountries = orderedFavorites
+    final selectedCountries = orderedFavorites
         .map(_findCountryByCode)
         .whereType<Country>()
         .toList();
 
-    if (selectedCountries.isEmpty && _allCountries.isNotEmpty) {
-      selectedCountries = _allCountries.take(4).toList();
+    // ✅ Ne PAS ajouter de pays par défaut si l'utilisateur a explicitement tout décoché
+    // (comme SNAL qui n'ajoute pas de pays par défaut)
+    // ⚠️ Cette logique ne doit s'appliquer que lors de la première initialisation
+    // Si _favoriteCountryCodes est vide ET qu'on n'a pas explicitement décoché, alors on peut ajouter des pays par défaut
+    // Mais si _hasExplicitlyDeselectedAll est true, on ne doit rien ajouter
+
+    // ✅ Créer une liste unique de tous les pays à afficher (comme SNAL displayedCountries)
+    // Les pays sélectionnés en premier, puis les non sélectionnés
+    final selectedCodes = _favoriteCountryCodes.toSet();
+    final allCountriesToDisplay = <Country>[];
+    
+    // ✅ D'abord ajouter les pays sélectionnés (dans l'ordre)
+    for (final code in orderedFavorites) {
+      final country = _findCountryByCode(code);
+      if (country != null) {
+        allCountriesToDisplay.add(country);
+      }
+    }
+    
+    // ✅ Ensuite ajouter les pays non sélectionnés (dans l'ordre de _allCountries)
+    for (final country in _allCountries) {
+      final code = (country.sPays ?? country.code ?? '').toUpperCase();
+      if (code.length == 2 && !selectedCodes.contains(code)) {
+        allCountriesToDisplay.add(country);
+      }
     }
 
-    final unselectedCountries = _allCountries
-        .where((country) {
-          final code = (country.sPays ?? '').toUpperCase();
-          return code.length == 2 && !_favoriteCountryCodes.contains(code);
+    // ✅ Créer les chips pour tous les pays (sélectionnés et non sélectionnés, sans duplication)
+    final allCountryChips = allCountriesToDisplay
+        .map((country) {
+          final code = (country.sPays ?? country.code ?? '').toUpperCase();
+          final isSelected = selectedCodes.contains(code);
+          return _buildCountryChip(country, isSelected, isMobile);
         })
-        .toList();
-
-    final selectedCountryChips = selectedCountries
-        .map((country) => _buildCountryChip(country, true, isMobile))
-        .toList();
-
-    final unselectedCountryChips = unselectedCountries
-        .map((country) => _buildCountryChip(country, false, isMobile))
         .toList();
 
     // Animation : SharedAxisTransition (slide horizontal - style Material Design)
@@ -873,114 +1068,69 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              // Affichage des drapeaux sans overflow
-              _buildCountryGrid(
-                selectedCountryChips,
-                unselectedCountryChips,
-                isMobile,
+              // ✅ Affichage des pays : 4 en haut et 3 en bas (responsive pour éviter le débordement)
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenWidth = constraints.maxWidth;
+                  final isMobile = screenWidth < 768;
+                  
+                  // Calculer la largeur disponible et ajuster l'espacement/taille
+                  final containerPadding = isMobile ? 32.0 : 64.0; // padding horizontal du container
+                  final availableWidth = screenWidth - containerPadding;
+                  
+                  // Pour 4 pays en haut : calculer l'espacement et la largeur max des chips
+                  final itemsPerRow = 4;
+                  final spacing = isMobile ? 6.0 : 6.0; // Espacement augmenté sur mobile
+                  final totalSpacing = spacing * (itemsPerRow - 1);
+                  // ✅ Augmenter la largeur des chips en utilisant plus d'espace disponible
+                  final maxChipWidth = isMobile ? (availableWidth - totalSpacing) / itemsPerRow : null;
+                  
+                  return Column(
+                    children: [
+                      // Première ligne : 4 pays
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (int i = 0; i < allCountryChips.length && i < 4; i++)
+                            Padding(
+                              padding: EdgeInsets.only(right: i < 3 ? spacing : 0.0),
+                              child: maxChipWidth != null
+                                  ? ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: maxChipWidth),
+                                      child: allCountryChips[i],
+                                    )
+                                  : allCountryChips[i],
+                            ),
+                        ],
+                      ),
+                      // Deuxième ligne : 3 pays (si il y en a plus de 4)
+                      if (allCountryChips.length > 4)
+                        Padding(
+                          padding: EdgeInsets.only(top: spacing),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (int i = 4; i < allCountryChips.length && i < 7; i++)
+                                Padding(
+                                  padding: EdgeInsets.only(right: i < 6 ? spacing : 0.0),
+                                  child: maxChipWidth != null
+                                      ? ConstrainedBox(
+                                          constraints: BoxConstraints(maxWidth: maxChipWidth),
+                                          child: allCountryChips[i],
+                                        )
+                                      : allCountryChips[i],
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCountryGrid(
-    List<Widget> selectedChips,
-    List<Widget> unselectedChips,
-    bool isMobile,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const double horizontalGap = 12.0;
-        const double verticalGap = 10.0;
-
-        final List<Widget> allChips = [...selectedChips, ...unselectedChips];
-        if (allChips.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final int columns = isMobile ? 4 : 6;
-        final rows = <Widget>[];
-        int cursor = 0;
-
-        while (cursor < allChips.length) {
-          final remaining = allChips.length - cursor;
-          final count = remaining < columns ? remaining : columns;
-          final double chipWidth = (constraints.maxWidth - horizontalGap * (columns - 1)) / columns;
-          final double totalWidth = count * chipWidth + (count - 1) * horizontalGap;
-
-          final rowChildren = <Widget>[];
-          for (int i = 0; i < count; i++) {
-            final chipIndex = cursor + i;
-            rowChildren.add(
-              SizedBox(
-                width: chipWidth,
-                child: TweenAnimationBuilder<double>(
-                  duration: Duration(milliseconds: 300 + (chipIndex * 50)),
-                  tween: Tween<double>(begin: 0.0, end: 1.0),
-                  curve: Curves.elasticOut,
-                  builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: 0.5 + (value * 0.5),
-                      child: Opacity(
-                        opacity: (value.clamp(0.0, 1.0) as double),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: isMobile ? 36.0 : 40.0,
-                          ),
-                          child: Align(
-                            alignment: Alignment.center,
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: horizontalGap * 0.15,
-                              ),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: child,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  child: allChips[chipIndex],
-                ),
-              ),
-            );
-
-            if (i < count - 1) {
-              rowChildren.add(SizedBox(width: horizontalGap));
-            }
-          }
-
-          rows.add(
-            Align(
-              alignment: Alignment.center,
-              child: SizedBox(
-                width: totalWidth,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: rowChildren,
-                ),
-              ),
-            ),
-          );
-
-          cursor += count;
-
-          if (cursor < allChips.length) {
-            rows.add(const SizedBox(height: verticalGap));
-          }
-        }
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: rows,
-        );
-      },
     );
   }
 
@@ -991,38 +1141,36 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       onTap: () => _toggleCountry(countryCode),
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 22 : 28,
-          vertical: isMobile ? 6 : 6,
+          horizontal: isMobile ? 22 : 24, // ✅ Encore augmenté sur mobile pour utiliser plus d'espace
+          vertical: isMobile ? 8 : 10,
         ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(isMobile ? 24 : 28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
+          // ✅ Pas de box-shadow ni de bordures (comme SNAL)
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _flagEmoji(countryCode),
-              style: TextStyle(fontSize: isMobile ? 18 : 20),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              isSelected ? '✓' : '+',
-              style: TextStyle(
-                fontSize: isMobile ? 15 : 17,
-                color: isSelected ? const Color(0xFF0D6EFD) : Colors.grey[500],
-                fontWeight: FontWeight.bold,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center, // ✅ Centrer le contenu
+            children: [
+              // Drapeau du pays
+              Text(
+                _flagEmoji(countryCode),
+                style: TextStyle(fontSize: isMobile ? 16 : 18), // ✅ Taille augmentée sur mobile
               ),
-            ),
-          ],
+              SizedBox(width: isMobile ? 8 : 8), // ✅ Espacement augmenté sur mobile
+              // Icône : coche bleue si sélectionné, plus gris si non sélectionné (comme SNAL)
+              Icon(
+                isSelected ? Icons.check : Icons.add,
+                size: isMobile ? 16 : 18, // ✅ Taille augmentée sur mobile
+                color: isSelected 
+                    ? const Color(0xFF0D6EFD) // Bleu pour sélectionné (comme SNAL i-lucide-check)
+                    : Colors.grey[400], // Gris pour non sélectionné (comme SNAL i-lucide-plus text-gray-400)
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1074,11 +1222,11 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                     closedShape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    closedColor: const Color(0xFF0D6EFD),
+                    closedColor: const Color(0xFF0058CC), // ✅ Couleur #0058CC
                     closedBuilder: (context, action) {
                       return Container(
                         padding: EdgeInsets.symmetric(
-                          vertical: isMobile ? 16 : 20,
+                          vertical: isMobile ? 12 : 14, // ✅ Hauteur réduite
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1112,7 +1260,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                   if (_isLoading)
                     _buildLoadingState(isMobile)
                   else if (_errorMessage.isNotEmpty)
-                    _buildErrorState()
+                    _buildErrorState(translationService)
                   else if (_filteredProducts.isNotEmpty)
                     _buildSearchResults(isMobile)
                   else
@@ -1149,9 +1297,10 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
         keyboardType: TextInputType.number,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
-          hintText: translationService.translate('PRODUCTSEARCH_HINT_CODE'),
+          hintText: translationService.translate('FRONTPAGE_Msg06'),
           hintStyle: TextStyle(color: Colors.grey[400]),
-          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+          // ✅ Icône search enlevée
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // ✅ Hauteur réduite
           suffixIcon: _isLoading
               ? Container(
                   width: 20,
@@ -1176,7 +1325,6 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                     )
                   : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
@@ -1208,32 +1356,55 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     );
   }
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(TranslationService translationService) {
+    // Récupérer les traductions en privilégiant le backend
+    final errorTitle = translationService.translateFromBackend('PRODUCTCODE_Msg04');
+    
+    // Si _errorMessage contient une clé de traduction (commence par une majuscule et contient des underscores),
+    // essayer de la traduire, sinon utiliser _errorMessage tel quel
+    String errorMessage;
+    if (_errorMessage.isNotEmpty) {
+      // Vérifier si _errorMessage ressemble à une clé de traduction
+      if (_errorMessage.contains('_') && _errorMessage == _errorMessage.toUpperCase()) {
+        // C'est probablement une clé de traduction, essayer de la traduire
+        final translated = translationService.translateFromBackend(_errorMessage);
+        errorMessage = (translated != _errorMessage) ? translated : _errorMessage;
+      } else {
+        // C'est déjà un message traduit, l'utiliser tel quel
+        errorMessage = _errorMessage;
+      }
+    } else {
+      // Utiliser la traduction par défaut
+      errorMessage = translationService.translateFromBackend('HTML_SEARCH_BADREFERENCE');
+    }
+    
+    // Remplacer <br> par des sauts de ligne
+    final formattedMessage = errorMessage.replaceAll('<br>', '\n');
+    
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: Colors.red[600],
-          ),
-          const SizedBox(height: 16),
+          // Titre de l'erreur
           Text(
-            'Erreur de recherche',
+            errorTitle,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
               color: Colors.blue[700],
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          // Message d'erreur principal (gère les sauts de ligne automatiquement)
           Text(
-            _errorMessage,
+            formattedMessage,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               color: Colors.blue[600],
+              height: 1.5,
             ),
             textAlign: TextAlign.center,
           ),
@@ -1254,7 +1425,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            translationService.translate('PRODUCTSEARCH_ENTER_CODE'),
+            translationService.translate('WISHLIST_Msg48'),
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[600],

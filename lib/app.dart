@@ -22,6 +22,7 @@ import 'services/auth_notifier.dart';
 import 'services/local_storage_service.dart';
 import 'services/route_persistence_service.dart';
 import 'services/route_tracker.dart';
+import 'services/oauth_mobile_handler.dart';
 // Import deep_link_service supprimé - plus utilisé
 
 /// Application principale
@@ -36,6 +37,7 @@ class _JirigAppState extends State<JirigApp> {
   GoRouter? _router;
   bool _isLoading = true;
   final ApiService _apiService = ApiService(); // Instance singleton réutilisable
+  final OAuthMobileHandler _oauthMobileHandler = OAuthMobileHandler();
   // DeepLinkService supprimé - plus utilisé
 
   // ✅ Déterminer la route initiale depuis SharedPreferences (mobile-first)
@@ -78,6 +80,9 @@ class _JirigAppState extends State<JirigApp> {
       // Initialiser le profil local (localStorage)
       print('📱 Initialisation du profil local...');
       await LocalStorageService.initializeProfile();
+      
+      // Initialiser l'écoute des callbacks OAuth mobiles (deep links)
+      await _oauthMobileHandler.init();
       
       // Vérifier le profil stocké
       final profile = await LocalStorageService.getProfile();
@@ -235,6 +240,7 @@ class _JirigAppState extends State<JirigApp> {
   
   @override
   void dispose() {
+    _oauthMobileHandler.dispose();
     // DeepLinkService supprimé - plus de dispose nécessaire
     super.dispose();
   }

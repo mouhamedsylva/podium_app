@@ -208,7 +208,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                           label: Consumer<TranslationService>(
                             builder: (context, translationService, child) {
                               return Text(
-                                translationService.translate('PROFILE_EDIT_BUTTON'),
+                                translationService.translateFromBackend('PROFIL_UPDATE_PROFIL'),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: isMobile ? 16 : 18,
@@ -284,7 +284,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              translationService.translate('PROFILE_MAIN_COUNTRY'),
+              translationService.translateFromBackend('PROFIL_COUNTRY'),
               style: TextStyle(
                 fontSize: isMobile ? 20 : 24,
                 fontWeight: FontWeight.bold,
@@ -340,7 +340,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   border: Border.all(color: Colors.grey[300]!),
                 ),
                 child: Text(
-                  translationService.translate('PROFILE_NOT_SELECTED'),
+                  translationService.translateFromBackend('PROFIL_NOT_SELECTED'),
                   style: TextStyle(
                     fontSize: isMobile ? 16 : 18,
                     color: Colors.grey[600],
@@ -387,7 +387,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              translationService.translate('PROFILE_FAVORITE_COUNTRIES'),
+              translationService.translateFromBackend('PROFIL_FAVOCOUNTRY'),
               style: TextStyle(
                 fontSize: isMobile ? 20 : 24,
                 fontWeight: FontWeight.bold,
@@ -405,7 +405,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   border: Border.all(color: Colors.grey[300]!),
                 ),
                 child: Text(
-                  translationService.translate('PROFILE_NO_FAVORITE_COUNTRIES'),
+                  translationService.translateFromBackend('PROFILE_NO_FAVORITE_COUNTRIES'),
                   style: TextStyle(
                     fontSize: isMobile ? 16 : 18,
                     color: Colors.grey[600],

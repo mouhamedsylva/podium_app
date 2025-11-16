@@ -193,7 +193,7 @@ class _PremiumBannerState extends State<PremiumBanner> with TickerProviderStateM
                                screenWidth < 900 ? 14 : 16),
                 Text(
                   // 100% gratuite
-                  context.watch<TranslationService>().translate('BANNER_FREE_100'),
+                  context.watch<TranslationService>().translate('BANNER_FREE_TITLE'),
                   style: TextStyle(
                     fontSize: screenWidth < 400 ? 14 : 
                              screenWidth < 600 ? 16 : 
@@ -226,8 +226,8 @@ class _PremiumBannerState extends State<PremiumBanner> with TickerProviderStateM
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      // Intro banner
-                      context.watch<TranslationService>().translate('BANNER_FREE_INTRO'),
+                      // Concaténation de BANNER_FREE_INTRO + BANNER_FREE_100
+                      '${context.watch<TranslationService>().translate('BANNER_FREE_INTRO')} ${context.watch<TranslationService>().translate('BANNER_FREE_100')}',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: screenWidth < 400 ? 9 : 

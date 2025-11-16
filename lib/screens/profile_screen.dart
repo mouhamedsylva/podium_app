@@ -276,7 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // ✅ Mettre à jour via l'API (qui utilisera les pays favoris et pays principal depuis localStorage)
       final response = await apiService.updateProfile(updateData);
       
-      if (mounted) {
+          if (mounted) {
         setState(() => _isSaving = false);
         
         // Vérifier si la réponse indique un succès
@@ -333,10 +333,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Profil mis à jour avec succès'),
+              SnackBar(
+                content: Text(Provider.of<TranslationService>(context, listen: false).translateFromBackend('PROFILE_UPDATED')),
                 backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
+                duration: const Duration(seconds: 2),
               ),
             );
             
@@ -354,7 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Afficher un message d'erreur si la réponse n'indique pas un succès
           final errorMessage = response['message'] ?? 
                               response['error'] ?? 
-                              'Erreur lors de la mise à jour du profil';
+                              Provider.of<TranslationService>(context, listen: false).translateFromBackend('PROFILE_UPDATE_ERROR');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(errorMessage),
@@ -635,7 +635,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Annuler'),
+                child: Text(
+                  Provider.of<TranslationService>(context).translateFromBackend('WISHLIST_Msg30'),
+                ),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -899,7 +901,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 20),
                     
                     // Bouton de déconnexion
-                    _buildActionButtons(isMobile),
+                    _buildActionButtons(isMobile, translationService),
                     
                     const SizedBox(height: 100),
                   ],
@@ -1038,7 +1040,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Modifier les informations',
+                translationService.translateFromBackend('PROFIL_MAJ_PROFIL'),
                 style: TextStyle(
                   fontSize: isMobile ? 18 : 20,
                   fontWeight: FontWeight.bold,
@@ -1048,25 +1050,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
               
               const SizedBox(height: 20),
               
-              _buildTextField('Prénom', _prenomController, Icons.person, isMobile),
+              _buildTextField(
+                translationService.translateFromBackend('PROFIL_FIRST_NAME'),
+                _prenomController,
+                Icons.person,
+                isMobile,
+                hint: translationService.translateFromBackend('PROFILE_Enter-FIRST_NAME'),
+              ),
               const SizedBox(height: 16),
               
-              _buildTextField('Nom', _nomController, Icons.person_outline, isMobile),
+              _buildTextField(
+                translationService.translateFromBackend('PROFIL_SECOND_NAME'),
+                _nomController,
+                Icons.person_outline,
+                isMobile,
+                hint: translationService.translateFromBackend('PROFIL_ENTER_SECOND_NAME'),
+              ),
               const SizedBox(height: 16),
               
-              _buildTextField('Email', _emailController, Icons.email, isMobile, isEmail: true),
+              _buildTextField(
+                translationService.translateFromBackend('PROFIL_EMAIL'),
+                _emailController,
+                Icons.email,
+                isMobile,
+                isEmail: true,
+                hint: translationService.translateFromBackend('PROFILE_ENTER_MAIL'),
+              ),
               const SizedBox(height: 16),
               
-              _buildTextField('Téléphone', _telController, Icons.phone, isMobile),
+              _buildTextField(
+                translationService.translateFromBackend('PROFIL_PHONE'),
+                _telController,
+                Icons.phone,
+                isMobile,
+                hint: translationService.translateFromBackend('PROFILE_ENTER_PHONE'),
+              ),
               const SizedBox(height: 16),
               
-              _buildTextField('Rue', _rueController, Icons.home, isMobile),
+              _buildTextField(
+                translationService.translateFromBackend('PROFIL_STREET'),
+                _rueController,
+                Icons.home,
+                isMobile,
+                hint: translationService.translateFromBackend('PROFILE_ENTER_SREET'),
+              ),
               const SizedBox(height: 16),
               
-              _buildTextField('Code postal', _zipController, Icons.location_on, isMobile),
+              _buildTextField(
+                translationService.translateFromBackend('PROFILE_POSTAL_CODE'),
+                _zipController,
+                Icons.location_on,
+                isMobile,
+                hint: translationService.translateFromBackend('PROFILE_ENTER_POSTAL_CODE'),
+              ),
               const SizedBox(height: 16),
               
-              _buildTextField('Ville', _cityController, Icons.location_city, isMobile),
+              _buildTextField(
+                translationService.translateFromBackend('PROFIL_CITY'),
+                _cityController,
+                Icons.location_city,
+                isMobile,
+                hint: translationService.translateFromBackend('PROFILE_ENTER_POSTAL_CITY'),
+              ),
             ],
           ),
         ),
@@ -1173,6 +1218,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     IconData icon,
     bool isMobile, {
     bool isEmail = false,
+    String? hint,
   }) {
     return TextFormField(
       controller: controller,
@@ -1182,6 +1228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hint,
         prefixIcon: Icon(icon, color: const Color(0xFF3B82F6)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1203,10 +1250,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       validator: (value) {
-        if (label == 'Email' && (value == null || value.isEmpty)) {
+        if (isEmail && (value == null || value.isEmpty)) {
           return 'L\'email est requis';
         }
-        if (label == 'Email' && !value!.contains('@')) {
+        if (isEmail && !value!.contains('@')) {
           return 'Email invalide';
         }
         return null;
@@ -1281,7 +1328,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           _buildCountrySelectionTile(
             Icons.flag,
-            'Pays principal',
+            translationService.translateFromBackend('PROFIL_COUNTRY'),
             _profile?['sPaysLangue'] ?? 'FR/fr',
             isMobile,
           ),
@@ -1290,7 +1337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           _buildFavoriteCountriesTile(
             Icons.favorite,
-            'Pays favoris',
+            translationService.translateFromBackend('PROFIL_FAVOCOUNTRY'),
             _profile?['sPaysFav'] ?? '',
             isMobile,
           ),
@@ -1541,7 +1588,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildActionButtons(bool isMobile) {
+  Widget _buildActionButtons(bool isMobile, TranslationService translationService) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 0),
       child: Column(
@@ -1571,13 +1618,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : Text(
-                      _isEditing ? 'Sauvegarder' : 'Mettre à jour le profil',
-                      style: TextStyle(
-                        fontSize: isMobile ? 14 : 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  : Consumer<TranslationService>(builder: (context, t, _) {
+                      return Text(
+                        _isEditing
+                            ? t.translateFromBackend('PROFIL_UPDATE_PROFIL')
+                            : t.translateFromBackend('PROFIL_MAJ_PROFIL'),
+                        style: TextStyle(
+                          fontSize: isMobile ? 14 : 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    }),
             ),
           ),
           
@@ -1626,7 +1677,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               child: Text(
-                _isEditing ? 'Annuler' : 'Retour',
+                _isEditing 
+                  ? translationService.translateFromBackend('WISHLIST_Msg30')
+                  : 'Retour',
                 style: TextStyle(
                   fontSize: isMobile ? 14 : 16,
                   fontWeight: FontWeight.w600,

@@ -287,14 +287,74 @@ class _HomeScreenState extends State<HomeScreen>
             opacity: _titleFadeAnimation,
             child: ScaleTransition(
               scale: _titleScaleAnimation,
-              child: _buildStyledTitle(
-                translationService.translate('FRONTPAGE_Msg02'),
+              child: _buildConcatenatedTitle(
+                translationService,
                 isMobile,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// Construire le titre en concaténant plusieurs clés de traduction
+  /// avec IKEA en dur avec le style existant (orange)
+  Widget _buildConcatenatedTitle(TranslationService translationService, bool isMobile) {
+    final baseStyle = TextStyle(
+      fontSize: isMobile ? 40 : 48,
+      fontWeight: FontWeight.w800,
+      color: Colors.black,
+      height: 1.3,
+      letterSpacing: -0.5,
+    );
+    
+    final ikeaStyle = TextStyle(
+      fontSize: isMobile ? 40 : 48,
+      fontWeight: FontWeight.w800,
+      color: const Color(0xFFF59E0B), // Orange
+      height: 1.3,
+      letterSpacing: -0.5,
+    );
+    
+    List<InlineSpan> spans = [];
+    
+    // 1. "LOGINREQUIRED01": "Comparez les prix"
+    spans.add(TextSpan(
+      text: translationService.translateFromBackend('LOGINREQUIRED01'),
+      style: baseStyle,
+    ));
+    
+    // 2. Espace
+    spans.add(const TextSpan(text: ' '));
+    
+    // 3. "IKEA" en dur avec style orange
+    spans.add(TextSpan(
+      text: 'IKEA',
+      style: ikeaStyle,
+    ));
+    
+    // 4. Espace
+    spans.add(const TextSpan(text: ' '));
+    
+    // 5. "FRONTPAGE_Msg78": "dans plusieurs pays"
+    spans.add(TextSpan(
+      text: translationService.translateFromBackend('FRONTPAGE_Msg78'),
+      style: baseStyle,
+    ));
+    
+    // 6. Espace
+    spans.add(const TextSpan(text: ' '));
+    
+    // 7. "FRONTPAGE_Msg79": "en un clic"
+    spans.add(TextSpan(
+      text: translationService.translateFromBackend('FRONTPAGE_Msg79'),
+      style: baseStyle,
+    ));
+    
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(children: spans),
     );
   }
 
@@ -346,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ));
       } else if (paysRegex.hasMatch(match.group(0)!)) {
-        // Ajouter "pays" normal puis l'icône
+        // Ajouter "pays" normal (sans icône)
         spans.add(TextSpan(
           text: match.group(0)!,
           style: TextStyle(
@@ -355,19 +415,6 @@ class _HomeScreenState extends State<HomeScreen>
             color: Colors.black,
             height: 1.3,
             letterSpacing: -0.5,
-          ),
-        ));
-        
-        // Ajouter l'icône après "pays"
-        spans.add(WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Transform.rotate(
-            angle: 0.2,
-            child: Icon(
-              Icons.touch_app,
-              size: isMobile ? 36 : 44,
-              color: Colors.grey[700],
-            ),
           ),
         ));
       }
@@ -412,14 +459,14 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildModulesGrid(bool isMobile, TranslationService translationService) {
     final modules = [
       {
-        'title': translationService.translate('HOME_MODULE_SEARCH'),
+        'title': translationService.translateFromBackend('HOME_MODULE_SEARCH'),
         'icon': Icons.search,
         'color': const Color(0xFF3B82F6), // Bleu
         'route': '/product-code',
         'delay': 0, // Pas de délai
       },
       {
-        'title': translationService.translate('HOME_MODULE_SCANNER'),
+        'title': translationService.translateFromBackend('HOME_MODULE_SCANNER'),
         'icon': Icons.qr_code_scanner,
         'color': const Color(0xFFF59E0B), // Orange/Jaune
         'route': '/scanner',

@@ -134,7 +134,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   );
                   final actionWidget = isLoggedIn
                       ? _buildUserAvatar(
-                          context, isMobile, authNotifier, userInfo)
+                          context, isMobile, authNotifier, userInfo, translationService)
                       : connectionButton;
 
                   return Row(
@@ -171,7 +171,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   Widget _buildSocialIcons(bool isMobile, {double? maxWidth}) {
     double iconSize = isMobile ? 26.0 : 30.0;
-    double spacing = isMobile ? 6.0 : 12.0;
+    double spacing = isMobile ? 18.0 : 24.0; // ✅ Encore plus d'espacement entre les icônes sociales
 
     final socialItems = [
       {
@@ -323,7 +323,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   /// Widget pour afficher l'avatar de l'utilisateur avec dropdown
-  Widget _buildUserAvatar(BuildContext context, bool isMobile, AuthNotifier authNotifier, Map<String, String>? userInfo) {
+  Widget _buildUserAvatar(BuildContext context, bool isMobile, AuthNotifier authNotifier, Map<String, String>? userInfo, TranslationService translationService) {
     final userName = '${userInfo?['prenom'] ?? ''} ${userInfo?['nom'] ?? ''}'.trim();
     final userPhoto = userInfo?['photo'];
     
@@ -379,7 +379,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               Icon(Icons.logout, color: Colors.red[600], size: 20),
               SizedBox(width: 12),
               Text(
-                'Déconnexion',
+                translationService.translateFromBackend('PROFILE_LOGOUT'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -425,6 +425,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   /// Gérer la déconnexion
   Future<void> _handleLogout(BuildContext context, AuthNotifier authNotifier) async {
+    final translationService = Provider.of<TranslationService>(context, listen: false);
     // Afficher une confirmation
     final confirmed = await showDialog<bool>(
       context: context,
@@ -434,21 +435,21 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
-            'Déconnexion',
+            translationService.translateFromBackend('PROFILE_LOGOUT'),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 18,
             ),
           ),
           content: Text(
-            'Êtes-vous sûr de vouloir vous déconnecter ?',
+            translationService.translateFromBackend('PROFILE_LOGOUT_CONFIRM'),
             style: TextStyle(fontSize: 14),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(
-                'Annuler',
+                translationService.translateFromBackend('WISHLIST_Msg30'),
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ),
@@ -461,7 +462,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: Text('Déconnexion'),
+              child: Text(translationService.translateFromBackend('PROFILE_LOGOUT')),
             ),
           ],
         );
@@ -469,11 +470,18 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
 
     if (confirmed == true) {
+      // Vérifier la route actuelle pour rediriger si nécessaire
+      final currentRoute = GoRouterState.of(context).uri.path;
+      final isOnProfileScreen = currentRoute == '/profile' || currentRoute == '/profil' || currentRoute.startsWith('/profile/');
+      
       // Effacer les informations de l'utilisateur via AuthNotifier
       await authNotifier.onLogout();
       
-      // ✅ Ne pas rediriger - rester sur la page actuelle
-      // L'utilisateur reste sur la page où il se trouve après la déconnexion
+      // ✅ Rediriger vers wishlist si on est dans profile_screen ou profile_detail_screen
+      if (isOnProfileScreen && context.mounted) {
+        context.go('/wishlist');
+      }
+      // Sinon, rester sur la page actuelle
     }
   }
 
@@ -561,7 +569,11 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
   
   void _updateSelectedCountry(SettingsService settingsService, CountryNotifier countryNotifier, String countryCode, String languageCode) {
-    // Créer un objet Country basique pour la mise à jour
+    // ✅ IMPORTANT: Ne PAS modifier selectedCountry lors du changement de langue
+    // Le pays choisi lors de l'onboarding doit rester inchangé
+    // Seulement mettre à jour la langue et sPaysLangue dans le profil
+    
+    // Créer un objet Country basique pour la notification (mais ne pas le sauvegarder comme selectedCountry)
     final country = Country(
       sPays: countryCode,
       sDescr: _getCountryName(countryCode),
@@ -570,20 +582,23 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       image: '/img/flags/${countryCode.toUpperCase()}.PNG',
     );
     
-    // Mettre à jour le pays sélectionné dans le SettingsService
-    settingsService.updateSelectedCountry(country);
+    // ✅ Ne PAS mettre à jour selectedCountry dans SettingsService
+    // settingsService.updateSelectedCountry(country); // ❌ DÉSACTIVÉ
     
-    // Notifier les changements via le CountryNotifier
+    // Notifier les changements via le CountryNotifier (pour l'affichage)
     countryNotifier.updateSelectedCountry(country);
     
-    // Sauvegarder les paramètres
-    settingsService.saveSettings(UserSettings(
-      selectedCountry: country,
-      languageCode: languageCode,
-      termsAccepted: true,
-      favoriteCountries: [],
-      lastUpdated: DateTime.now(),
-    ));
+    // ✅ Ne PAS sauvegarder le nouveau pays comme selectedCountry
+    // Seulement mettre à jour la langue dans les paramètres (sans modifier selectedCountry)
+    settingsService.loadSettings().then((currentSettings) {
+      settingsService.saveSettings(UserSettings(
+        selectedCountry: currentSettings.selectedCountry, // ✅ Conserver le pays original de l'onboarding
+        languageCode: languageCode, // ✅ Mettre à jour uniquement la langue
+        termsAccepted: currentSettings.termsAccepted,
+        favoriteCountries: currentSettings.favoriteCountries,
+        lastUpdated: DateTime.now(),
+      ));
+    });
   }
   
   String _getCountryName(String countryCode) {

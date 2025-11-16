@@ -5,6 +5,7 @@ const path = require('path');
 
 const app = express();
 const PORT = 3001;
+const FLUTTER_APP_URL = process.env.FLUTTER_APP_URL || 'http://localhost:3000';
 
 // Servir les fichiers statiques (pour oauth-callback.html)
 app.use(express.static(path.join(__dirname, 'web')));
@@ -839,7 +840,7 @@ app.post('/api/update-quantity-articleBasket', express.json(), async (req, res) 
 
 // ℹ️ OAUTH GOOGLE & FACEBOOK
 // Ces endpoints ne sont PAS définis ici car Flutter redirige DIRECTEMENT vers SNAL
-// Flutter utilise: https://jirig.be/api/auth/google (pas via proxy)
+// Flutter utilise: https://jirig.be/api/auth/google-mobile (pas via proxy)
 // Après OAuth, SNAL redirige vers https://jirig.be/ et HomeScreen détecte la connexion
 
 // Middleware spécial pour /auth/init - initialisation du profil utilisateur
@@ -1890,18 +1891,18 @@ app.post('/api/auth/login-with-code', express.json(), async (req, res) => {
 });
 
 // **********************************************************************
-// 🔐 AUTH/GOOGLE: Connexion OAuth Google
+// 🔐 AUTH/GOOGLE-MOBILE: Connexion OAuth Google
 // **********************************************************************
-app.get('/api/auth/google', async (req, res) => {
+app.get('/api/auth/google-mobile', async (req, res) => {
   console.log(`\n${'*'.repeat(70)}`);
-  console.log(`🔐 AUTH/GOOGLE: Connexion OAuth Google`);
+  console.log(`🔐 AUTH/GOOGLE-MOBILE: Connexion OAuth Google Mobile`);
   console.log(`${'*'.repeat(70)}`);
   
   try {
     // Rediriger directement vers SNAL OAuth (sans paramètres)
-    const snallUrl = 'https://jirig.be/api/auth/google';
+    const snallUrl = 'https://jirig.be/api/auth/google-mobile';
     
-    console.log(`🌐 Redirection vers SNAL Google OAuth: ${snallUrl}`);
+    console.log(`🌐 Redirection vers SNAL Google OAuth Mobile: ${snallUrl}`);
     console.log(`📝 Note: SNAL redirigera vers / après OAuth, nous intercepterons cette redirection`);
     
     res.redirect(snallUrl);
@@ -1955,16 +1956,21 @@ app.get('/api/auth/oauth-callback', async (req, res) => {
     console.log(`📥 Callback OAuth reçu:`, { provider, success, error });
     console.log(`📥 Query params complets:`, req.query);
     
+    const providerName = provider || 'unknown';
+
     if (success === 'true' || !error) {
       console.log(`✅ OAuth ${provider} réussi, redirection vers Flutter`);
       
       // Rediriger vers Flutter avec succès
-      res.redirect('http://localhost:3000/#/home?oauth=success&provider=' + (provider || 'unknown'));
+      const successUrl = `${FLUTTER_APP_URL}/#/home?oauth=success&provider=${encodeURIComponent(providerName)}`;
+      res.redirect(successUrl);
     } else {
       console.log(`❌ OAuth ${provider} échoué: ${error}`);
       
       // Rediriger vers Flutter avec erreur
-      res.redirect('http://localhost:3000/#/login?oauth=error&provider=' + (provider || 'unknown') + '&error=' + (error || 'unknown'));
+      const errorMessage = error || 'unknown';
+      const errorUrl = `${FLUTTER_APP_URL}/#/login?oauth=error&provider=${encodeURIComponent(providerName)}&error=${encodeURIComponent(errorMessage)}`;
+      res.redirect(errorUrl);
     }
   } catch (error) {
     console.error('❌ Auth/OAuth-Callback Error:', error.message);
@@ -1986,13 +1992,15 @@ app.get('/api/auth/oauth-success', async (req, res) => {
   
   try {
     const { provider } = req.query;
+    const providerName = provider || 'unknown';
     
     console.log(`📥 Redirection SNAL interceptée avec provider:`, provider);
     console.log(`📥 Query params complets:`, req.query);
     
     // Rediriger vers Flutter avec succès
-    console.log(`✅ OAuth ${provider || 'unknown'} réussi, redirection vers Flutter`);
-    res.redirect('http://localhost:3000/#/home?oauth=success&provider=' + (provider || 'unknown'));
+    console.log(`✅ OAuth ${providerName} réussi, redirection vers Flutter`);
+    const successUrl = `${FLUTTER_APP_URL}/#/home?oauth=success&provider=${encodeURIComponent(providerName)}`;
+    res.redirect(successUrl);
     
   } catch (error) {
     console.error('❌ Auth/OAuth-Success Error:', error.message);
@@ -2288,6 +2296,164 @@ app.post('/api/auth/login', express.json(), async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la connexion',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 🔐 AUTH/DISCONNECT: Déconnexion utilisateur (comme SNAL-Project disconnect.post.ts)
+// **********************************************************************
+app.post('/api/auth/disconnect', express.json(), async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🚪 AUTH/DISCONNECT: Déconnexion utilisateur`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    // ✅ Récupérer le GuestProfile depuis le header X-Guest-Profile (Flutter) ou les cookies (Web)
+    const guestProfileHeader = req.headers['x-guest-profile'];
+    let guestProfile;
+    
+    console.log(`📥 Headers reçus:`, {
+      'x-guest-profile': guestProfileHeader ? guestProfileHeader.substring(0, 100) + '...' : '(aucun)',
+      'x-iprofile': req.headers['x-iprofile'] || '(aucun)',
+      'x-ibasket': req.headers['x-ibasket'] || '(aucun)',
+      'cookie': req.headers.cookie ? req.headers.cookie.substring(0, 100) + '...' : '(aucun)'
+    });
+    
+    if (guestProfileHeader) {
+      // Flutter envoie via header
+      try {
+        guestProfile = JSON.parse(guestProfileHeader);
+        console.log(`✅ GuestProfile depuis Flutter localStorage (via header):`, guestProfile);
+      } catch (e) {
+        console.log(`❌ Erreur parsing GuestProfile header:`, e.message);
+        return res.status(400).json({
+          success: false,
+          error: 'Header invalide',
+          message: 'Impossible de parser le header X-Guest-Profile'
+        });
+      }
+    } else {
+      // Web utilise les cookies
+      const cookies = req.headers.cookie || '';
+      const guestProfileMatch = cookies.match(/GuestProfile=([^;]+)/);
+      
+      if (guestProfileMatch) {
+        try {
+          guestProfile = JSON.parse(decodeURIComponent(guestProfileMatch[1]));
+          console.log(`🍪 GuestProfile trouvé dans cookies:`, guestProfile);
+        } catch (e) {
+          console.log(`❌ Erreur parsing GuestProfile cookie:`, e.message);
+        }
+      }
+    }
+    
+    // Si aucun profil trouvé, créer un profil vide
+    if (!guestProfile) {
+      guestProfile = { iProfile: '', iBasket: '', sPaysLangue: '', sPaysFav: '' };
+      console.log(`⚠️ Aucun GuestProfile trouvé, utilisation d'un profil vide`);
+    }
+    
+    const iProfile = guestProfile.iProfile || '';
+    const iBasket = guestProfile.iBasket || '';
+    const sPaysLangue = guestProfile.sPaysLangue || '';
+    const sPaysFav = guestProfile.sPaysFav || '';
+    
+    console.log(`📋 Profil actuel avant déconnexion:`, {
+      iProfile: iProfile || '(vide)',
+      iBasket: iBasket || '(vide)',
+      sPaysLangue: sPaysLangue || '(vide)',
+      sPaysFav: sPaysFav || '(vide)'
+    });
+    
+    // Créer le cookie GuestProfile pour SNAL
+    const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(guestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+    
+    console.log(`📱 Appel SNAL API: https://jirig.be/api/auth/disconnect`);
+    console.log(`🍪 Cookie GuestProfile envoyé:`, cookieString.substring(0, 100) + '...');
+    
+    // Faire la requête POST vers l'API SNAL-Project
+    const fetch = require('node-fetch');
+    const response = await fetch(`https://jirig.be/api/auth/disconnect`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Cookie': cookieString,
+        'User-Agent': 'Mobile-Flutter-App/1.0'
+      }
+    });
+    
+    console.log(`📡 Response status: ${response.status}`);
+    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`❌ Error response from SNAL:`, errorText);
+      
+      return res.status(response.status).json({
+        success: false,
+        error: 'API SNAL Error',
+        message: `Erreur ${response.status}: ${response.statusText}`,
+        details: errorText
+      });
+    }
+    
+    const responseData = await response.json();
+    console.log(`✅ Réponse SNAL disconnect:`, responseData);
+    
+    // Récupérer les nouveaux identifiants depuis la réponse
+    const newIProfile = responseData.iProfile?.toString() || '';
+    const newIBasket = responseData.iBasket?.toString() || '';
+    const success = responseData.success === true;
+    
+    console.log(`📋 Nouveaux identifiants après déconnexion:`, {
+      iProfile: newIProfile || '(vide)',
+      iBasket: newIBasket || '(vide)',
+      success: success
+    });
+    
+    if (success && newIProfile && newIBasket) {
+      console.log(`✅ Déconnexion réussie - Nouveaux identifiants anonymes générés`);
+      
+      // Créer le nouveau GuestProfile avec les nouveaux identifiants
+      const newGuestProfile = {
+        iProfile: newIProfile,
+        iBasket: newIBasket,
+        sPaysLangue: sPaysLangue, // Conserver la langue
+        sPaysFav: sPaysFav // Conserver les pays favoris
+      };
+      
+      const newCookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(newGuestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+      
+      console.log(`🍪 Nouveau GuestProfile créé:`, newGuestProfile);
+      console.log(`🍪 Nouveau cookie à renvoyer:`, newCookieString.substring(0, 100) + '...');
+      
+      // Renvoyer la réponse avec le nouveau cookie
+      res.set('Set-Cookie', newCookieString);
+      res.status(200).json({
+        success: true,
+        iProfile: newIProfile,
+        iBasket: newIBasket,
+        message: 'Déconnexion réussie'
+      });
+      
+      console.log(`✅ Réponse disconnect envoyée avec succès`);
+    } else {
+      console.log(`⚠️ Réponse disconnect incomplète ou échec`);
+      res.status(200).json({
+        success: false,
+        message: 'Déconnexion incomplète',
+        data: responseData
+      });
+    }
+  } catch (error) {
+    console.error('❌ Auth/Disconnect Error:', error.message);
+    console.error('❌ Stack trace:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la déconnexion',
       message: error.message
     });
   }
@@ -2629,7 +2795,7 @@ app.use('/api', createProxyMiddleware({
       '/api/auth/init',
       '/api/auth/login',
       '/api/auth/login-with-code',  // Connexion avec code - géré spécifiquement
-      '/api/auth/google',      // OAuth Google - géré directement par Flutter
+      '/api/auth/google-mobile',      // OAuth Google mobile - géré directement par Flutter
       '/api/auth/facebook',    // OAuth Facebook - géré directement par Flutter
       '/api/oauth/callback',   // Callback OAuth - non utilisé
       '/api/get-info-profil',
