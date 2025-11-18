@@ -138,26 +138,76 @@ app.get('/api/search-article', async (req, res) => {
     // IMPORTANT: SNAL-Project utilise UNIQUEMENT les paramètres 'search' et 'limit'
     // Les autres paramètres (iProfile, iBasket, sPaysLangue) viennent des COOKIES
     
-    // Récupérer le GuestProfile depuis le header
-    const guestProfileHeader = req.headers['x-guest-profile'];
+    // ✅ PRIORITÉ 1: Récupérer le GuestProfile depuis les COOKIES de la requête (comme SNAL)
+    // C'est la source principale pour Web
     let existingProfile = { iProfile: '', iBasket: '', sPaysLangue: '', sPaysFav: '' };
+    const cookies = req.headers.cookie || '';
+    const guestProfileMatch = cookies.match(/GuestProfile=([^;]+)/);
     
+    if (guestProfileMatch) {
+      try {
+        const guestProfileDecoded = decodeURIComponent(guestProfileMatch[1]);
+        existingProfile = JSON.parse(guestProfileDecoded);
+        console.log(`✅ GuestProfile récupéré depuis les cookies:`, existingProfile);
+      } catch (e) {
+        console.log(`⚠️ Erreur parsing GuestProfile cookie:`, e.message);
+      }
+    }
+    
+    // ✅ PRIORITÉ 2: Récupérer le GuestProfile depuis le header X-Guest-Profile (Flutter)
+    // Flutter envoie via header depuis localStorage
+    const guestProfileHeader = req.headers['x-guest-profile'];
     if (guestProfileHeader) {
       try {
-        existingProfile = JSON.parse(guestProfileHeader);
+        const headerProfile = JSON.parse(guestProfileHeader);
+        console.log(`✅ GuestProfile depuis Flutter header:`, headerProfile);
+        
+        // ✅ Utiliser les valeurs du header si elles sont valides (non vides, non '0')
+        if (headerProfile.iProfile && headerProfile.iProfile !== '0' && !headerProfile.iProfile.startsWith('guest_')) {
+          existingProfile.iProfile = headerProfile.iProfile;
+          console.log(`✅ iProfile mis à jour depuis header: ${headerProfile.iProfile}`);
+        }
+        if (headerProfile.iBasket && headerProfile.iBasket !== '0' && !headerProfile.iBasket.startsWith('basket_')) {
+          existingProfile.iBasket = headerProfile.iBasket;
+          console.log(`✅ iBasket mis à jour depuis header: ${headerProfile.iBasket}`);
+        }
+        if (headerProfile.sPaysLangue) {
+          existingProfile.sPaysLangue = headerProfile.sPaysLangue;
+        }
+        if (headerProfile.sPaysFav) {
+          existingProfile.sPaysFav = headerProfile.sPaysFav;
+        }
       } catch (e) {
         console.log(`⚠️ Erreur parsing GuestProfile header:`, e.message);
       }
     }
     
-    // Créer le profil guest exactement comme SNAL-Project l'attend
+    // ✅ PRIORITÉ 3: Utiliser le token en dernier recours (si fourni en query param)
+    // Le token peut être l'iProfile de l'utilisateur connecté
+    let iProfile = existingProfile.iProfile || '';
+    if (!iProfile || iProfile === '' || iProfile === '0') {
+      if (token && token !== '0' && !token.startsWith('guest_')) {
+        iProfile = token;
+        console.log(`✅ iProfile récupéré depuis token: ${token}`);
+      }
+    }
+    
+    // ✅ Si iProfile est toujours vide, utiliser '0' pour éviter l'erreur varbinary
+    // Le backend SNAL peut gérer '0' dans certains cas, mais pas une chaîne vide
+    if (!iProfile || iProfile === '') {
+      iProfile = '0';
+      console.log(`⚠️ iProfile vide, utilisation de '0' pour éviter l'erreur varbinary`);
+    }
+    
     const guestProfile = {
-      iProfile: token || existingProfile.iProfile || '',
-      iBasket: existingProfile.iBasket || '', // SNAL-Project récupère le basket depuis la DB
+      iProfile: iProfile,
+      iBasket: existingProfile.iBasket || '', // SNAL-Project récupère le basket depuis la DB si vide
       sPaysLangue: existingProfile.sPaysLangue || '' // Utiliser celui du profil
     };
     
-    console.log(`👤 GuestProfile pour cookie:`, guestProfile);
+    console.log(`👤 GuestProfile final pour cookie:`, guestProfile);
+    console.log(`👤 iProfile utilisé: ${iProfile} (type: ${typeof iProfile}, length: ${iProfile.length})`);
+    console.log(`👤 iBasket utilisé: ${guestProfile.iBasket} (length: ${guestProfile.iBasket.length})`);
 
     // Créer le cookie GuestProfile comme SNAL-Project l'attend
     const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(guestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
@@ -1493,6 +1543,711 @@ app.post('/api/auth/login-with-code', express.json(), async (req, res) => {
       isCodeValidation: isCodeValidation
     });
 
+    // ✅ PRIORITÉ: Récupérer d'abord le GuestProfile depuis les cookies
+    // Le cookie doit être vérifié en premier pour avoir l'iProfile au début et qu'il ne soit pas vide
+    let iProfile = '';
+    let iBasket = '';
+    let sPaysLangue = '';
+    let sPaysFav = '';
+    
+    // ✅ PRIORITÉ 1: Récupérer le GuestProfile depuis les cookies (comme SNAL)
+    const guestProfileCookie = req.headers['cookie'];
+    console.log(`🔍 DEBUG Cookie header:`, guestProfileCookie ? 'présent' : 'absent');
+    if (guestProfileCookie) {
+      console.log(`🍪 Cookie reçu:`, guestProfileCookie);
+      
+      // Extraire le GuestProfile du cookie
+      const guestProfileMatch = guestProfileCookie.match(/GuestProfile=([^;]+)/);
+      if (guestProfileMatch) {
+        try {
+          const guestProfileDecoded = decodeURIComponent(guestProfileMatch[1]);
+          const cookieProfile = JSON.parse(guestProfileDecoded);
+          console.log(`🍪 GuestProfile depuis cookie:`, cookieProfile);
+          
+          // ✅ PRIORITÉ: Utiliser l'iProfile du cookie en premier, mais seulement s'il est valide (non '0', non vide, non 'guest_')
+          // Si le cookie a un iProfile valide, on l'utilise
+          if (cookieProfile.iProfile && 
+              cookieProfile.iProfile !== '' && 
+              cookieProfile.iProfile !== '0' && 
+              !cookieProfile.iProfile.startsWith('guest_')) {
+            iProfile = cookieProfile.iProfile;
+            console.log(`✅ iProfile récupéré depuis cookie (priorité, valide): ${iProfile}`);
+          } else {
+            console.log(`⚠️ iProfile du cookie invalide ou vide: "${cookieProfile.iProfile}"`);
+          }
+          
+          if (cookieProfile.iBasket && 
+              cookieProfile.iBasket !== '' && 
+              cookieProfile.iBasket !== '0' && 
+              !cookieProfile.iBasket.startsWith('basket_')) {
+            iBasket = cookieProfile.iBasket;
+            console.log(`✅ iBasket récupéré depuis cookie (priorité, valide): ${iBasket}`);
+          }
+          
+          // Utiliser les valeurs du cookie si disponibles
+          if (cookieProfile.sPaysLangue) sPaysLangue = cookieProfile.sPaysLangue;
+          if (cookieProfile.sPaysFav) sPaysFav = cookieProfile.sPaysFav;
+          
+          console.log(`✅ Valeurs depuis cookie: iProfile=${iProfile || '(vide)'}, iBasket=${iBasket || '(vide)'}, sPaysLangue=${sPaysLangue}, sPaysFav=${sPaysFav}`);
+        } catch (e) {
+          console.log(`⚠️ Erreur parsing GuestProfile cookie:`, e.message);
+        }
+      } else {
+        console.log(`⚠️ GuestProfile non trouvé dans le cookie`);
+      }
+    } else {
+      console.log(`⚠️ Aucun cookie présent dans la requête`);
+    }
+    
+    // ✅ PRIORITÉ 2: Récupérer le GuestProfile depuis le header X-Guest-Profile (Flutter localStorage)
+    // CRITIQUE: Utiliser les identifiants depuis le header s'ils sont valides, même si le cookie est vide
+    // Les identifiants peuvent être créés lors de l'initialisation et stockés dans le localStorage Flutter
+    const guestProfileHeader = req.headers['x-guest-profile'];
+    if (guestProfileHeader) {
+      try {
+        const headerProfile = JSON.parse(guestProfileHeader);
+        console.log(`📤 X-Guest-Profile header reçu:`, headerProfile);
+        
+        // ✅ CRITIQUE: Vérifier si les identifiants du header sont valides
+        // Si valides, les utiliser même si on a déjà des valeurs vides depuis le cookie
+        const headerIProfileValid = headerProfile.iProfile && 
+                                     headerProfile.iProfile !== '' && 
+                                     headerProfile.iProfile !== '0' && 
+                                     !headerProfile.iProfile.startsWith('guest_');
+        const headerIBasketValid = headerProfile.iBasket && 
+                                   headerProfile.iBasket !== '' && 
+                                   headerProfile.iBasket !== '0' && 
+                                   !headerProfile.iBasket.startsWith('basket_');
+        
+        // ✅ Utiliser les identifiants du header s'ils sont valides
+        // Priorité: Si on n'a pas d'iProfile valide OU si le header a un iProfile valide, utiliser le header
+        if (headerIProfileValid) {
+          // Si le header a un iProfile valide, l'utiliser (même si on a déjà une valeur vide)
+          iProfile = headerProfile.iProfile;
+          console.log(`✅ iProfile récupéré depuis X-Guest-Profile (valide, priorité): ${iProfile}`);
+        } else if (!iProfile || iProfile === '' || iProfile === '0') {
+          // Si le header n'a pas d'iProfile valide ET qu'on n'a pas d'iProfile valide, ignorer
+          console.log(`⚠️ iProfile du header invalide ou vide: "${headerProfile.iProfile}" - ignoré`);
+        }
+        
+        if (headerIBasketValid) {
+          // Si le header a un iBasket valide, l'utiliser (même si on a déjà une valeur vide)
+          iBasket = headerProfile.iBasket;
+          console.log(`✅ iBasket récupéré depuis X-Guest-Profile (valide, priorité): ${iBasket}`);
+        } else if (!iBasket || iBasket === '' || iBasket === '0') {
+          // Si le header n'a pas d'iBasket valide ET qu'on n'a pas d'iBasket valide, ignorer
+          console.log(`⚠️ iBasket du header invalide ou vide: "${headerProfile.iBasket}" - ignoré`);
+        }
+        
+        // Utiliser sPaysLangue et sPaysFav du header si pas encore définis
+        if (!sPaysLangue && headerProfile.sPaysLangue) sPaysLangue = headerProfile.sPaysLangue;
+        if (!sPaysFav && headerProfile.sPaysFav) sPaysFav = headerProfile.sPaysFav;
+        
+        console.log(`✅ Valeurs finales: iProfile=${iProfile || '(vide)'}, iBasket=${iBasket || '(vide)'}, sPaysLangue=${sPaysLangue}, sPaysFav=${sPaysFav}`);
+      } catch (e) {
+        console.log(`⚠️ Erreur parsing X-Guest-Profile header:`, e.message);
+      }
+    }
+    
+    // ✅ Créer le cookie GuestProfile pour SNAL
+    // IMPORTANT: Ne pas mettre '0' dans le cookie, utiliser une chaîne vide si invalide
+    // Le backend SNAL ne peut pas convertir '0' en varbinary
+    const guestProfile = {
+      iProfile: (iProfile && iProfile !== '0' && !iProfile.startsWith('guest_')) ? iProfile : '',
+      iBasket: (iBasket && iBasket !== '0' && !iBasket.startsWith('basket_')) ? iBasket : '',
+      sPaysLangue: sPaysLangue,
+      sPaysFav: sPaysFav
+    };
+    
+    console.log(`🔍 DEBUG GuestProfile pour cookie:`);
+    console.log(`   - iProfile: "${guestProfile.iProfile}" (${guestProfile.iProfile ? 'valide' : 'vide/invalide'})`);
+    console.log(`   - iBasket: "${guestProfile.iBasket}" (${guestProfile.iBasket ? 'valide' : 'vide/invalide'})`);
+    
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🍪 GUESTPROFILE DÉTAILLÉ POUR SNAL:`);
+    console.log(`${'='.repeat(60)}`);
+    console.log(`iProfile: "${guestProfile.iProfile}" (${guestProfile.iProfile.length} chars)`);
+    console.log(`iBasket: "${guestProfile.iBasket}" (${guestProfile.iBasket.length} chars)`);
+    console.log(`sPaysLangue: "${guestProfile.sPaysLangue}"`);
+    console.log(`sPaysFav: "${guestProfile.sPaysFav}" (${guestProfile.sPaysFav.length} chars)`);
+    console.log(`${'='.repeat(60)}\n`);
+    
+    const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(guestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+    
+    console.log(`👤 GuestProfile pour cookie:`, guestProfile);
+    console.log(`📱 Appel SNAL API LOCAL: https://jirig.be/api/auth/login-with-code`);
+    
+    // ✅ Créer la structure XML comme dans SNAL login-with-code.ts
+    // Le backend SNAL utilise toujours iProfile dans le XML, même s'il est vide (ligne 59: <iProfile>${iProfile}</iProfile>)
+    // Mais si iProfile est vide ou '0', cela cause l'erreur "varchar to varbinary"
+    // SOLUTION: Ne pas inclure iProfile dans le XML s'il est vide ou '0'
+    const passwordCleaned = password || "";
+    const sLang = sLangue || "fr";
+    const sPaysListe = guestProfile.sPaysFav || "";
+    const sTypeAccount = "EMAIL";
+    const xmlSPaysLangue = guestProfile.sPaysLangue || "";
+    
+    // ✅ CRITIQUE: Vérifier si iProfile est valide (non vide, non '0', non 'guest_')
+    // Si invalide, ne pas l'inclure dans le XML pour éviter l'erreur "varchar to varbinary"
+    const xmlIProfile = guestProfile.iProfile || "";
+    const hasValidIProfile = xmlIProfile && 
+                             xmlIProfile !== '' && 
+                             xmlIProfile !== '0' && 
+                             !xmlIProfile.startsWith('guest_');
+    
+    console.log(`🔍 DEBUG XML Construction:`);
+    console.log(`   - xmlIProfile: "${xmlIProfile}"`);
+    console.log(`   - hasValidIProfile: ${hasValidIProfile}`);
+    console.log(`   - iProfile vide: ${!xmlIProfile || xmlIProfile === ''}`);
+    console.log(`   - iProfile = '0': ${xmlIProfile === '0'}`);
+    
+    // ✅ CRITIQUE: Le backend SNAL utilise toujours <iProfile>${iProfile}</iProfile> dans le XML (ligne 59)
+    // Même si iProfile est vide, il l'inclut toujours. Mais si iProfile est vide ou '0',
+    // cela cause l'erreur "varchar to varbinary" dans la procédure stockée SQL.
+    // SOLUTION: Utiliser une valeur spéciale "-99" comme dans init.post.ts (ligne 40) pour indiquer qu'il n'y a pas d'iProfile valide
+    // Le backend SNAL utilise "-99" comme valeur par défaut dans init.post.ts, donc on fait pareil
+    // ✅ IMPORTANT: Toujours inclure iProfile dans le XML comme le fait le backend SNAL
+    const xmlIProfileValue = hasValidIProfile ? xmlIProfile : '-99';
+    
+    // ✅ Construire le XML exactement comme SNAL (lignes 57-70 de login-with-code.ts)
+    // Le backend SNAL inclut toujours <iProfile>${iProfile}</iProfile>, même si vide
+    const xXml = `
+      <root>
+        <iProfile>${xmlIProfileValue}</iProfile>
+        <sProvider>magic-link</sProvider>
+        <email>${email}</email>
+        <code>${passwordCleaned}</code>
+        <sTypeAccount>${sTypeAccount}</sTypeAccount>
+        <iPaysOrigine>${xmlSPaysLangue}</iPaysOrigine>
+        <sLangue>${xmlSPaysLangue}</sLangue>
+        <sPaysListe>${sPaysListe}</sPaysListe>
+        <sPaysLangue>${xmlSPaysLangue}</sPaysLangue>
+        <sCurrentLangue>${sLang}</sCurrentLangue>
+      </root>
+    `.trim();
+    
+    if (hasValidIProfile) {
+      console.log(`✅ XML créé avec iProfile valide: ${xmlIProfile}`);
+    } else {
+      console.log(`⚠️ XML créé avec iProfile="-99" (vide ou invalide: "${xmlIProfile}"). Le backend SNAL créera un nouveau iProfile.`);
+    }
+    
+    console.log(`📤 XML envoyé à SNAL:`, xXml);
+    console.log(`📤 Paramètres:`, { 
+      email, 
+      sLangue,
+      password: password ? `*** (${password.length} chars)` : '(vide)',
+      iProfile: xmlIProfile || '(vide)',
+      sPaysLangue: xmlSPaysLangue || '(vide)'
+    });
+
+    // Faire la requête POST vers l'API SNAL-Project LOCAL avec XML
+    const fetch = require('node-fetch');
+    const response = await fetch(`https://jirig.be/api/auth/login-with-code`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Cookie': cookieString,
+        'User-Agent': 'Mobile-Flutter-App/1.0'
+      },
+      body: JSON.stringify({
+        email: email,
+        sLangue: sLangue || 'fr',
+        password: password || '',
+        xXml: xXml  // ✅ Envoyer le XML comme dans SNAL
+      })
+    });
+
+    console.log(`📡 Response status: ${response.status}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`❌ Error response from SNAL:`, errorText);
+      
+      return res.status(response.status).json({
+        success: false,
+        error: 'API SNAL Error',
+        message: `Erreur ${response.status}: ${response.statusText}`,
+        details: errorText
+      });
+    }
+
+    const responseText = await response.text();
+    console.log(`📡 Response RAW text:`, responseText);
+    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+    
+    let data;
+    let enrichedData;
+    try {
+      data = JSON.parse(responseText);
+      console.log(`📡 API Response parsed:`, data);
+      
+      // ✅ CRITIQUE: Créer une copie de la réponse pour éviter les problèmes de référence
+      enrichedData = { ...data };
+      
+      // ✅ Afficher le code envoyé si présent dans la réponse
+      if (data && data.code) {
+        console.log(`\n${'🔑'.repeat(30)}`);
+        console.log(`✉️  CODE ENVOYÉ PAR EMAIL:`);
+        console.log(`${'🔑'.repeat(30)}`);
+        console.log(`🔑 Code: ${data.code}`);
+        console.log(`📧 Envoyé à: ${email}`);
+        console.log(`${'🔑'.repeat(30)}\n`);
+      }
+      
+      // Extraire les cookies de la réponse SNAL (contient le profil mis à jour)
+      const setCookieHeaders = response.headers.raw()['set-cookie'];
+      if (setCookieHeaders) {
+        console.log(`🍪 Cookies reçus de SNAL:`, setCookieHeaders);
+        
+        // Extraire iProfile et iBasket du cookie GuestProfile
+        const guestProfileCookie = setCookieHeaders.find(cookie => cookie.startsWith('GuestProfile='));
+        let updatedProfile = null;
+        
+        if (guestProfileCookie) {
+          try {
+            const cookieValue = guestProfileCookie.split(';')[0].split('=')[1];
+            const decodedValue = decodeURIComponent(cookieValue);
+            updatedProfile = JSON.parse(decodedValue);
+            
+            console.log(`\n${'='.repeat(60)}`);
+            console.log(`🎯 PROFIL UTILISATEUR CONNECTÉ (AVANT CORRECTION):`);
+            console.log(`${'='.repeat(60)}`);
+            console.log(`👤 iProfile: ${updatedProfile.iProfile || 'N/A'}`);
+            console.log(`🛒 iBasket: ${updatedProfile.iBasket || 'N/A'}`);
+            console.log(`🌍 sPaysLangue: ${updatedProfile.sPaysLangue || 'N/A'}`);
+            console.log(`🏳️  sPaysFav: ${updatedProfile.sPaysFav || 'N/A'}`);
+            console.log(`${'='.repeat(60)}\n`);
+            
+            // ✅ CORRECTION: Remplacer sPaysLangue et sPaysFav par les valeurs du GuestProfile envoyé
+            if (guestProfile.sPaysLangue) {
+              updatedProfile.sPaysLangue = guestProfile.sPaysLangue;
+            }
+            if (guestProfile.sPaysFav) {
+              updatedProfile.sPaysFav = guestProfile.sPaysFav;
+            }
+            
+            console.log(`🔧 CORRECTION: Restauration des valeurs du GuestProfile envoyé`);
+            console.log(`   sPaysLangue: ${guestProfile.sPaysLangue} → ${updatedProfile.sPaysLangue}`);
+            console.log(`   sPaysFav: ${guestProfile.sPaysFav} → ${updatedProfile.sPaysFav}`);
+            
+            console.log(`\n${'='.repeat(60)}`);
+            console.log(`✅ PROFIL UTILISATEUR CONNECTÉ (CORRIGÉ):`);
+            console.log(`${'='.repeat(60)}`);
+            console.log(`👤 iProfile: ${updatedProfile.iProfile || 'N/A'}`);
+            console.log(`🛒 iBasket: ${updatedProfile.iBasket || 'N/A'}`);
+            console.log(`🌍 sPaysLangue: ${updatedProfile.sPaysLangue || 'N/A'}`);
+            console.log(`🏳️  sPaysFav: ${updatedProfile.sPaysFav || 'N/A'}`);
+            console.log(`${'='.repeat(60)}\n`);
+            
+            // Remplacer le cookie dans le tableau
+            const guestProfileCookieIndex = setCookieHeaders.findIndex(cookie => cookie.startsWith('GuestProfile='));
+            if (guestProfileCookieIndex !== -1) {
+              const correctedCookie = `GuestProfile=${encodeURIComponent(JSON.stringify(updatedProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+              setCookieHeaders[guestProfileCookieIndex] = correctedCookie;
+              console.log(`✅ Cookie GuestProfile corrigé et remplacé dans les headers`);
+            }
+          } catch (e) {
+            console.log(`⚠️ Erreur lors du parsing du cookie GuestProfile:`, e.message);
+          }
+        }
+        
+        // ✅ Si c'est une validation de code réussie, enrichir la réponse avec les nouveaux identifiants
+        if (isCodeValidation && data.status === 'OK') {
+          console.log('🔄 Enrichissement de la réponse avec les nouveaux identifiants...');
+          
+          // ✅ CRITIQUE: Ajouter les nouveaux identifiants dans la réponse pour que Flutter les utilise
+          if (updatedProfile) {
+            console.log('🔑 NOUVEAUX IDENTIFIANTS POUR FLUTTER:');
+            console.log(`   Nouveau iProfile: ${updatedProfile.iProfile}`);
+            console.log(`   Nouveau iBasket: ${updatedProfile.iBasket}`);
+            
+            // Ajouter les nouveaux identifiants dans la réponse JSON
+            enrichedData.newIProfile = updatedProfile.iProfile;
+            enrichedData.newIBasket = updatedProfile.iBasket;
+            enrichedData.iProfile = updatedProfile.iProfile;
+            enrichedData.iBasket = updatedProfile.iBasket;
+            enrichedData.sPaysLangue = updatedProfile.sPaysLangue;
+            enrichedData.sPaysFav = updatedProfile.sPaysFav;
+          } else {
+            console.log('⚠️ updatedProfile non défini, utilisation des identifiants par défaut');
+          }
+          
+          // ✅ Appeler get-info-profil pour récupérer les infos complètes (sNom, sPrenom, sEmail, sPhoto)
+          try {
+            console.log('📞 Appel de get-info-profil pour récupérer les infos utilisateur complètes...');
+            
+            const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(updatedProfile))}`;
+            const authSessionCookie = setCookieHeaders.find(cookie => cookie.startsWith('auth.session-token='));
+            const sessionCookie = authSessionCookie ? authSessionCookie.split(';')[0] : '';
+            
+            const profileResponse = await fetch(`https://jirig.be/api/get-info-profil`, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'Cookie': `${cookieString}; ${sessionCookie}`,
+                'User-Agent': 'Mobile-Flutter-App/1.0'
+              }
+            });
+            
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json();
+              console.log('✅ Profil complet récupéré:', profileData);
+              
+              // Enrichir encore plus la réponse avec les données utilisateur
+              enrichedData.sEmail = profileData.sEmail || email;
+              enrichedData.sNom = profileData.sNom || '';
+              enrichedData.sPrenom = profileData.sPrenom || '';
+              enrichedData.sPhoto = profileData.sPhoto || '';
+              enrichedData.sTel = profileData.sTel || '';
+              enrichedData.sRue = profileData.sRue || '';
+              enrichedData.sCity = profileData.sCity || '';
+              enrichedData.sZip = profileData.sZip || '';
+              
+              console.log('✅ Réponse enrichie avec les infos utilisateur complètes');
+            } else {
+              console.log('⚠️ get-info-profil a retourné:', profileResponse.status);
+              // Au moins ajouter l'email
+              data.sEmail = email;
+            }
+          } catch (e) {
+            console.log('⚠️ Erreur lors de l\'appel get-info-profil:', e.message);
+            // Au moins ajouter l'email
+            data.sEmail = email;
+          }
+          
+          console.log('✅ Réponse enrichie finale:');
+          console.log(`   iProfile: ${enrichedData.iProfile}`);
+          console.log(`   iBasket: ${enrichedData.iBasket}`);
+          console.log(`   sPaysLangue: ${enrichedData.sPaysLangue}`);
+          console.log(`   sPaysFav: ${enrichedData.sPaysFav}`);
+          console.log(`   sEmail: ${enrichedData.sEmail}`);
+          console.log(`   sNom: ${enrichedData.sNom || '(vide)'}`);
+          console.log(`   sPrenom: ${enrichedData.sPrenom || '(vide)'}`);
+        }
+        
+        // Transférer les cookies au client Flutter
+        setCookieHeaders.forEach(cookie => {
+          res.append('Set-Cookie', cookie);
+        });
+        
+        // ✅ CRITIQUE: Ajouter le cookie GuestProfile mis à jour pour Flutter
+        if (isCodeValidation && data.status === 'OK' && enrichedData) {
+          console.log('🍪 Ajout du cookie GuestProfile mis à jour pour Flutter...');
+          const updatedGuestProfile = {
+            iProfile: enrichedData.newIProfile || enrichedData.iProfile,
+            iBasket: enrichedData.newIBasket || enrichedData.iBasket,
+            sPaysLangue: enrichedData.sPaysLangue,
+            sPaysFav: enrichedData.sPaysFav
+          };
+          
+          const updatedCookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(updatedGuestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+          res.append('Set-Cookie', updatedCookieString);
+          console.log('✅ Cookie GuestProfile mis à jour ajouté aux headers de réponse');
+        }
+      }
+      
+      console.log(`✅ Connexion ${password ? 'validée' : 'code envoyé'} !`);
+    } catch (e) {
+      console.error(`❌ Erreur parsing JSON:`, e.message);
+      return res.status(500).json({ success: false, error: 'Invalid JSON response from SNAL' });
+    }
+    
+      // ✅ CRITIQUE: Mettre à jour les cookies avec les nouveaux identifiants (comme SNAL)
+      if (data.status === 'OK' && enrichedData.newIProfile && enrichedData.newIBasket) {
+        console.log('🍪 Mise à jour des cookies avec les nouveaux identifiants:');
+        console.log(`   Nouveau iProfile: ${enrichedData.newIProfile}`);
+        console.log(`   Nouveau iBasket: ${enrichedData.newIBasket}`);
+        
+        // Mettre à jour le cookie GuestProfile avec les nouveaux identifiants
+        const updatedGuestProfile = {
+          iProfile: enrichedData.newIProfile,
+          iBasket: enrichedData.newIBasket,
+          sPaysLangue: enrichedData.sPaysLangue || guestProfile.sPaysLangue,
+          sPaysFav: enrichedData.sPaysFav || guestProfile.sPaysFav,
+        };
+        
+        const updatedCookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(updatedGuestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+        res.append('Set-Cookie', updatedCookieString);
+        
+        // Mettre à jour le cookie Guest_basket_init (comme SNAL)
+        const basketInitCookieString = `Guest_basket_init=${encodeURIComponent(JSON.stringify({ iBasket: enrichedData.newIBasket }))}; Path=/; HttpOnly=false; Max-Age=31536000`;
+        res.append('Set-Cookie', basketInitCookieString);
+        
+        console.log('✅ Cookies mis à jour avec les nouveaux identifiants');
+      }
+      
+      // ✅ CRITIQUE: S'assurer que les nouveaux identifiants sont dans la réponse
+      if (isCodeValidation && data.status === 'OK') {
+        // S'assurer que les nouveaux identifiants sont présents dans la réponse
+        if (enrichedData.newIProfile && enrichedData.newIBasket) {
+          console.log('✅ Nouveaux identifiants ajoutés à la réponse pour Flutter:');
+          console.log(`   newIProfile: ${enrichedData.newIProfile}`);
+          console.log(`   newIBasket: ${enrichedData.newIBasket}`);
+        } else {
+          console.log('⚠️ Nouveaux identifiants manquants dans la réponse enrichie');
+        }
+      }
+      
+      // ✅ CRITIQUE: Debug de ce qui est envoyé à Flutter
+      console.log('🔍 DEBUG: Contenu de enrichedData avant envoi:');
+      console.log('   newIProfile: ', enrichedData?.newIProfile);
+      console.log('   newIBasket: ', enrichedData?.newIBasket);
+      console.log('   iProfile: ', enrichedData?.iProfile);
+      console.log('   iBasket: ', enrichedData?.iBasket);
+      console.log('   status: ', enrichedData?.status);
+      
+      // ✅ CRITIQUE: Envoyer la réponse enrichie à Flutter
+      res.json(enrichedData || data);
+  } catch (error) {
+    console.error('❌ Auth/Login-With-Code Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la connexion avec code',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 🔐 AUTH/GOOGLE-MOBILE: Connexion OAuth Google Mobile (Flutter Android)
+// **********************************************************************
+// Proxy pour transmettre l'idToken à SNAL et retourner la réponse JSON
+app.get('/api/auth/google-mobile', async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🔐 AUTH/GOOGLE-MOBILE: Connexion OAuth Google Mobile (Flutter Android)`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    // ✅ Récupérer l'id_token depuis les query parameters (envoyé par Flutter)
+    const { id_token } = req.query;
+    
+    if (!id_token || typeof id_token !== 'string') {
+      console.error('❌ id_token manquant ou invalide');
+      return res.status(400).json({
+        status: 'error',
+        error: 'Missing or invalid Google id_token',
+        message: 'id_token est requis pour la connexion Google Mobile'
+      });
+    }
+    
+    console.log(`📥 id_token reçu: ${id_token.substring(0, 20)}...`);
+    
+    // ✅ Récupérer le GuestProfile depuis les cookies ou headers (comme pour les autres endpoints)
+    let existingProfile = { iProfile: '', iBasket: '', sPaysLangue: '', sPaysFav: '' };
+    const cookies = req.headers.cookie || '';
+    const guestProfileMatch = cookies.match(/GuestProfile=([^;]+)/);
+    
+    if (guestProfileMatch) {
+      try {
+        const guestProfileDecoded = decodeURIComponent(guestProfileMatch[1]);
+        existingProfile = JSON.parse(guestProfileDecoded);
+        console.log(`✅ GuestProfile récupéré depuis les cookies:`, existingProfile);
+      } catch (e) {
+        console.log(`⚠️ Erreur parsing GuestProfile cookie:`, e.message);
+      }
+    }
+    
+    // ✅ PRIORITÉ 2: Récupérer le GuestProfile depuis le header X-Guest-Profile (Flutter)
+    const guestProfileHeader = req.headers['x-guest-profile'];
+    if (guestProfileHeader) {
+      try {
+        const headerProfile = JSON.parse(guestProfileHeader);
+        console.log(`✅ GuestProfile depuis Flutter header:`, headerProfile);
+        
+        if (headerProfile.iProfile && headerProfile.iProfile !== '0' && !headerProfile.iProfile.startsWith('guest_')) {
+          existingProfile.iProfile = headerProfile.iProfile;
+        }
+        if (headerProfile.iBasket && headerProfile.iBasket !== '0' && !headerProfile.iBasket.startsWith('basket_')) {
+          existingProfile.iBasket = headerProfile.iBasket;
+        }
+        if (headerProfile.sPaysLangue) {
+          existingProfile.sPaysLangue = headerProfile.sPaysLangue;
+        }
+        if (headerProfile.sPaysFav) {
+          existingProfile.sPaysFav = headerProfile.sPaysFav;
+        }
+      } catch (e) {
+        console.log(`⚠️ Erreur parsing GuestProfile header:`, e.message);
+      }
+    }
+    
+    // ✅ Créer le cookie GuestProfile pour SNAL (si disponible)
+    let cookieString = '';
+    if (existingProfile.iProfile || existingProfile.iBasket || existingProfile.sPaysLangue || existingProfile.sPaysFav) {
+      const guestProfile = {
+        iProfile: existingProfile.iProfile || '',
+        iBasket: existingProfile.iBasket || '',
+        sPaysLangue: existingProfile.sPaysLangue || '',
+        sPaysFav: existingProfile.sPaysFav || '',
+      };
+      cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(guestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+      console.log(`🍪 Cookie GuestProfile créé pour SNAL:`, guestProfile);
+    }
+    
+    // ✅ Construire l'URL avec l'id_token
+    const params = new URLSearchParams({
+      id_token: id_token,
+    });
+    
+    const snallUrl = `https://jirig.be/api/auth/google-mobile?${params}`;
+    console.log(`📡 Appel SNAL API: ${snallUrl}`);
+    
+    // ✅ Faire la requête GET vers l'API SNAL-Project avec le cookie
+    const fetch = require('node-fetch');
+    const response = await fetch(snallUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        ...(cookieString ? { 'Cookie': cookieString } : {}),
+        'User-Agent': 'Mobile-Flutter-App/1.0'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Erreur SNAL API (${response.status}):`, errorText);
+      return res.status(response.status).json({
+        status: 'error',
+        error: 'Erreur lors de la connexion Google',
+        message: errorText || `HTTP ${response.status}`
+      });
+    }
+    
+    // ✅ Parser la réponse JSON
+    const data = await response.json();
+    console.log(`✅ Réponse SNAL reçue:`, data);
+    
+    // ✅ Retourner la réponse JSON à Flutter (SNAL retourne déjà {status, iProfile, iBasket, nom, prenom, email})
+    res.json(data);
+  } catch (error) {
+    console.error('❌ Auth/Google-Mobile Error:', error.message);
+    res.status(500).json({
+      status: 'error',
+      error: 'Erreur lors de la connexion Google',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 🔐 AUTH/FACEBOOK: Connexion OAuth Facebook
+// **********************************************************************
+app.get('/api/auth/facebook', async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🔐 AUTH/FACEBOOK: Connexion OAuth Facebook`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    // Rediriger directement vers SNAL OAuth (sans paramètres)
+    const snallUrl = 'https://jirig.be/api/auth/facebook';
+    
+    console.log(`🌐 Redirection vers SNAL Facebook OAuth: ${snallUrl}`);
+    console.log(`📝 Note: SNAL redirigera vers / après OAuth, nous intercepterons cette redirection`);
+    
+    res.redirect(snallUrl);
+  } catch (error) {
+    console.error('❌ Auth/Facebook Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la connexion Facebook',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 🔐 AUTH/OAUTH-CALLBACK: Callback OAuth pour retourner dans Flutter
+// **********************************************************************
+app.get('/api/auth/oauth-callback', async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🔐 AUTH/OAUTH-CALLBACK: Callback OAuth pour Flutter`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    const { provider, success, error } = req.query;
+    
+    console.log(`📥 Callback OAuth reçu:`, { provider, success, error });
+    console.log(`📥 Query params complets:`, req.query);
+    
+    const providerName = provider || 'unknown';
+
+    if (success === 'true' || !error) {
+      console.log(`✅ OAuth ${provider} réussi, redirection vers Flutter`);
+      
+      // Rediriger vers Flutter avec succès
+      const successUrl = `${FLUTTER_APP_URL}/#/home?oauth=success&provider=${encodeURIComponent(providerName)}`;
+      res.redirect(successUrl);
+    } else {
+      console.log(`❌ OAuth ${provider} échoué: ${error}`);
+      
+      // Rediriger vers Flutter avec erreur
+      const errorMessage = error || 'unknown';
+      const errorUrl = `${FLUTTER_APP_URL}/#/login?oauth=error&provider=${encodeURIComponent(providerName)}&error=${encodeURIComponent(errorMessage)}`;
+      res.redirect(errorUrl);
+    }
+  } catch (error) {
+    console.error('❌ Auth/OAuth-Callback Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du callback OAuth',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 🔐 AUTH/OAUTH-SUCCESS: Intercepter la redirection SNAL vers / après OAuth
+// **********************************************************************
+app.get('/api/auth/oauth-success', async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🔐 AUTH/OAUTH-SUCCESS: Interception redirection SNAL après OAuth`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    const { provider } = req.query;
+    const providerName = provider || 'unknown';
+    
+    console.log(`📥 Redirection SNAL interceptée avec provider:`, provider);
+    console.log(`📥 Query params complets:`, req.query);
+    
+    // Rediriger vers Flutter avec succès
+    console.log(`✅ OAuth ${providerName} réussi, redirection vers Flutter`);
+    const successUrl = `${FLUTTER_APP_URL}/#/home?oauth=success&provider=${encodeURIComponent(providerName)}`;
+    res.redirect(successUrl);
+    
+  } catch (error) {
+    console.error('❌ Auth/OAuth-Success Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la redirection OAuth',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 🔐 AUTH/LOGIN-WITH-CODE: Connexion avec code (basé sur SNAL login-with-code.ts)
+// **********************************************************************
+app.post('/api/auth/login-with-code', express.json(), async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🔐 AUTH/LOGIN-WITH-CODE: Connexion avec code`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    const { email, sLangue, password } = req.body;
+    
+    // ✅ Déterminer si c'est une validation de code ou une demande de code
+    const isCodeValidation = password && password.trim() !== '';
+    
+    console.log(`🔐 Paramètres reçus:`, { 
+      email: email || '(vide)', 
+      sLangue: sLangue || '(vide)',
+      password: password ? '***' : '(vide)',
+      isCodeValidation: isCodeValidation
+    });
+
     // ✅ MÊME LOGIQUE QUE SNAL : Utiliser des identifiants par défaut pour la connexion
     // SNAL créera de nouveaux identifiants lors de la connexion
     let iProfile = '0'; // Utiliser '0' au lieu de '' pour éviter l'erreur de conversion
@@ -1890,416 +2645,6 @@ app.post('/api/auth/login-with-code', express.json(), async (req, res) => {
   }
 });
 
-// **********************************************************************
-// 🔐 AUTH/GOOGLE-MOBILE: Connexion OAuth Google
-// **********************************************************************
-app.get('/api/auth/google-mobile', async (req, res) => {
-  console.log(`\n${'*'.repeat(70)}`);
-  console.log(`🔐 AUTH/GOOGLE-MOBILE: Connexion OAuth Google Mobile`);
-  console.log(`${'*'.repeat(70)}`);
-  
-  try {
-    // Rediriger directement vers SNAL OAuth (sans paramètres)
-    const snallUrl = 'https://jirig.be/api/auth/google-mobile';
-    
-    console.log(`🌐 Redirection vers SNAL Google OAuth Mobile: ${snallUrl}`);
-    console.log(`📝 Note: SNAL redirigera vers / après OAuth, nous intercepterons cette redirection`);
-    
-    res.redirect(snallUrl);
-  } catch (error) {
-    console.error('❌ Auth/Google Error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la connexion Google',
-      message: error.message
-    });
-  }
-});
-
-// **********************************************************************
-// 🔐 AUTH/FACEBOOK: Connexion OAuth Facebook
-// **********************************************************************
-app.get('/api/auth/facebook', async (req, res) => {
-  console.log(`\n${'*'.repeat(70)}`);
-  console.log(`🔐 AUTH/FACEBOOK: Connexion OAuth Facebook`);
-  console.log(`${'*'.repeat(70)}`);
-  
-  try {
-    // Rediriger directement vers SNAL OAuth (sans paramètres)
-    const snallUrl = 'https://jirig.be/api/auth/facebook';
-    
-    console.log(`🌐 Redirection vers SNAL Facebook OAuth: ${snallUrl}`);
-    console.log(`📝 Note: SNAL redirigera vers / après OAuth, nous intercepterons cette redirection`);
-    
-    res.redirect(snallUrl);
-  } catch (error) {
-    console.error('❌ Auth/Facebook Error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la connexion Facebook',
-      message: error.message
-    });
-  }
-});
-
-// **********************************************************************
-// 🔐 AUTH/OAUTH-CALLBACK: Callback OAuth pour retourner dans Flutter
-// **********************************************************************
-app.get('/api/auth/oauth-callback', async (req, res) => {
-  console.log(`\n${'*'.repeat(70)}`);
-  console.log(`🔐 AUTH/OAUTH-CALLBACK: Callback OAuth pour Flutter`);
-  console.log(`${'*'.repeat(70)}`);
-  
-  try {
-    const { provider, success, error } = req.query;
-    
-    console.log(`📥 Callback OAuth reçu:`, { provider, success, error });
-    console.log(`📥 Query params complets:`, req.query);
-    
-    const providerName = provider || 'unknown';
-
-    if (success === 'true' || !error) {
-      console.log(`✅ OAuth ${provider} réussi, redirection vers Flutter`);
-      
-      // Rediriger vers Flutter avec succès
-      const successUrl = `${FLUTTER_APP_URL}/#/home?oauth=success&provider=${encodeURIComponent(providerName)}`;
-      res.redirect(successUrl);
-    } else {
-      console.log(`❌ OAuth ${provider} échoué: ${error}`);
-      
-      // Rediriger vers Flutter avec erreur
-      const errorMessage = error || 'unknown';
-      const errorUrl = `${FLUTTER_APP_URL}/#/login?oauth=error&provider=${encodeURIComponent(providerName)}&error=${encodeURIComponent(errorMessage)}`;
-      res.redirect(errorUrl);
-    }
-  } catch (error) {
-    console.error('❌ Auth/OAuth-Callback Error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors du callback OAuth',
-      message: error.message
-    });
-  }
-});
-
-// **********************************************************************
-// 🔐 AUTH/OAUTH-SUCCESS: Intercepter la redirection SNAL vers / après OAuth
-// **********************************************************************
-app.get('/api/auth/oauth-success', async (req, res) => {
-  console.log(`\n${'*'.repeat(70)}`);
-  console.log(`🔐 AUTH/OAUTH-SUCCESS: Interception redirection SNAL après OAuth`);
-  console.log(`${'*'.repeat(70)}`);
-  
-  try {
-    const { provider } = req.query;
-    const providerName = provider || 'unknown';
-    
-    console.log(`📥 Redirection SNAL interceptée avec provider:`, provider);
-    console.log(`📥 Query params complets:`, req.query);
-    
-    // Rediriger vers Flutter avec succès
-    console.log(`✅ OAuth ${providerName} réussi, redirection vers Flutter`);
-    const successUrl = `${FLUTTER_APP_URL}/#/home?oauth=success&provider=${encodeURIComponent(providerName)}`;
-    res.redirect(successUrl);
-    
-  } catch (error) {
-    console.error('❌ Auth/OAuth-Success Error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la redirection OAuth',
-      message: error.message
-    });
-  }
-});
-
-// **********************************************************************
-// 🔐 AUTH/LOGIN: Connexion avec Magic Link (email + token)
-// **********************************************************************
-app.post('/api/auth/login', express.json(), async (req, res) => {
-  console.log(`\n${'*'.repeat(70)}`);
-  console.log(`🔐 AUTH/LOGIN: Connexion utilisateur`);
-  console.log(`${'*'.repeat(70)}`);
-  
-  try {
-    const { email, password } = req.body;
-    
-    console.log(`🔐 Paramètres reçus:`, { 
-      email: email || '(vide)', 
-      password: password ? '***' : '(vide)' 
-    });
-    console.log(`🔄 CallBackUrl reçu dans query:`, req.query.callBackUrl || '(aucun)');
-    console.log(`🔄 CallBackUrl reçu dans body:`, req.body.callBackUrl || '(aucun)');
-
-    // ✅ Récupérer iProfile et iBasket depuis les headers (envoyés par Flutter)
-    const iProfileFromHeader = req.headers['x-iprofile'] || '';
-    const iBasketFromHeader = req.headers['x-ibasket'] || '';
-    
-    console.log(`📤 X-IProfile header:`, iProfileFromHeader || '(vide)');
-    console.log(`📤 X-IBasket header:`, iBasketFromHeader || '(vide)');
-    
-    // Récupérer le GuestProfile depuis le header X-Guest-Profile (envoyé par Flutter depuis localStorage)
-    const guestProfileHeader = req.headers['x-guest-profile'];
-    console.log(`📤 X-Guest-Profile header:`, guestProfileHeader);
-    
-    let existingProfile = { iProfile: '', iBasket: '', sPaysLangue: '', sPaysFav: '' };
-    
-    // Priorité au header (Flutter localStorage)
-    if (guestProfileHeader) {
-      try {
-        existingProfile = JSON.parse(guestProfileHeader);
-        console.log(`✅ GuestProfile depuis Flutter localStorage (via header):`, existingProfile);
-      } catch (e) {
-        console.log(`⚠️ Erreur parsing GuestProfile header:`, e.message);
-      }
-    } else {
-      console.log(`⚠️ Aucun GuestProfile dans le header, utilisation des valeurs par défaut`);
-    }
-
-    // ✅ Créer le cookie GuestProfile pour SNAL (même logique que les autres endpoints)
-    // Priorité: X-IProfile/X-IBasket headers > GuestProfile header > vide
-    const guestProfile = {
-      iProfile: iProfileFromHeader || existingProfile.iProfile || '',
-      iBasket: iBasketFromHeader || existingProfile.iBasket || '',
-      sPaysLangue: existingProfile.sPaysLangue || '',
-      sPaysFav: existingProfile.sPaysFav || ''
-    };
-    
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🍪 GUESTPROFILE DÉTAILLÉ POUR SNAL:`);
-    console.log(`${'='.repeat(60)}`);
-    console.log(`iProfile: "${guestProfile.iProfile}" (${guestProfile.iProfile.length} chars)`);
-    console.log(`iBasket: "${guestProfile.iBasket}" (${guestProfile.iBasket.length} chars)`);
-    console.log(`sPaysLangue: "${guestProfile.sPaysLangue}"`);
-    console.log(`sPaysFav: "${guestProfile.sPaysFav}" (${guestProfile.sPaysFav.length} chars)`);
-    console.log(`${'='.repeat(60)}\n`);
-    
-    const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(guestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
-    
-    console.log(`👤 GuestProfile pour cookie:`, guestProfile);
-    console.log(`📱 Appel SNAL API LOCAL: https://jirig.be/api/auth/login`);
-    console.log(`📤 Body envoyé:`, { 
-      email, 
-      password: password ? `*** (${password.length} chars)` : '(vide)' 
-    });
-    console.log(`📤 Body complet pour debug:`, { email, password });
-
-    // Faire la requête POST vers l'API SNAL-Project LOCAL
-    const fetch = require('node-fetch');
-    const response = await fetch(`https://jirig.be/api/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Cookie': cookieString,
-        'User-Agent': 'Mobile-Flutter-App/1.0'
-      },
-      body: JSON.stringify({
-        email: email,
-        password: password || ''
-      })
-    });
-
-    console.log(`📡 Response status: ${response.status}`);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log(`❌ Error response from SNAL:`, errorText);
-      
-      return res.status(response.status).json({
-        success: false,
-        error: 'API SNAL Error',
-        message: `Erreur ${response.status}: ${response.statusText}`,
-        details: errorText
-      });
-    }
-
-    const responseText = await response.text();
-    console.log(`📡 Response RAW text:`, responseText);
-    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
-    
-    let data;
-    try {
-      data = JSON.parse(responseText);
-      console.log(`📡 API Response parsed:`, data);
-      
-      // ✅ Afficher le Magic Link si présent dans la réponse
-      if (data && data.link) {
-        console.log(`\n${'🔗'.repeat(30)}`);
-        console.log(`✉️  MAGIC LINK ENVOYÉ PAR EMAIL:`);
-        console.log(`${'🔗'.repeat(30)}`);
-        console.log(`🔑 Lien complet: ${data.link}`);
-        console.log(`📧 Envoyé à: ${email}`);
-        
-        // Extraire le callBackUrl du magic link si présent
-        try {
-          const linkUrl = new URL(data.link);
-          const linkCallBackUrl = linkUrl.searchParams.get('callBackUrl');
-          if (linkCallBackUrl) {
-            console.log(`🔄 CallBackUrl dans le magic link: ${decodeURIComponent(linkCallBackUrl)}`);
-          }
-          const token = linkUrl.searchParams.get('token');
-          if (token) {
-            console.log(`🎫 Token: ${token}`);
-          }
-        } catch (e) {
-          console.log(`⚠️ Impossible de parser l'URL du magic link:`, e.message);
-        }
-        
-        console.log(`${'🔗'.repeat(30)}\n`);
-      }
-      
-      // Extraire les cookies de la réponse SNAL (contient le profil mis à jour)
-      const setCookieHeaders = response.headers.raw()['set-cookie'];
-      if (setCookieHeaders) {
-        console.log(`🍪 Cookies reçus de SNAL:`, setCookieHeaders);
-        
-        // Extraire iProfile et iBasket du cookie GuestProfile
-        const guestProfileCookie = setCookieHeaders.find(cookie => cookie.startsWith('GuestProfile='));
-        let updatedProfile = null;
-        
-        if (guestProfileCookie) {
-          try {
-            const cookieValue = guestProfileCookie.split(';')[0].split('=')[1];
-            const decodedValue = decodeURIComponent(cookieValue);
-            updatedProfile = JSON.parse(decodedValue);
-            
-            console.log(`\n${'='.repeat(60)}`);
-            console.log(`🎯 PROFIL UTILISATEUR CONNECTÉ (AVANT CORRECTION):`);
-            console.log(`${'='.repeat(60)}`);
-            console.log(`👤 iProfile: ${updatedProfile.iProfile || 'N/A'}`);
-            console.log(`🛒 iBasket: ${updatedProfile.iBasket || 'N/A'}`);
-            console.log(`🌍 sPaysLangue: ${updatedProfile.sPaysLangue || 'N/A'}`);
-            console.log(`🏳️  sPaysFav: ${updatedProfile.sPaysFav || 'N/A'}`);
-            console.log(`${'='.repeat(60)}\n`);
-            
-            // ✅ CORRECTION: Remplacer sPaysLangue et sPaysFav par les valeurs du GuestProfile envoyé
-            if (guestProfile.sPaysLangue) {
-              updatedProfile.sPaysLangue = guestProfile.sPaysLangue;
-            }
-            if (guestProfile.sPaysFav) {
-              updatedProfile.sPaysFav = guestProfile.sPaysFav;
-            }
-            
-            console.log(`🔧 CORRECTION: Restauration des valeurs du GuestProfile envoyé`);
-            console.log(`   sPaysLangue: ${guestProfile.sPaysLangue} → ${updatedProfile.sPaysLangue}`);
-            console.log(`   sPaysFav: ${guestProfile.sPaysFav} → ${updatedProfile.sPaysFav}`);
-            
-            console.log(`\n${'='.repeat(60)}`);
-            console.log(`✅ PROFIL UTILISATEUR CONNECTÉ (CORRIGÉ):`);
-            console.log(`${'='.repeat(60)}`);
-            console.log(`👤 iProfile: ${updatedProfile.iProfile || 'N/A'}`);
-            console.log(`🛒 iBasket: ${updatedProfile.iBasket || 'N/A'}`);
-            console.log(`🌍 sPaysLangue: ${updatedProfile.sPaysLangue || 'N/A'}`);
-            console.log(`🏳️  sPaysFav: ${updatedProfile.sPaysFav || 'N/A'}`);
-            console.log(`${'='.repeat(60)}\n`);
-            
-            // Remplacer le cookie dans le tableau
-            const guestProfileCookieIndex = setCookieHeaders.findIndex(cookie => cookie.startsWith('GuestProfile='));
-            if (guestProfileCookieIndex !== -1) {
-              const correctedCookie = `GuestProfile=${encodeURIComponent(JSON.stringify(updatedProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
-              setCookieHeaders[guestProfileCookieIndex] = correctedCookie;
-              console.log(`✅ Cookie GuestProfile corrigé et remplacé dans les headers`);
-            }
-          } catch (e) {
-            console.log(`⚠️ Erreur lors du parsing du cookie GuestProfile:`, e.message);
-          }
-        }
-        
-        // ✅ Si c'est une validation de token (password présent) et qu'on a un GuestProfile,
-        // enrichir la réponse avec TOUTES les données du profil pour Flutter
-        if (password && updatedProfile) {
-          console.log('🔄 Enrichissement de la réponse avec les données du profil...');
-          
-          // Données du GuestProfile (cookie)
-          data.iProfile = updatedProfile.iProfile;
-          data.iBasket = updatedProfile.iBasket;
-          data.sPaysLangue = updatedProfile.sPaysLangue;
-          data.sPaysFav = updatedProfile.sPaysFav;
-          
-          // ✅ Appeler get-info-profil pour récupérer les infos complètes (sNom, sPrenom, sEmail, sPhoto)
-          try {
-            console.log('📞 Appel de get-info-profil pour récupérer les infos utilisateur complètes...');
-            
-            const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(updatedProfile))}`;
-            const authSessionCookie = setCookieHeaders.find(cookie => cookie.startsWith('auth.session-token='));
-            const sessionCookie = authSessionCookie ? authSessionCookie.split(';')[0] : '';
-            
-            const profileResponse = await fetch(`https://jirig.be/api/get-info-profil`, {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-                'Cookie': `${cookieString}; ${sessionCookie}`,
-                'User-Agent': 'Mobile-Flutter-App/1.0'
-              }
-            });
-            
-            if (profileResponse.ok) {
-              const profileData = await profileResponse.json();
-              console.log('✅ Profil complet récupéré:', profileData);
-              
-              // Enrichir encore plus la réponse avec les données utilisateur
-              enrichedData.sEmail = profileData.sEmail || email;
-              enrichedData.sNom = profileData.sNom || '';
-              enrichedData.sPrenom = profileData.sPrenom || '';
-              enrichedData.sPhoto = profileData.sPhoto || '';
-              enrichedData.sTel = profileData.sTel || '';
-              enrichedData.sRue = profileData.sRue || '';
-              enrichedData.sCity = profileData.sCity || '';
-              enrichedData.sZip = profileData.sZip || '';
-              
-              console.log('✅ Réponse enrichie avec les infos utilisateur complètes');
-            } else {
-              console.log('⚠️ get-info-profil a retourné:', profileResponse.status);
-              // Au moins ajouter l'email
-              data.sEmail = email;
-            }
-          } catch (e) {
-            console.log('⚠️ Erreur lors de l\'appel get-info-profil:', e.message);
-            // Au moins ajouter l'email
-            data.sEmail = email;
-          }
-          
-          console.log('✅ Réponse enrichie finale:');
-          console.log(`   iProfile: ${enrichedData.iProfile}`);
-          console.log(`   iBasket: ${enrichedData.iBasket}`);
-          console.log(`   sPaysLangue: ${enrichedData.sPaysLangue}`);
-          console.log(`   sPaysFav: ${enrichedData.sPaysFav}`);
-          console.log(`   sEmail: ${enrichedData.sEmail}`);
-          console.log(`   sNom: ${enrichedData.sNom || '(vide)'}`);
-          console.log(`   sPrenom: ${enrichedData.sPrenom || '(vide)'}`);
-        }
-        
-        // Gérer le callBackUrl comme SNAL
-        const callBackUrl = req.query.callBackUrl || req.body.callBackUrl;
-        if (callBackUrl) {
-          console.log(`🔄 CallBackUrl détecté: ${callBackUrl}`);
-          // Ajouter le cookie callBackUrl pour Flutter
-          const callBackCookie = `callback_url=${encodeURIComponent(callBackUrl)}; Path=/; HttpOnly=false; Max-Age=864000`;
-          res.setHeader('Set-Cookie', [...(res.getHeader('Set-Cookie') || []), callBackCookie]);
-        }
-        
-        // Transférer les cookies au client Flutter
-        setCookieHeaders.forEach(cookie => {
-          res.append('Set-Cookie', cookie);
-        });
-      }
-      
-      console.log(`✅ Connexion ${password ? 'validée' : 'lien magique envoyé'} !`);
-    } catch (e) {
-      console.error(`❌ Erreur parsing JSON:`, e.message);
-      return res.status(500).json({ success: false, error: 'Invalid JSON response from SNAL' });
-    }
-    
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Auth/Login Error:', error.message);
-    res.status(500).json({
-      success: false,
-      error: 'Erreur lors de la connexion',
-      message: error.message
-    });
-  }
-});
 
 // **********************************************************************
 // 🔐 AUTH/DISCONNECT: Déconnexion utilisateur (comme SNAL-Project disconnect.post.ts)
@@ -2454,6 +2799,180 @@ app.post('/api/auth/disconnect', express.json(), async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la déconnexion',
+      message: error.message
+    });
+  }
+});
+
+// **********************************************************************
+// 📦 GET-BASKET-USER: Récupération de tous les baskets de l'utilisateur
+// **********************************************************************
+app.get('/api/get-basket-user', async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`📦 GET-BASKET-USER: Récupération de tous les baskets de l'utilisateur`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    // ✅ Récupérer le GuestProfile depuis le header X-Guest-Profile (Flutter) ou les cookies (Web)
+    const guestProfileHeader = req.headers['x-guest-profile'];
+    let guestProfile;
+    
+    if (guestProfileHeader) {
+      // Flutter envoie via header
+      try {
+        guestProfile = JSON.parse(guestProfileHeader);
+        console.log(`✅ GuestProfile depuis Flutter localStorage (via header):`, guestProfile);
+      } catch (e) {
+        console.log(`❌ Erreur parsing GuestProfile header:`, e.message);
+        return res.status(400).json({
+          success: false,
+          error: 'Header invalide',
+          message: 'Impossible de parser le header X-Guest-Profile'
+        });
+      }
+    } else {
+      // Web utilise les cookies
+      const cookies = req.headers.cookie || '';
+      const guestProfileMatch = cookies.match(/GuestProfile=([^;]+)/);
+      
+      if (!guestProfileMatch) {
+        console.log(`❌ Aucun cookie GuestProfile trouvé et aucun header X-Guest-Profile`);
+        return res.status(401).json({
+          success: false,
+          error: 'Non authentifié',
+          message: 'Aucun profil trouvé dans les cookies ou headers'
+        });
+      }
+      
+      try {
+        guestProfile = JSON.parse(decodeURIComponent(guestProfileMatch[1]));
+        console.log(`🍪 GuestProfile trouvé dans cookies:`, guestProfile);
+      } catch (e) {
+        console.log(`❌ Erreur parsing GuestProfile:`, e.message);
+        return res.status(400).json({
+          success: false,
+          error: 'Cookie invalide',
+          message: 'Impossible de parser le cookie GuestProfile'
+        });
+      }
+    }
+    
+    const iProfile = guestProfile.iProfile || '';
+    
+    // ✅ CRITIQUE: Vérifier que iProfile est valide (non vide et non '0')
+    // Le backend SNAL en production ne peut pas convertir une chaîne vide en varbinary
+    if (!iProfile || iProfile === '' || iProfile === '0') {
+      console.log(`❌ iProfile invalide ou vide: "${iProfile}"`);
+      console.log(`⚠️ Le backend SNAL ne peut pas traiter un iProfile vide`);
+      return res.status(400).json({
+        success: false,
+        error: 'iProfile invalide',
+        message: 'Le cookie GuestProfile ne contient pas d\'iProfile valide. Veuillez vous connecter d\'abord.'
+      });
+    }
+    
+    console.log(`👤 iProfile: ${iProfile} (type: ${typeof iProfile}, length: ${iProfile.length})`);
+    console.log(`👤 iProfile commence par 0x: ${iProfile.toString().startsWith('0x')}`);
+    console.log(`📱 Appel SNAL API LOCAL: https://jirig.be/api/get-basket-user`);
+    
+    // ✅ CRITIQUE: S'assurer que le cookie GuestProfile contient bien l'iProfile généré lors de la connexion
+    // Le backend SNAL lit l'iProfile depuis ce cookie via getGuestProfile()
+    // VÉRIFIER que guestProfile contient bien iProfile avant de créer le cookie
+    if (!guestProfile.iProfile || guestProfile.iProfile === '') {
+      console.log(`❌ ERREUR CRITIQUE: guestProfile.iProfile est vide ou undefined!`);
+      console.log(`   guestProfile complet:`, JSON.stringify(guestProfile, null, 2));
+      return res.status(400).json({
+        success: false,
+        error: 'iProfile manquant dans GuestProfile',
+        message: 'Le GuestProfile ne contient pas d\'iProfile valide'
+      });
+    }
+    
+    // ✅ CRITIQUE: Le backend SNAL utilise getGuestProfile() qui fait JSON.parse() du cookie
+    // Le cookie doit être une chaîne JSON valide, pas URL-encodée dans la valeur du cookie
+    // Format attendu: GuestProfile={"iProfile":"...","iBasket":"..."}
+    // getCookie() de h3 décode automatiquement, donc on doit encoder la valeur JSON
+    const guestProfileJson = JSON.stringify(guestProfile);
+    const cookieString = `GuestProfile=${encodeURIComponent(guestProfileJson)}; Path=/; HttpOnly=false; Max-Age=864000`;
+    
+    console.log(`🍪 Cookie GuestProfile créé avec iProfile: ${iProfile}`);
+    console.log(`🍪 Cookie GuestProfile JSON (avant encodage):`, guestProfileJson);
+    console.log(`🍪 Cookie GuestProfile complet:`, JSON.stringify(guestProfile, null, 2));
+    console.log(`🍪 Cookie string (preview): ${cookieString.substring(0, 200)}...`);
+    
+    // ✅ VÉRIFICATION: Tester le parsing du cookie pour s'assurer qu'il est valide
+    try {
+      const testParsed = JSON.parse(decodeURIComponent(cookieString.split('=')[1].split(';')[0]));
+      console.log(`✅ Test parsing cookie réussi:`, testParsed);
+      if (testParsed.iProfile !== iProfile) {
+        console.log(`❌ ERREUR: iProfile dans cookie parsé (${testParsed.iProfile}) ne correspond pas à l'iProfile attendu (${iProfile})`);
+      }
+    } catch (e) {
+      console.log(`❌ ERREUR lors du test parsing du cookie:`, e.message);
+    }
+
+    // Faire la requête GET vers l'API SNAL-Project LOCAL
+    // ✅ CRITIQUE: Le cookie doit être dans le header Cookie, pas dans Set-Cookie
+    // getCookie() de h3 dans SNAL décode automatiquement, donc le cookie doit être URL-encodé
+    const fetch = require('node-fetch');
+    console.log(`📤 Envoi de la requête GET vers SNAL avec le cookie GuestProfile`);
+    console.log(`📤 Cookie header: ${cookieString.substring(0, 150)}...`);
+    
+    const response = await fetch(`https://jirig.be/api/get-basket-user`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Cookie': cookieString,
+        'User-Agent': 'Mobile-Flutter-App/1.0'
+      }
+    });
+
+    console.log(`📡 Response status: ${response.status}`);
+    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`❌ Error response from SNAL:`, errorText);
+      
+      return res.status(response.status).json({
+        success: false,
+        error: 'API SNAL Error',
+        message: `Erreur ${response.status}: ${response.statusText}`,
+        details: errorText
+      });
+    }
+
+    const responseText = await response.text();
+    console.log(`📡 Response RAW text:`, responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log(`📡 API Response parsed:`, data);
+      console.log(`✅ Baskets récupérés avec succès !`);
+      
+      // Log des informations principales
+      if (data.success && data.data && Array.isArray(data.data)) {
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`🎯 BASKETS RÉCUPÉRÉS:`);
+        console.log(`${'='.repeat(60)}`);
+        console.log(`📦 Nombre de baskets: ${data.data.length}`);
+        data.data.forEach((basket, index) => {
+          console.log(`   ${index + 1}. ${basket.sBasketName || 'Sans nom'} (iBasket: ${basket.iBasket})`);
+        });
+        console.log(`${'='.repeat(60)}\n`);
+      }
+    } catch (e) {
+      console.error(`❌ Erreur parsing JSON:`, e.message);
+      return res.status(500).json({ success: false, error: 'Invalid JSON response from SNAL' });
+    }
+    
+    res.json(data);
+  } catch (error) {
+    console.error('❌ Get-Basket-User Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des baskets',
       message: error.message
     });
   }
@@ -2798,6 +3317,7 @@ app.use('/api', createProxyMiddleware({
       '/api/auth/google-mobile',      // OAuth Google mobile - géré directement par Flutter
       '/api/auth/facebook',    // OAuth Facebook - géré directement par Flutter
       '/api/oauth/callback',   // Callback OAuth - non utilisé
+      '/api/get-basket-user',  // Récupération de tous les baskets - géré spécifiquement
       '/api/get-info-profil',
       '/api/profile/update',   // Mise à jour du profil - géré spécifiquement
       '/api/get-ikea-store-list',

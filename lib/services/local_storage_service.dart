@@ -31,9 +31,11 @@ class LocalStorageService {
     print('   iProfile: "$iProfileValue" (null: ${profile['iProfile'] == null}, empty: ${iProfileValue.isEmpty}, length: ${iProfileValue.length})');
     print('   iBasket: "$iBasketValue" (null: ${profile['iBasket'] == null}, empty: ${iBasketValue.isEmpty}, length: ${iBasketValue.length})');
     
+    // ✅ CORRECTION: Sauvegarder iProfile s'il est valide (non vide et non guest_)
+    // Les valeurs hexadécimales (varbinary) comme 0x02000000... sont valides et doivent être sauvegardées
     if (iProfileValue.isNotEmpty && !iProfileValue.startsWith('guest_')) {
       await prefs.setString(_profileKey, iProfileValue);
-      print('✅ iProfile sauvegardé: $iProfileValue');
+      print('✅ iProfile sauvegardé: $iProfileValue (type: ${iProfileValue.startsWith('0x') ? 'hexadécimal/varbinary' : 'normal'})');
     } else {
       if (iProfileValue.isEmpty) {
         print('⚠️ iProfile vide, non sauvegardé (conservation de la valeur existante)');

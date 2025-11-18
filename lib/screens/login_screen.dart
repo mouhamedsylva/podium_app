@@ -8,6 +8,7 @@ import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
 import '../services/auth_notifier.dart';
 import '../services/translation_service.dart';
+import '../config/api_config.dart';
 import '../widgets/terms_of_use_modal.dart';
 import '../widgets/privacy_policy_modal.dart';
 // OAuthHandler supprimé - utilisation directe des URLs SNAL
@@ -18,6 +19,9 @@ import '../utils/web_utils.dart';
 import 'package:animations/animations.dart';
 import 'dart:math' as math;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+// Google Sign-In pour Android
+import 'package:google_sign_in/google_sign_in.dart';
+import 'dart:io' show Platform;
 
 class LoginScreen extends StatefulWidget {
   final String? callBackUrl;
@@ -413,53 +417,206 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  /// Connexion avec Google - Basée sur SNAL google.get.ts
+  /// Connexion avec Google - Basée sur SNAL google.get.ts et google-mobile.get.ts
+  /// - Web : Flux OAuth classique SNAL (redirection vers le site)
+  /// - Android : Google Sign-In Mobile (récupération idToken et appel /api/auth/google-mobile)
   Future<void> _loginWithGoogle() async {
-    print('🔐 Connexion avec Google');
+    print('\n${List.filled(70, '=').join()}');
+    print('🔐 === DÉBUT CONNEXION GOOGLE ===');
+    print('${List.filled(70, '=').join()}');
     final translationService =
         Provider.of<TranslationService>(context, listen: false);
+    
+    // ✅ DEBUG: Afficher la plateforme détectée
+    print('🔍 DEBUG Plateforme:');
+    print('   kIsWeb: $kIsWeb');
+    print('   kDebugMode: $kDebugMode');
+    if (!kIsWeb) {
+      print('   Platform.isAndroid: ${Platform.isAndroid}');
+      print('   Platform.operatingSystem: ${Platform.operatingSystem}');
+      print('   Platform.isIOS: ${Platform.isIOS}');
+    }
+    
+    // ✅ DEBUG: Afficher la configuration API
+    print('🔍 DEBUG Configuration API:');
+    print('   ApiConfig.baseUrl: ${ApiConfig.baseUrl}');
+    print('   ApiConfig.useProductionApiOnMobile: ${ApiConfig.useProductionApiOnMobile}');
+    
     try {
-      // ✅ Démarrer le timer OAuth pour vérifier la connexion
-      _startOAuthCheckTimer();
-      
-      // Sauvegarder le callBackUrl pour le récupérer après OAuth
-      final callBackUrl = widget.callBackUrl ?? '/wishlist';
-      await LocalStorageService.saveCallBackUrl(callBackUrl);
-
-      // Endpoint adapté selon la plateforme :
-      //  - Web : flux classique SNAL (redirige vers le site, détecté ensuite par Flutter)
-      //  - Mobile : endpoint mobile SNAL qui renvoie un deep link jirig://auth/callback
-      final authUrl = kIsWeb
-          ? 'https://jirig.be/api/auth/google'
-          : 'https://jirig.be/api/auth/google-mobile';
-
-      print('🌐 Redirection vers Google OAuth: $authUrl');
-      print('📝 Note: Après la connexion sur Jirig, revenez à cette application');
-
-      final uri = Uri.parse(authUrl);
-
+      // ✅ Détecter la plateforme
       if (kIsWeb) {
+        // Web : Flux OAuth classique SNAL (redirection vers le site)
+        print('🌐 Mode Web détecté - Redirection vers SNAL OAuth');
+        print('⚠️ ATTENTION: Vous êtes dans un navigateur, la redirection vers jirig.be est NORMALE pour le flux Web OAuth');
+        _startOAuthCheckTimer();
+        
+        // Sauvegarder le callBackUrl pour le récupérer après OAuth
+        final callBackUrl = widget.callBackUrl ?? '/wishlist';
+        await LocalStorageService.saveCallBackUrl(callBackUrl);
+
+        final authUrl = 'https://jirig.be/api/auth/google';
+        print('🌐 Redirection vers Google OAuth (Web): $authUrl');
+        print('📝 Après la connexion sur jirig.be, revenez à cette application');
+
+        final uri = Uri.parse(authUrl);
         await launchUrl(
           uri,
           mode: LaunchMode.platformDefault,
           webOnlyWindowName: '_self',
         );
-      } else {
-        // Sur mobile on laisse le navigateur externe gérer l'OAuth et le deep link
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
-      }
 
-      // Afficher un message à l'utilisateur
-      setState(() {
-        _errorMessage =
-            translationService.translate('LOGIN_MESSAGE_RETURN_APP');
-      });
+        // Afficher un message à l'utilisateur
+        setState(() {
+          _errorMessage =
+              translationService.translate('LOGIN_MESSAGE_RETURN_APP');
+        });
+        print('✅ Redirection Web vers jirig.be effectuée');
+        print('${List.filled(70, '=').join()}\n');
+        return; // ✅ Sortir ici pour éviter d'exécuter le code Android
+      } else if (Platform.isAndroid) {
+        // ✅ Android : Google Sign-In Mobile (selon documentation)
+        print('📱 Mode Android détecté - Utilisation de Google Sign-In Mobile');
+        print('✅ Vous êtes dans une vraie app Android, le flux Google Sign-In devrait s\'exécuter');
+        setState(() {
+          _isLoading = true;
+          _errorMessage = '';
+        });
+
+        try {
+          print('📱 === ÉTAPE 1: Configuration Google Sign-In ===');
+          
+          // ✅ Configuration Google Sign-In selon la documentation
+          // serverClientId doit être le Web Client ID (TA_WEB_CLIENT_ID.apps.googleusercontent.com)
+          // TODO: Remplacer par votre Web Client ID réel dans les variables d'environnement
+          const webClientId = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com'; // À remplacer par la vraie valeur
+          
+          // ✅ VÉRIFICATION CRITIQUE: S'assurer que le webClientId est configuré
+          if (webClientId == 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com') {
+            print('❌ ERREUR: Web Client ID non configuré');
+            throw Exception('Web Client ID non configuré. Veuillez remplacer YOUR_WEB_CLIENT_ID.apps.googleusercontent.com par votre vrai Web Client ID dans login_screen.dart ligne 475.');
+          }
+          
+          print('🔑 Configuration Google Sign-In avec serverClientId: ${webClientId.substring(0, 30)}...');
+          
+          final GoogleSignIn googleSignIn = GoogleSignIn(
+            scopes: ['email', 'profile'],
+            serverClientId: webClientId, // Web Client ID pour Android
+          );
+
+          // ✅ Étape 1: Récupérer l'idToken via Google Sign-In
+          print('📱 === ÉTAPE 2: Récupération idToken via Google Sign-In ===');
+          print('🔑 Demande de connexion Google Sign-In...');
+          print('⏳ En attente de la sélection du compte Google par l\'utilisateur...');
+          
+          final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+          
+          if (googleUser == null) {
+            // L'utilisateur a annulé la connexion
+            print('⚠️ Connexion Google annulée par l\'utilisateur');
+            print('ℹ️ Pas de redirection - retour normal à l\'app');
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '';
+            });
+            print('${List.filled(70, '=').join()}\n');
+            return;
+          }
+
+          print('✅ Compte Google récupéré: ${googleUser.email}');
+          print('✅ Google User ID: ${googleUser.id}');
+          
+          // ✅ Étape 2: Récupérer l'idToken
+          print('📱 === ÉTAPE 3: Récupération idToken depuis Google ===');
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          final idToken = googleAuth.idToken;
+
+          if (idToken == null) {
+            print('❌ ERREUR: idToken est null');
+            throw Exception('idToken non disponible depuis Google Sign-In');
+          }
+
+          print('✅ idToken récupéré: ${idToken.substring(0, 20)}...');
+          print('✅ idToken length: ${idToken.length}');
+
+          // ✅ Étape 3: Appeler l'endpoint Nuxt3 /api/auth/google-mobile
+          print('📱 === ÉTAPE 4: Appel API /api/auth/google-mobile ===');
+          print('📡 URL complète: ${ApiConfig.baseUrl}/auth/google-mobile?id_token=...');
+          print('📡 Appel à /api/auth/google-mobile...');
+          
+          final apiService = ApiService();
+          final response = await apiService.loginWithGoogleMobile(idToken);
+
+          print('✅ Réponse API reçue:');
+          print('   Status: ${response['status']}');
+          print('   Keys: ${response.keys.toList()}');
+
+          // ✅ Étape 4: Gérer la réponse
+          if (response['status'] == 'success') {
+            print('✅ Connexion Google réussie');
+            print('📱 === ÉTAPE 5: Traitement de la réponse ===');
+            
+            // Notifier l'AuthNotifier de la connexion
+            print('📢 Notification de la connexion à AuthNotifier...');
+            final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+            await authNotifier.onLogin();
+            print('✅ AuthNotifier notifié');
+            
+            // Rediriger vers la page souhaitée
+            String? callBackUrl = widget.callBackUrl;
+            if (callBackUrl == null || callBackUrl.isEmpty) {
+              callBackUrl = '/wishlist'; // Par défaut vers la wishlist
+            }
+
+            print('📱 === ÉTAPE 6: Redirection interne dans l\'app ===');
+            print('🔄 Redirection interne vers: $callBackUrl');
+            print('ℹ️ ATTENTION: Cette redirection est INTERNE (context.go), pas vers jirig.be');
+
+            // Afficher le popup de succès avant la redirection
+            await _showSuccessPopup();
+
+            // Redirection après le popup
+            if (mounted) {
+              print('✅ Widget monté, redirection interne en cours...');
+              context.go(callBackUrl);
+              print('✅ Redirection interne effectuée vers: $callBackUrl');
+            } else {
+              print('⚠️ Widget non monté, redirection annulée');
+            }
+            print('${List.filled(70, '=').join()}\n');
+          } else {
+            print('❌ ERREUR: Status de la réponse n\'est pas "success"');
+            print('   Réponse complète: $response');
+            throw Exception(response['message']?.toString() ?? response['error']?.toString() ?? 'Erreur lors de la connexion Google');
+          }
+        } catch (e, stackTrace) {
+          print('❌ ERREUR connexion Google Mobile:');
+          print('   Exception: $e');
+          print('   Type: ${e.runtimeType}');
+          print('   StackTrace:');
+          print(stackTrace);
+          print('ℹ️ ATTENTION: Cette erreur ne devrait PAS causer de redirection vers jirig.be');
+          setState(() {
+            _errorMessage =
+                translationService.translate('LOGIN_ERROR_GOOGLE') + ': ${e.toString()}';
+          });
+          print('${List.filled(70, '=').join()}\n');
+        } finally {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      } else {
+        // iOS ou autre plateforme : Flux OAuth classique (à implémenter plus tard si nécessaire)
+        print('⚠️ Plateforme non supportée pour Google Sign-In Mobile: ${Platform.operatingSystem}');
+        setState(() {
+          _errorMessage =
+              translationService.translate('LOGIN_ERROR_GOOGLE') + ': Plateforme non supportée';
+        });
+      }
     } catch (e) {
       print('❌ Erreur connexion Google: $e');
       setState(() {
+        _isLoading = false;
         _errorMessage =
             translationService.translate('LOGIN_ERROR_GOOGLE');
       });

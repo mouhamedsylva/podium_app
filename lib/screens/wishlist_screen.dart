@@ -4390,9 +4390,13 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF212529),
+                    // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                    fontStyle: FontStyle.normal, // Style: normal
+                    fontSize: 16.0, // Size: 16px
+                    fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                    color: Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                    height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                    letterSpacing: 0.0, // Pas de letterSpacing
                   ),
                 ),
               ),
@@ -5646,6 +5650,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                       ),
                                       
                             // Nom du pays
+                            // Style: system-ui, normal, weight 400, size 16px, line height 24px, color black
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5654,12 +5659,13 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                                     Text(
                                               name,
                                               style: TextStyle(
-                                                fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
-                                                fontWeight: FontWeight.w600,
-                                                color: isSelected
-                                                    ? const Color(0xFF065F46)
-                                                    : (isAvailable ? Colors.black : const Color(0xFF6B7280)),
-                                        height: 1.0,
+                                                // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                                                fontStyle: FontStyle.normal, // Style: normal
+                                                fontSize: 16.0, // Size: 16px
+                                                fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                                                color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                                                height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                                                letterSpacing: 0.0, // Pas de letterSpacing
                                       ),
                                               ),
                                             SizedBox(height: isVerySmallMobile ? 2 : 4),

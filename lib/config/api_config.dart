@@ -5,6 +5,20 @@ import 'package:flutter/foundation.dart';
 /// Mobile (Android/iOS): Appelle directement https://jirig.be/api
 /// Web: Utilise le proxy local http://localhost:3001/api pour éviter CORS
 class ApiConfig {
+  // 🔧 Configuration pour mobile
+  // Définir à true pour utiliser directement l'API de production (https://jirig.be/api)
+  // Définir à false pour utiliser le proxy local (http://10.0.2.2:3001/api ou http://192.168.x.x:3001/api)
+  static const bool useProductionApiOnMobile = false; // ✅ Changer à true pour appeler directement https://jirig.be/api
+  
+  // 📱 Configuration du proxy local pour développement mobile
+  // Android Emulator: 'http://10.0.2.2:3001/api'
+  // Android Device: 'http://192.168.1.XXX:3001/api' (remplacer XXX par votre IP locale)
+  // iOS Simulator: 'http://localhost:3001/api'
+  // Trouvez votre IP avec: ipconfig (Windows) ou ifconfig (Mac/Linux)
+  static const String localProxyUrl = 'http://10.0.2.2:3001/api'; // Android Emulator
+  // static const String localProxyUrl = 'http://192.168.1.XXX:3001/api'; // Android Device (remplacer XXX)
+  // static const String localProxyUrl = 'http://localhost:3001/api'; // iOS Simulator
+  
   /// URL de base de l'API selon la plateforme
   /// Mobile-First: Priorité à l'expérience mobile native
   static String get baseUrl {
@@ -12,8 +26,14 @@ class ApiConfig {
       // Web: Utiliser le proxy local pour contourner CORS
       return 'http://localhost:3001/api';
     } else {
-      // Mobile (Android/iOS): Appeler directement l'API de production
-      return 'https://jirig.be/api';
+      // Mobile (Android/iOS): Utiliser soit le proxy local soit l'API de production
+      if (useProductionApiOnMobile) {
+        // ✅ Appel direct à l'API de production (pour tests sur appareil physique ou production)
+        return 'https://jirig.be/api';
+      } else {
+        // ✅ Utiliser le proxy local (pour développement avec émulateur ou appareil physique sur même réseau)
+        return localProxyUrl;
+      }
     }
   }
   

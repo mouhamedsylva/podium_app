@@ -156,74 +156,106 @@ class ApiService {
 
         // ✅ RÉCUPÉRER LES VRAIES VALEURS DEPUIS LE LOCALSTORAGE
         // SNAL gère les identifiants côté serveur via les cookies
-        // CRITIQUE: Le LocalStorage est toujours la source de vérité après connexion
+        // CRITIQUE: Le LocalStorage est toujours la source de vérité après initialisation/connexion
+        String finalIProfile = '0';
+        String finalIBasket = '0';
+        String sPaysLangue = '';
+        String sPaysFav = '';
+        
         if (profile != null) {
-          final iProfile = profile['iProfile']?.toString() ?? '0';
-          final iBasket = profile['iBasket']?.toString() ?? '0';
-          final sPaysLangue = profile['sPaysLangue']?.toString() ?? '';
-          final sPaysFav = profile['sPaysFav']?.toString() ?? '';
+          final iProfile = profile['iProfile']?.toString() ?? '';
+          final iBasket = profile['iBasket']?.toString() ?? '';
+          sPaysLangue = profile['sPaysLangue']?.toString() ?? '';
+          sPaysFav = profile['sPaysFav']?.toString() ?? '';
           final sEmail = profile['sEmail']?.toString() ?? '';
 
-          // ✅ UTILISER LES VRAIES VALEURS directement depuis le localStorage
-          // Si l'utilisateur est connecté (a un email), utiliser les vrais identifiants
-          String finalIProfile = iProfile;
-          String finalIBasket = iBasket;
+          print('🔍 DEBUG Intercepteur - Profil récupéré depuis localStorage:');
+          print('   iProfile: "$iProfile" (empty: ${iProfile.isEmpty}, is "0": ${iProfile == '0'})');
+          print('   iBasket: "$iBasket" (empty: ${iBasket.isEmpty}, is "0": ${iBasket == '0'})');
+          print('   sPaysLangue: "$sPaysLangue"');
+          print('   sPaysFav: "$sPaysFav"');
+          print('   sEmail: "$sEmail"');
 
-          // Si ce sont des identifiants par défaut, utiliser '0' (comme le proxy) et non des chaînes vides
-          // MAIS si l'utilisateur est connecté, forcer l'utilisation des vrais identifiants
-          if (sEmail.isNotEmpty && iProfile.isNotEmpty && !iProfile.startsWith('guest_')) {
-            // Utilisateur connecté : utiliser les vrais identifiants
+          // ✅ UTILISER LES VRAIES VALEURS directement depuis le localStorage
+          // CRITIQUE: Utiliser les identifiants depuis le localStorage s'ils existent (même si l'utilisateur n'est pas connecté)
+          // Les identifiants peuvent être créés lors de l'initialisation, même sans connexion
+          // ✅ PRIORITÉ: Utiliser les identifiants depuis le localStorage s'ils existent et sont valides
+          // Vérifier si les identifiants sont valides (non vides, non '0', ne commencent pas par 'guest_' ou 'basket_')
+          final hasValidIProfile = iProfile.isNotEmpty && 
+                                   iProfile != '0' && 
+                                   !iProfile.startsWith('guest_');
+          final hasValidIBasket = iBasket.isNotEmpty && 
+                                  iBasket != '0' && 
+                                  !iBasket.startsWith('basket_');
+
+          print('🔍 DEBUG Validation:');
+          print('   hasValidIProfile: $hasValidIProfile');
+          print('   hasValidIBasket: $hasValidIBasket');
+
+          if (hasValidIProfile && hasValidIBasket) {
+            // ✅ Utiliser les vrais identifiants depuis le localStorage (créés lors de l'initialisation)
             finalIProfile = iProfile;
             finalIBasket = iBasket;
-          } else if (iProfile.isEmpty || iProfile == '0' || iProfile.startsWith('guest_')) {
-            finalIProfile = '0';
-          }
-          if (iBasket.isEmpty || iBasket == '0' || iBasket.startsWith('basket_')) {
-            finalIBasket = '0';
-          }
-
-          if (finalIProfile != '0' && finalIBasket != '0') {
-            print('✅ Vrais identifiants utilisés directement depuis LocalStorage: iProfile=$finalIProfile, iBasket=$finalIBasket');
+            print('✅ Identifiants depuis localStorage (initialisation): iProfile=$finalIProfile, iBasket=$finalIBasket');
             if (sEmail.isNotEmpty) {
               print('   👤 Utilisateur connecté: $sEmail');
+            } else {
+              print('   👤 Utilisateur non connecté mais identifiants valides depuis initialisation');
             }
           } else {
-            print('⚠️ Identifiants par défaut détectés, envoi de iProfile=0 / iBasket=0 (comme proxy web)...');
+            // Si pas d'identifiants valides, utiliser '0' comme valeur par défaut
+            finalIProfile = '0';
+            finalIBasket = '0';
+            print('⚠️ Aucun identifiant valide dans localStorage - Utilisation des identifiants par défaut: iProfile=0, iBasket=0');
+            if (!hasValidIProfile) {
+              print('   ❌ iProfile invalide: "$iProfile"');
+            }
+            if (!hasValidIBasket) {
+              print('   ❌ iBasket invalide: "$iBasket"');
+            }
           }
-
-          // Créer le GuestProfile (comme SNAL / proxy)
-          final guestProfile = {
-            'iProfile': finalIProfile,
-            'iBasket': finalIBasket,
-            'sPaysLangue': sPaysLangue,
-            'sPaysFav': sPaysFav,
-          };
-
-          // ✅ Ajouter le GuestProfile JSON dans les headers (comme SNAL)
-          final guestProfileJson = jsonEncode(guestProfile);
-          options.headers['X-Guest-Profile'] = guestProfileJson;
-          options.headers['x-guest-profile'] = guestProfileJson;
-
-          // ✅ IMPORTANT : Ajouter le GuestProfile comme COOKIE (comme SNAL)
-          final guestProfileEncoded = Uri.encodeComponent(guestProfileJson);
-          final cookieParts = <String>[
-            'GuestProfile=' + guestProfileEncoded,
-          ];
-
-          if (finalIProfile.isNotEmpty) {
-            cookieParts.add('iProfile=' + Uri.encodeComponent(finalIProfile));
-          }
-          if (finalIBasket.isNotEmpty) {
-            cookieParts.add('iBasket=' + Uri.encodeComponent(finalIBasket));
-          }
-
-          final cookieHeader = cookieParts.join('; ');
-          options.headers['Cookie'] = cookieHeader;
-          options.headers['cookie'] = cookieHeader;
-
-          print('🍪 GuestProfile envoyé: ' + guestProfile.toString());
-          print('🍪 Cookie: ' + cookieHeader);
+        } else {
+          print('⚠️ Aucun profil trouvé dans localStorage - Utilisation des identifiants par défaut: iProfile=0, iBasket=0');
         }
+
+        if (finalIProfile != '0' && finalIBasket != '0') {
+          print('✅ Vrais identifiants utilisés directement depuis LocalStorage: iProfile=$finalIProfile, iBasket=$finalIBasket');
+        } else {
+          print('⚠️ Identifiants par défaut détectés, envoi de iProfile=0 / iBasket=0 (comme proxy web)...');
+        }
+
+        // Créer le GuestProfile (comme SNAL / proxy)
+        final guestProfile = {
+          'iProfile': finalIProfile,
+          'iBasket': finalIBasket,
+          'sPaysLangue': sPaysLangue,
+          'sPaysFav': sPaysFav,
+        };
+
+        // ✅ Ajouter le GuestProfile JSON dans les headers (comme SNAL)
+        final guestProfileJson = jsonEncode(guestProfile);
+        options.headers['X-Guest-Profile'] = guestProfileJson;
+        options.headers['x-guest-profile'] = guestProfileJson;
+
+        // ✅ IMPORTANT : Ajouter le GuestProfile comme COOKIE (comme SNAL)
+        final guestProfileEncoded = Uri.encodeComponent(guestProfileJson);
+        final cookieParts = <String>[
+          'GuestProfile=' + guestProfileEncoded,
+        ];
+
+        if (finalIProfile.isNotEmpty) {
+          cookieParts.add('iProfile=' + Uri.encodeComponent(finalIProfile));
+        }
+        if (finalIBasket.isNotEmpty) {
+          cookieParts.add('iBasket=' + Uri.encodeComponent(finalIBasket));
+        }
+
+        final cookieHeader = cookieParts.join('; ');
+        options.headers['Cookie'] = cookieHeader;
+        options.headers['cookie'] = cookieHeader;
+
+        print('🍪 GuestProfile envoyé: ' + guestProfile.toString());
+        print('🍪 Cookie: ' + cookieHeader);
 
         handler.next(options);
       },
@@ -1097,9 +1129,25 @@ class ApiService {
       
       print('📦 getAllBasket4User - Récupération de tous les baskets...');
       print('🔍 Profil utilisé pour l\'appel:');
-      print('   iProfile: $iProfile');
+      print('   iProfile: $iProfile (length: ${iProfile.length})');
       print('   sEmail: $sEmail');
       print('   Est connecté: ${sEmail.isNotEmpty}');
+      
+      // ✅ CRITIQUE: Vérifier que iProfile est valide avant d'appeler l'API
+      // Le backend SNAL ne peut pas convertir une chaîne vide en varbinary
+      if (iProfile.isEmpty || iProfile == '0') {
+        print('❌ ERREUR: iProfile invalide ou vide: "$iProfile"');
+        print('⚠️ Le backend SNAL ne peut pas traiter un iProfile vide');
+        print('💡 Solution: L\'utilisateur doit se connecter d\'abord pour obtenir un iProfile valide');
+        return {
+          'success': false,
+          'error': 'iProfile invalide',
+          'message': 'Aucun profil valide trouvé. Veuillez vous connecter d\'abord.',
+          'data': [],
+        };
+      }
+      
+      print('   ✅ iProfile valide détecté');
       print('   ⚠️ L\'intercepteur ajoutera automatiquement le GuestProfile dans les headers/cookies');
       print('   ⚠️ Le backend SNAL utilise getGuestProfile() pour récupérer l\'iProfile depuis le cookie');
       
@@ -1314,6 +1362,7 @@ class ApiService {
     }
   }
 
+  
   /// Connexion avec code (basé sur SNAL login-with-code.ts)
   /// - Si code est null : Étape 1 (demande du code par email)
   /// - Si code est fourni : Étape 2 (validation du code)
@@ -1335,19 +1384,31 @@ class ApiService {
       String xXml = '';
       try {
         final profile = await LocalStorageService.getProfile();
-        final iProfileLocal = profile?['iProfile']?.toString() ?? '0';
+        final iProfileLocal = profile?['iProfile']?.toString() ?? '';
         final sPaysLangueLocal = profile?['sPaysLangue']?.toString() ?? '';
         final sPaysFavLocal = profile?['sPaysFav']?.toString() ?? '';
 
-        final xmlIProfile = (iProfileLocal.isEmpty || iProfileLocal == '0') ? '0' : iProfileLocal;
+        // ✅ CRITIQUE: Vérifier si iProfile est valide (non vide, non '0', non 'guest_')
+        // Si invalide, utiliser "-99" comme valeur par défaut (comme dans init.post.ts ligne 40)
+        // Le backend SNAL utilise "-99" comme valeur par défaut, donc on fait pareil
+        final hasValidIProfile = iProfileLocal.isNotEmpty && 
+                                 iProfileLocal != '0' && 
+                                 !iProfileLocal.startsWith('guest_');
+        
+        // ✅ IMPORTANT: Toujours inclure iProfile dans le XML comme le fait le backend SNAL
+        // Utiliser "-99" si invalide pour éviter l'erreur "varchar to varbinary"
+        final xmlIProfileValue = hasValidIProfile ? iProfileLocal : '-99';
+        
         final xmlSPaysLangue = sPaysLangueLocal;
         final sLang = sLangue;
         final passwordCleaned = code ?? '';
         const sTypeAccount = 'EMAIL';
 
+        // ✅ Construire le XML exactement comme SNAL (lignes 57-70 de login-with-code.ts)
+        // Le backend SNAL inclut toujours <iProfile>${iProfile}</iProfile>, même si vide
         xXml = (
           '<root>'
-          '<iProfile>' + xmlIProfile + '</iProfile>'
+          '<iProfile>' + xmlIProfileValue + '</iProfile>'
           '<sProvider>magic-link</sProvider>'
           '<email>' + email + '</email>'
           '<code>' + passwordCleaned + '</code>'
@@ -1359,6 +1420,12 @@ class ApiService {
           '<sCurrentLangue>' + sLang + '</sCurrentLangue>'
           '</root>'
         );
+        
+        if (hasValidIProfile) {
+          print('✅ XML créé avec iProfile valide: $iProfileLocal');
+        } else {
+          print('⚠️ XML créé avec iProfile="-99" (vide ou invalide). Le backend SNAL créera un nouveau iProfile.');
+        }
       } catch (e) {
         // Si génération xXml échoue, on continue sans
         xXml = '';
@@ -1810,19 +1877,163 @@ class ApiService {
     }
   }
 
+
+  /// Connexion avec Google Sign-In Mobile (basé sur SNAL google-mobile.get.ts)
+  /// Récupère un idToken depuis Google Sign-In et l'envoie à /api/auth/google-mobile
+  /// Retourne un JSON avec status, iProfile, iBasket, nom, prenom, email
+  Future<Map<String, dynamic>> loginWithGoogleMobile(String idToken) async {
+    try {
+      print('🔐 Connexion avec Google Mobile - idToken: ${idToken.substring(0, 20)}...');
+      
+      // Appel à l'endpoint /api/auth/google-mobile?id_token=...
+      // ✅ IMPORTANT: Ne pas suivre les redirections (followRedirects: false)
+      // Pour éviter que Dio suive une redirection HTTP vers jirig.be
+      final response = await _dio!.get(
+        '/auth/google-mobile',
+        queryParameters: {
+          'id_token': idToken,
+        },
+        options: Options(
+          followRedirects: false, // ✅ Ne pas suivre les redirections HTTP
+          validateStatus: (status) {
+            // ✅ Accepter les codes 200-299 comme valides
+            return status != null && status >= 200 && status < 300;
+          },
+        ),
+      );
+      
+      print('✅ Réponse google-mobile: ${response.data}');
+      print('🔍 Analyse de la réponse reçue:');
+      print('   Type: ${response.data.runtimeType}');
+      print('   Contenu: ${response.data}');
+      
+      final data = response.data ?? {};
+      
+      // Vérifier si la réponse indique un succès
+      if (data['status'] == 'success') {
+        print('✅ Connexion Google réussie');
+        
+        // Récupérer les identifiants depuis la réponse (comme dans google-mobile.get.ts ligne 129-135)
+        final iProfile = data['iProfile']?.toString();
+        final iBasket = data['iBasket']?.toString();
+        final email = data['email']?.toString();
+        final nom = data['nom']?.toString();
+        final prenom = data['prenom']?.toString();
+        
+        print('🔍 Identifiants récupérés depuis la réponse:');
+        print('   iProfile: $iProfile');
+        print('   iBasket: $iBasket');
+        print('   email: $email');
+        print('   nom: $nom');
+        print('   prenom: $prenom');
+        
+        if (iProfile != null && iBasket != null && email != null) {
+          // Récupérer le profil actuel pour conserver sPaysLangue et sPaysFav
+          final currentProfile = await LocalStorageService.getProfile();
+          final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+          final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+          
+          // Mettre à jour le profil local avec TOUTES les informations
+          final updatedProfile = {
+            ...?currentProfile,
+            'iProfile': iProfile,
+            'iBasket': iBasket,
+            'sEmail': email,
+            if (nom != null && nom.isNotEmpty) 'sNom': nom,
+            if (prenom != null && prenom.isNotEmpty) 'sPrenom': prenom,
+            if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
+            if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
+          };
+          
+          await LocalStorageService.saveProfile(updatedProfile);
+          print('💾 Profil sauvegardé avec identifiants et infos utilisateur');
+          
+          // Forcer la mise à jour des cookies avant toute autre requête
+          await _updateCookiesWithNewIdentifiers(iProfile, iBasket);
+          
+          // Attendre que les cookies soient mis à jour
+          print('⏳ Attente de la mise à jour des cookies...');
+          await Future.delayed(const Duration(seconds: 2));
+          
+          // Vérifier que le cookie jar contient bien le nouveau GuestProfile
+          if (ApiConfig.useCookieManager && _cookieJar != null) {
+            try {
+              final apiUrl = Uri.parse('https://jirig.be/api/');
+              final savedCookies = await _cookieJar!.loadForRequest(apiUrl);
+              final guestProfileCookie = savedCookies.firstWhere(
+                (c) => c.name == 'GuestProfile',
+                orElse: () => Cookie('', ''),
+              );
+              
+              if (guestProfileCookie.name.isNotEmpty) {
+                try {
+                  String decodedValue = Uri.decodeComponent(guestProfileCookie.value);
+                  if (decodedValue.contains('%')) {
+                    decodedValue = Uri.decodeComponent(decodedValue);
+                  }
+                  final guestProfile = jsonDecode(decodedValue);
+                  final cookieIProfile = guestProfile['iProfile']?.toString() ?? '';
+                  
+                  if (cookieIProfile == iProfile) {
+                    print('✅ Cookie GuestProfile confirmé avec le bon iProfile: $cookieIProfile');
+                  } else {
+                    print('⚠️ Cookie GuestProfile a un iProfile différent: $cookieIProfile (attendu: $iProfile)');
+                    // Réessayer la mise à jour
+                    await _updateCookiesWithNewIdentifiers(iProfile, iBasket);
+                    await Future.delayed(const Duration(seconds: 1));
+                  }
+                } catch (e) {
+                  print('⚠️ Erreur lors de la vérification du cookie: $e');
+                }
+              } else {
+                print('⚠️ Cookie GuestProfile non trouvé dans le cookie jar après mise à jour');
+                // Réessayer la mise à jour
+                await _updateCookiesWithNewIdentifiers(iProfile, iBasket);
+                await Future.delayed(const Duration(seconds: 1));
+              }
+            } catch (e) {
+              print('⚠️ Erreur lors de la vérification du cookie jar: $e');
+            }
+          }
+          
+          print('✅ Connexion Google réussie - identifiants et infos utilisateur mis à jour');
+        } else {
+          print('❌ Identifiants manquants dans la réponse');
+          throw Exception('Identifiants manquants dans la réponse Google Mobile');
+        }
+      } else {
+        print('❌ Échec de la connexion Google: ${data['message'] ?? data['error']}');
+        throw Exception(data['message']?.toString() ?? data['error']?.toString() ?? 'Erreur lors de la connexion Google');
+      }
+      
+      return data;
+    } catch (e) {
+      print('❌ Erreur lors de la connexion Google Mobile: $e');
+      rethrow;
+    }
+  }
+
   /// Déconnexion (appelle /api/auth/disconnect comme SNAL-Project)
+  /// ✅ CRITIQUE: Conserve les iProfile et iBasket de l'utilisateur connecté
   Future<Map<String, dynamic>?> disconnect() async {
     try {
       print('🚪 Déconnexion via /api/auth/disconnect...');
       
-      // Récupérer le profil actuel pour conserver sPaysLangue et sPaysFav
+      // ✅ CRITIQUE: Récupérer le profil actuel pour CONSERVER iProfile et iBasket
       final currentProfile = await LocalStorageService.getProfile();
+      final currentIProfile = currentProfile?['iProfile']?.toString() ?? '';
+      final currentIBasket = currentProfile?['iBasket']?.toString() ?? '';
       final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
       final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
       
+      print('📋 Profil actuel avant déconnexion:');
+      print('   iProfile: $currentIProfile (à CONSERVER)');
+      print('   iBasket: $currentIBasket (à CONSERVER)');
+      print('   sPaysLangue: $sPaysLangue');
+      print('   sPaysFav: $sPaysFav');
+      
       print('📤 Appel POST /auth/disconnect');
       print('📡 URL complète: ${_dio!.options.baseUrl}/auth/disconnect');
-      print('📋 Profil actuel: sPaysLangue=$sPaysLangue, sPaysFav=$sPaysFav');
       
       // Appeler l'endpoint disconnect (comme SNAL-Project)
       final response = await _dio!.post('/auth/disconnect');
@@ -1832,34 +2043,27 @@ class ApiService {
         
         final data = response.data;
         if (data != null && data is Map<String, dynamic>) {
-          final iProfile = data['iProfile']?.toString();
-          final iBasket = data['iBasket']?.toString();
-          final success = data['success'] == true;
+          // ✅ CRITIQUE: IGNORER les nouveaux identifiants anonymes du backend
+          // On conserve les iProfile et iBasket de l'utilisateur connecté
+          print('⚠️ Le backend a généré de nouveaux identifiants anonymes, mais on les IGNORE');
+          print('✅ On conserve les identifiants de l\'utilisateur connecté: iProfile=$currentIProfile, iBasket=$currentIBasket');
           
-          if (success && iProfile != null && iBasket != null) {
-            print('✅ Nouveaux identifiants générés: iProfile=$iProfile, iBasket=$iBasket');
-            
-            // Mettre à jour le profil avec les nouveaux identifiants anonymes (comme SNAL)
-            // ✅ CRITIQUE: Supprimer TOUTES les informations utilisateur pour que isLoggedIn() retourne false
-            await LocalStorageService.saveProfile({
-              'iProfile': iProfile,
-              'iBasket': iBasket,
-              'sPaysLangue': sPaysLangue, // Conserver la langue
-              'sPaysFav': sPaysFav, // Conserver les pays favoris
-              'sTypeAccount': 'ANONYMOUS', // Marquer comme anonyme
-              'sEmail': '', // ✅ Supprimer l'email (CRITIQUE pour isLoggedIn())
-              'sNom': '', // ✅ Supprimer le nom
-              'sPrenom': '', // ✅ Supprimer le prénom
-              'sPhoto': '', // ✅ Supprimer la photo
-            });
-            
-            print('✅ Profil mis à jour: email et infos utilisateur supprimés');
-            
-            print('✅ Profil mis à jour avec les nouveaux identifiants anonymes');
-            return data;
-          } else {
-            print('⚠️ Réponse disconnect incomplète: $data');
-          }
+          // ✅ CRITIQUE: Mettre à jour le profil en CONSERVANT les iProfile et iBasket actuels
+          // Supprimer uniquement les informations utilisateur pour que isLoggedIn() retourne false
+          await LocalStorageService.saveProfile({
+            'iProfile': currentIProfile, // ✅ CONSERVER l'iProfile de l'utilisateur connecté
+            'iBasket': currentIBasket, // ✅ CONSERVER l'iBasket de l'utilisateur connecté
+            'sPaysLangue': sPaysLangue, // Conserver la langue
+            'sPaysFav': sPaysFav, // Conserver les pays favoris
+            'sEmail': '', // ✅ Supprimer l'email (CRITIQUE pour isLoggedIn())
+            'sNom': '', // ✅ Supprimer le nom
+            'sPrenom': '', // ✅ Supprimer le prénom
+            'sPhoto': '', // ✅ Supprimer la photo
+          });
+          
+          print('✅ Profil mis à jour: iProfile et iBasket CONSERVÉS, email et infos utilisateur supprimés');
+          
+          return data;
         }
         
         return data;
@@ -1869,6 +2073,26 @@ class ApiService {
       }
     } catch (e) {
       print('❌ Erreur disconnect: $e');
+      // ✅ Même en cas d'erreur, effectuer la déconnexion locale en conservant iProfile et iBasket
+      print('⚠️ Erreur lors de l\'appel backend, déconnexion locale uniquement...');
+      final currentProfile = await LocalStorageService.getProfile();
+      final currentIProfile = currentProfile?['iProfile']?.toString() ?? '';
+      final currentIBasket = currentProfile?['iBasket']?.toString() ?? '';
+      final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+      final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+      
+      await LocalStorageService.saveProfile({
+        'iProfile': currentIProfile, // ✅ CONSERVER l'iProfile
+        'iBasket': currentIBasket, // ✅ CONSERVER l'iBasket
+        'sPaysLangue': sPaysLangue,
+        'sPaysFav': sPaysFav,
+        'sEmail': '', // Supprimer l'email
+        'sNom': '', // Supprimer le nom
+        'sPrenom': '', // Supprimer le prénom
+        'sPhoto': '', // Supprimer la photo
+      });
+      
+      print('✅ Déconnexion locale effectuée: iProfile et iBasket conservés');
       rethrow;
     }
   }

@@ -222,20 +222,19 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
     return null;
   }
 
-  /// Valider si le code QR est valide
+  /// Valider si le code QR est valide (logique SNAL)
+  // ✅ SNAL ne fait pas de validation stricte de plage (10000000-99999999)
+  // SNAL valide seulement que le code contient au moins 8 chiffres
   bool _isValidQRCode(String code) {
-    // Vérifier si le code contient au moins 8 chiffres
+    // Vérifier si le code contient au moins 8 chiffres (comme SNAL)
     if (code.length < 8) return false;
     
-    // Vérifier si le code contient uniquement des chiffres
+    // Vérifier si le code contient uniquement des chiffres (comme SNAL)
     if (!RegExp(r'^\d+$').hasMatch(code)) return false;
     
-    // Vérifier si le code est dans une plage valide (exemple: 10000000 à 99999999)
-    final codeNumber = int.tryParse(code);
-    if (codeNumber == null) return false;
-    
-    // Plage de codes valides (peut être ajustée selon vos besoins)
-    return codeNumber >= 10000000 && codeNumber <= 99999999;
+    // ✅ SNAL n'a pas de validation de plage stricte, donc on ne vérifie pas la plage
+    // Le code est valide s'il contient au moins 8 chiffres
+    return true;
   }
 
   /// Formater le code personnalisé (XXX.XXX.XX)
@@ -412,9 +411,13 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
 
     print('🎉 Scan validé: $code');
 
+    // ✅ Transformation du code : _ → - (comme SNAL ligne 404)
+    final formattedCode = code.replaceAll('_', '-');
+    print('📝 Code formaté pour URL (après _ → -): $formattedCode');
+
     // Formatage du code (logique SNAL)
-    final formatted = _formatCustomCode(code);
-    final finalCode = formatted ?? code;
+    final formatted = _formatCustomCode(formattedCode);
+    final finalCode = formatted ?? formattedCode;
     print('📝 Code final formaté: $finalCode');
 
     // Animation de capture (300ms comme SNAL)

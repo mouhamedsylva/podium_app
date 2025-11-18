@@ -522,9 +522,14 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                           Text(
               language['name']!,
                             style: const TextStyle(
-                              fontSize: 14,
-                fontWeight: FontWeight.w500,
-                ),
+                              // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                              fontStyle: FontStyle.normal, // Style: normal
+                              fontSize: 16.0, // Size: 16px
+                              fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                              color: Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                              height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                              letterSpacing: 0.0, // Pas de letterSpacing
+                            ),
               ),
           ],
         ),

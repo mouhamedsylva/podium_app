@@ -239,14 +239,18 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                   
                   SizedBox(width: isVerySmallMobile ? 10 : (isSmallMobile ? 12 : 14)),
                   
-                  // Nom du pays
+                  // Nom du pays avec style spécifié : system-ui, normal, weight 400, size 16px, line height 24px, color black
                   Expanded(
                     child: Text(
                       _selectedCountry!.sDescr,
                       style: TextStyle(
-                        fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : (isMobile ? 16 : 18)),
-                        color: Colors.black87,
-                        fontWeight: FontWeight.bold,
+                        // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                        fontStyle: FontStyle.normal, // Style: normal
+                        fontSize: 16.0, // Size: 16px
+                        fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                        color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                        height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                        letterSpacing: 0.0, // Pas de letterSpacing
                       ),
                     ),
                   ),
@@ -798,13 +802,18 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                       SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
                       
                       // Nom du pays
+                      // Style: system-ui, normal, weight 400, size 16px, line height 24px, color black
                       Expanded(
                         child: Text(
                           country.sDescr,
                           style: TextStyle(
-                            fontSize: isVerySmallMobile ? 12 : (isSmallMobile ? 13 : (isMobile ? 14 : 15)),
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
+                            // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                            fontStyle: FontStyle.normal, // Style: normal
+                            fontSize: 16.0, // Size: 16px
+                            fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                            color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                            height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                            letterSpacing: 0.0, // Pas de letterSpacing
                           ),
                         ),
                       ),

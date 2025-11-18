@@ -98,18 +98,41 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   /// Mettre à jour l'état après déconnexion (nettoyage local uniquement, sans endpoint backend)
+  /// ✅ CRITIQUE: Conserve iProfile et iBasket de l'utilisateur connecté
   Future<void> onLogout() async {
     print('🔐 AuthNotifier: onLogout appelé');
     
     try {
-      // Nettoyer le profil local (supprime email et infos utilisateur)
+      // ✅ Récupérer le profil actuel pour vérifier que iProfile et iBasket sont conservés
+      final currentProfile = await LocalStorageService.getProfile();
+      final currentIProfile = currentProfile?['iProfile']?.toString() ?? '';
+      final currentIBasket = currentProfile?['iBasket']?.toString() ?? '';
+      
+      print('📋 Profil avant déconnexion:');
+      print('   iProfile: $currentIProfile (à CONSERVER)');
+      print('   iBasket: $currentIBasket (à CONSERVER)');
+      
+      // Nettoyer le profil local (supprime email et infos utilisateur, CONSERVE iProfile et iBasket)
       await LocalStorageService.clearProfile();
+      
+      // ✅ Vérifier que iProfile et iBasket sont toujours présents après clearProfile()
+      final profileAfterClear = await LocalStorageService.getProfile();
+      final iProfileAfterClear = profileAfterClear?['iProfile']?.toString() ?? '';
+      final iBasketAfterClear = profileAfterClear?['iBasket']?.toString() ?? '';
+      
+      if (iProfileAfterClear == currentIProfile && iBasketAfterClear == currentIBasket) {
+        print('✅ iProfile et iBasket correctement conservés après déconnexion');
+      } else {
+        print('⚠️ ATTENTION: iProfile ou iBasket modifiés après clearProfile()');
+        print('   Avant: iProfile=$currentIProfile, iBasket=$currentIBasket');
+        print('   Après: iProfile=$iProfileAfterClear, iBasket=$iBasketAfterClear');
+      }
       
       // Mettre à jour l'état local
       _isLoggedIn = false;
       _userInfo = null;
       
-      print('✅ Déconnexion réussie - Profil local nettoyé');
+      print('✅ Déconnexion réussie - Profil local nettoyé (iProfile et iBasket conservés)');
     } catch (e) {
       print('❌ Erreur lors de la déconnexion: $e');
       // En cas d'erreur, forcer quand même la déconnexion

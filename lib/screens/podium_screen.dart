@@ -992,6 +992,7 @@ class _PodiumScreenState extends State<PodiumScreen>
       if (hasPosA) return -1;
       if (hasPosB) return 1;
 
+      
       final priceA = _extractPrice(a['sPrice'] ?? '');
       final priceB = _extractPrice(b['sPrice'] ?? '');
       return priceA.compareTo(priceB);
@@ -1629,14 +1630,19 @@ class _PodiumScreenState extends State<PodiumScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // Nom du pays - Une seule ligne, s'adapte automatiquement à la largeur
+                          // Style: system-ui, normal, weight 400, size 16px, line height 24px, color black
                           FittedBox( // ✅ Utiliser FittedBox pour adapter automatiquement la taille sans casser le texte
                             fit: BoxFit.scaleDown,
                             child: Text(
                               article['sPays'] ?? 'Pays',
                               style: TextStyle(
-                                fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 13), // ✅ Taille de base adaptée pour mobile
-                                fontWeight: FontWeight.w700,
-                                height: 1.2, // ✅ Hauteur de ligne normale
+                                // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                                fontStyle: FontStyle.normal, // Style: normal
+                                fontSize: 16.0, // Size: 16px
+                                fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                                color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                                height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                                letterSpacing: 0.0, // Pas de letterSpacing
                               ),
                               textAlign: TextAlign.center,
                               maxLines: 1, // ✅ Une seule ligne
@@ -2050,11 +2056,17 @@ class _PodiumScreenState extends State<PodiumScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Nom du pays
+                    // Style: system-ui, normal, weight 400, size 16px, line height 24px, color black
                     Text(
                       country['sPays'] ?? 'Pays',
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                        // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+                        fontStyle: FontStyle.normal, // Style: normal
+                        fontSize: 16.0, // Size: 16px
+                        fontWeight: FontWeight.w400, // Weight: 400 (normal)
+                        color: Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+                        height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
+                        letterSpacing: 0.0, // Pas de letterSpacing
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

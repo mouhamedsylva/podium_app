@@ -293,20 +293,53 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
           ),
+          
+          const SizedBox(height: 16),
+          
+          // Sous-titre "Trouvez vos articles..." avec style spécifié
+          FadeTransition(
+            opacity: _titleFadeAnimation,
+            child: _buildSubtitle(translationService, isMobile),
+          ),
         ],
       ),
+    );
+  }
+
+  /// Construire le sous-titre "Trouvez vos articles..." avec le style spécifié
+  /// Style: system-ui, normal, weight 700, size 24px, line height 32px, color black
+  Widget _buildSubtitle(TranslationService translationService, bool isMobile) {
+    // Style selon les spécifications de l'image : system-ui, normal, weight 700, size 24px, line height 32px, color black
+    final subtitleStyle = TextStyle(
+      // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+      fontStyle: FontStyle.normal, // Style: normal
+      fontSize: 24.0, // Size: 24px
+      fontWeight: FontWeight.w700, // Weight: 700 (bold)
+      color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+      height: 32.0 / 24.0, // Line Height: 32px / 24px = 1.333
+      letterSpacing: 0.0, // Pas de letterSpacing
+    );
+    
+    return Text(
+      translationService.translateFromBackend('FRONTPAGE_Msg05') ?? 'Trouvez vos articles...',
+      style: subtitleStyle,
+      textAlign: TextAlign.center,
     );
   }
 
   /// Construire le titre en concaténant plusieurs clés de traduction
   /// avec IKEA en dur avec le style existant (orange)
   Widget _buildConcatenatedTitle(TranslationService translationService, bool isMobile) {
+    // Style selon les spécifications : system-ui, normal, weight 700, size 36px, line height 43px, color black
+    // En Flutter, on utilise la police système par défaut pour correspondre à system-ui
     final baseStyle = TextStyle(
-      fontSize: isMobile ? 40 : 48,
-      fontWeight: FontWeight.w800,
-      color: Colors.black,
-      height: 1.3,
-      letterSpacing: -0.5,
+      // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
+      fontStyle: FontStyle.normal, // Style: normal
+      fontSize: 36.0, // Size: 36px
+      fontWeight: FontWeight.w700, // Weight: 700 (bold)
+      color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
+      height: 43.0 / 36.0, // Line Height: 43px / 36px = 1.194
+      letterSpacing: 0.0, // Pas de letterSpacing négatif pour correspondre au style
     );
     
     final ikeaStyle = TextStyle(

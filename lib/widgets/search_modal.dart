@@ -1040,7 +1040,7 @@ class _SearchModalState extends State<SearchModal>
               color: Color(0xFF1A1A1A),
             ),
             decoration: InputDecoration(
-              hintText: translationService.translate('PRODUCTSEARCH_HINT_CODE'), // ✅ Utilise la clé de traduction
+              hintText: translationService.translate('FRONTPAGE_Msg06'), // ✅ Utilise la clé de traduction
               hintStyle: TextStyle(
                 color: Colors.grey[400],
                 fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
@@ -1338,7 +1338,7 @@ class _SearchModalState extends State<SearchModal>
               ),
               const SizedBox(height: 16),
               Text(
-                translationService.translate('PRODUCTSEARCH_ENTER_CODE'),
+                translationService.translate('FRONTPAGE_Msg07'),
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[500],
