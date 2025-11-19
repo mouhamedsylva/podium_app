@@ -681,40 +681,21 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     context.go('/podium/$codeArticle?crypt=$codeArticleCrypt');
   }
 
-  void _onInputCode(String value) {
-    String digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+  /// ✅ ALIGNÉ AVEC SNAL-PROJECT : Permettre recherche par nom ET par code
+  /// Gestion de la saisie de recherche (texte libre, pas de formatage)
+  void _onInputSearch(String value) {
+    final cleanQuery = value.trim();
     
-    if (digitsOnly.length > 9) {
-      digitsOnly = digitsOnly.substring(0, 9);
-    }
-
-    String formatted = '';
-    if (digitsOnly.length > 6) {
-      formatted = '${digitsOnly.substring(0, 3)}.${digitsOnly.substring(3, 6)}.${digitsOnly.substring(6)}';
-    } else if (digitsOnly.length > 3) {
-      formatted = '${digitsOnly.substring(0, 3)}.${digitsOnly.substring(3)}';
-    } else {
-      formatted = digitsOnly;
-    }
-
-    if (_searchController.text != formatted) {
-      _searchController.value = TextEditingValue(
-        text: formatted,
-        selection: TextSelection.fromPosition(
-          TextPosition(offset: formatted.length),
-        ),
-      );
-    }
-
-    // Rechercher seulement si on a au moins 3 chiffres
-    if (digitsOnly.length >= 3) {
-      _searchProducts(digitsOnly);
+    // ✅ ALIGNÉ AVEC SNAL-PROJECT : Minimum 3 caractères pour lancer la recherche
+    // (useSearchArticle.ts ligne 19)
+    if (cleanQuery.length >= 3) {
+      _searchProducts(cleanQuery);
     } else {
       setState(() {
         _filteredProducts = [];
         _errorMessage = '';
         _isLoading = false;
-        _hasSearched = false; // Pas de recherche si moins de 3 chiffres
+        _hasSearched = false; // Pas de recherche si moins de 3 caractères
       });
     }
   }
@@ -1293,8 +1274,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       ),
       child: TextField(
         controller: _searchController,
-        onChanged: _onInputCode,
-        keyboardType: TextInputType.number,
+        onChanged: _onInputSearch, // ✅ Changé pour permettre les lettres
+        keyboardType: TextInputType.text, // ✅ Permettre texte ET chiffres
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           hintText: translationService.translate('FRONTPAGE_Msg06'),

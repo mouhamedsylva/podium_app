@@ -8,7 +8,7 @@ class ApiConfig {
   // 🔧 Configuration pour mobile
   // Définir à true pour utiliser directement l'API de production (https://jirig.be/api)
   // Définir à false pour utiliser le proxy local (http://10.0.2.2:3001/api ou http://192.168.x.x:3001/api)
-  static const bool useProductionApiOnMobile = false; // ✅ Changer à true pour appeler directement https://jirig.be/api
+  static const bool useProductionApiOnMobile = true; // ✅ true = Appel direct à https://jirig.be/api (pour mobile physique)
   
   // 📱 Configuration du proxy local pour développement mobile
   // Android Emulator: 'http://10.0.2.2:3001/api'

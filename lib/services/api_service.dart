@@ -297,21 +297,19 @@ class ApiService {
 
       final cleanQuery = query.trim();
 
-      // Validation : seuls les chiffres et points sont autorisés (conforme à SNAL-Project)
-      if (RegExp(r'[^0-9.]').hasMatch(cleanQuery)) {
-        return []; // contient des lettres → on ne fait rien
-      }
+      // ✅ ALIGNÉ AVEC SNAL-PROJECT : Permettre les lettres pour recherche par nom ET par code
+      // La validation qui interdit les lettres est commentée dans SNAL-Project (useSearchArticle.ts lignes 9-12)
+      // if (RegExp(r'[^0-9.]').hasMatch(cleanQuery)) {
+      //   return []; // contient des lettres → on ne fait rien
+      // }
 
-      // Minimum 3 caractères (conforme à SNAL-Project)
+      // ✅ ALIGNÉ AVEC SNAL-PROJECT : Minimum 3 caractères (useSearchArticle.ts ligne 19)
       if (cleanQuery.length < 3) {
         return []; // pas assez de caractères → on ne fait rien
       }
 
-      // Maximum 9 chiffres (conforme à SNAL-Project)
-      final numericQuery = cleanQuery.replaceAll(RegExp(r'[^\d]'), '');
-      if (numericQuery.length > 9) {
-        return [];
-      }
+      // ✅ ALIGNÉ AVEC SNAL-PROJECT : Pas de validation de longueur maximale pour les codes
+      // La validation de longueur avec points est commentée dans SNAL-Project (lignes 14-18)
 
       // Utiliser exactement la même approche que SNAL-Project (sans XML en paramètre)
       final response = await _dio!.get('/search-article', queryParameters: {
@@ -426,6 +424,7 @@ class ApiService {
 
 
   /// Filtrer les résultats de recherche côté client (conforme à SNAL-Project)
+  /// ✅ ALIGNÉ AVEC SNAL-PROJECT : useSearchArticle.ts lignes 47-61
   List<dynamic> _filterSearchResults(List<dynamic> results, String cleanQuery) {
     // Vérifier s'il y a une erreur dans le tableau
     final error = results.firstWhere(
@@ -437,7 +436,7 @@ class ApiService {
       return []; // Erreur trouvée, retourner liste vide
     }
 
-    // Pour les codes numériques, recherche progressive
+    // ✅ ALIGNÉ AVEC SNAL-PROJECT : Pour les codes numériques, recherche progressive (lignes 48-52)
     if (RegExp(r'^\d+$').hasMatch(cleanQuery)) {
       return results.where((item) {
         final itemCode = (item['sCodeArticle'] ?? '').toString().replaceAll(RegExp(r'[^\d]'), '');
@@ -445,7 +444,7 @@ class ApiService {
       }).toList();
     }
 
-    // Pour les recherches textuelles, recherche dans description et code
+    // ✅ ALIGNÉ AVEC SNAL-PROJECT : Pour les recherches textuelles, recherche dans description ET code (lignes 56-61)
     return results.where((item) {
       final description = (item['sDescr'] ?? '').toString().toLowerCase();
       final code = (item['sCodeArticle'] ?? '').toString().toLowerCase();

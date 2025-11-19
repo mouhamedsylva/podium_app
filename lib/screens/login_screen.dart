@@ -486,14 +486,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('📱 === ÉTAPE 1: Configuration Google Sign-In ===');
           
           // ✅ Configuration Google Sign-In selon la documentation
-          // serverClientId doit être le Web Client ID (TA_WEB_CLIENT_ID.apps.googleusercontent.com)
-          // TODO: Remplacer par votre Web Client ID réel dans les variables d'environnement
-          const webClientId = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com'; // À remplacer par la vraie valeur
+          // serverClientId doit être le Web Client ID complet (XXXXX-XXXXX.apps.googleusercontent.com)
+          const webClientId = '116497000948-90d84akvtp9g4favfmi63ciktp5rbgfu.apps.googleusercontent.com';
           
-          // ✅ VÉRIFICATION CRITIQUE: S'assurer que le webClientId est configuré
-          if (webClientId == 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com') {
-            print('❌ ERREUR: Web Client ID non configuré');
-            throw Exception('Web Client ID non configuré. Veuillez remplacer YOUR_WEB_CLIENT_ID.apps.googleusercontent.com par votre vrai Web Client ID dans login_screen.dart ligne 475.');
+          // ✅ VÉRIFICATION CRITIQUE: S'assurer que le webClientId est valide
+          if (webClientId.isEmpty || !webClientId.endsWith('.apps.googleusercontent.com')) {
+            print('❌ ERREUR: Web Client ID invalide');
+            throw Exception('Web Client ID invalide. Le Web Client ID doit se terminer par .apps.googleusercontent.com');
           }
           
           print('🔑 Configuration Google Sign-In avec serverClientId: ${webClientId.substring(0, 30)}...');
