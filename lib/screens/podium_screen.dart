@@ -992,52 +992,59 @@ class _PodiumScreenState extends State<PodiumScreen>
       if (hasPosA) return -1;
       if (hasPosB) return 1;
 
-      
-      final priceA = _extractPrice(a['sPrice'] ?? '');
-      final priceB = _extractPrice(b['sPrice'] ?? '');
-      return priceA.compareTo(priceB);
+      return 0;
+      // final priceA = _extractPrice(a['sPrice'] ?? '');
+      // final priceB = _extractPrice(b['sPrice'] ?? '');
+      // return priceA.compareTo(priceB);
     });
+    
+    final topThree = sortedByPosition.take(3).toList();
+    final otherCountries = sortedByPosition.skip(3).toList();
 
-    final podiumCandidates = sortedByPosition.where((article) {
-      final pos = parsePosition(article);
-      return pos != null && pos > 0 && pos <= 3;
-    }).toList();
+    // final podiumCandidates = sortedByPosition.where((article) {
+    //   final pos = parsePosition(article);
+    //   return pos != null && pos > 0 && pos <= 3;
+    // }).toList();
 
-    if (podiumCandidates.length < 3) {
-      final remaining = sortedByPosition.where((article) => !podiumCandidates.contains(article)).toList();
-      remaining.sort((a, b) {
-        final priceA = _extractPrice(a['sPrice'] ?? '');
-        final priceB = _extractPrice(b['sPrice'] ?? '');
-        return priceA.compareTo(priceB);
-      });
-      podiumCandidates.addAll(remaining.take(3 - podiumCandidates.length));
-    }
+    // if (podiumCandidates.length < 3) {
+    //   final remaining = sortedByPosition.where((article) => !podiumCandidates.contains(article)).toList();
+    //   remaining.sort((a, b) {
+    //     final priceA = _extractPrice(a['sPrice'] ?? '');
+    //     final priceB = _extractPrice(b['sPrice'] ?? '');
+    //     return priceA.compareTo(priceB);
+    //   });
+    //   podiumCandidates.addAll(remaining.take(3 - podiumCandidates.length));
+    // }
 
-    final topThree = podiumCandidates.isNotEmpty
-        ? podiumCandidates.take(3).toList()
-        : (() {
-            final fallback = List<Map<String, dynamic>>.from(allArticles);
-            fallback.sort((a, b) {
-              final priceA = _extractPrice(a['sPrice'] ?? '');
-              final priceB = _extractPrice(b['sPrice'] ?? '');
-              return priceA.compareTo(priceB);
-            });
-            return fallback.take(3).toList();
-          })();
+    // final topThree = podiumCandidates.isNotEmpty
+    //     ? podiumCandidates.take(3).toList()
+    //     : (() {
+    //         final fallback = List<Map<String, dynamic>>.from(allArticles);
+    //         fallback.sort((a, b) {
+    //           final posA = parsePosition(a);
+    //           final posB = parsePosition(b);
+    //           final hasPosA = posA != null;
+    //           final hasPosB = posB != null;
 
-    final otherCountries = sortedByPosition.where((article) {
-      final pos = parsePosition(article);
-      if (pos != null) {
-        return pos > 3;
-      }
-      return !topThree.contains(article);
-    }).toList();
+    //           if (hasPosA && hasPosB) {
+    //             return posA!.compareTo(posB!);
+    //           }
+    //           if (hasPosA) return -1;
+    //           if (hasPosB) return 1;
 
-    final maxPrice = topThree.isEmpty
-        ? 0.0
-        : topThree
-            .map((a) => _extractPrice(a['sPrice'] ?? ''))
-            .reduce((a, b) => a > b ? a : b);
+    //           return 0;
+    //         });
+    //         return fallback.take(3).toList();
+    //       })();
+
+    
+    // final otherCountries = sortedByPosition.where((article) {
+    //   final pos = parsePosition(article);
+    //   if (pos != null) {
+    //     return pos > 3;
+    //   }
+    //   return !topThree.contains(article);
+    // }).toList();
 
     return SingleChildScrollView(
       child: Column(
@@ -1196,7 +1203,7 @@ class _PodiumScreenState extends State<PodiumScreen>
                 child: Container(
                   height: isVerySmallMobile ? 360 : (isSmallMobile ? 380 : 420),
                   padding: EdgeInsets.symmetric(horizontal: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
-                  child: _buildPodium(topThree, maxPrice, isVerySmallMobile, isSmallMobile, isMobile),
+                  child: _buildPodium(topThree, isVerySmallMobile, isSmallMobile, isMobile),
                 ),
               ),
             ),
@@ -1455,7 +1462,7 @@ class _PodiumScreenState extends State<PodiumScreen>
     );
   }
 
-  Widget _buildPodium(List<Map<String, dynamic>> topThree, double maxPrice, bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
+  Widget _buildPodium(List<Map<String, dynamic>> topThree, bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
     // Réorganiser pour avoir 2, 1, 3 (argent, or, bronze)
     final arranged = [
       if (topThree.length > 1) topThree[1], // 2ème place
@@ -1493,7 +1500,7 @@ class _PodiumScreenState extends State<PodiumScreen>
               ),
               child: Align(
                 alignment: Alignment.bottomCenter,
-                child: _buildPodiumCard(article, realRank, maxPrice, isVerySmallMobile, isSmallMobile, isMobile),
+                child: _buildPodiumCard(article, realRank, isVerySmallMobile, isSmallMobile, isMobile),
               ),
             ),
           );
@@ -1502,7 +1509,7 @@ class _PodiumScreenState extends State<PodiumScreen>
     );
   }
 
-  Widget _buildPodiumCard(Map<String, dynamic> article, int rank, double maxPrice, bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
+  Widget _buildPodiumCard(Map<String, dynamic> article, int rank, bool isVerySmallMobile, bool isSmallMobile, bool isMobile) {
     final cardColor = rank == 1 
         ? const Color(0xFFFFFBE6) 
         : (rank == 2 ? const Color(0xFFF5F5F5) : const Color(0xFFFFF3E0));
@@ -1510,20 +1517,16 @@ class _PodiumScreenState extends State<PodiumScreen>
         ? const Color(0xFFFFB300) 
         : (rank == 2 ? const Color(0xFF90A4AE) : const Color(0xFFFF6F00));
     
-    // Calculer l'écart de prix
-    final currentPrice = _extractPrice(article['sPrice'] ?? '');
-    final priceDifference = (currentPrice > 0 && maxPrice > 0)
-        ? maxPrice - currentPrice
-        : 0.0;
-    final isEconomy = priceDifference > 0;
+    // Utiliser les données du backend pour l'écart de prix
+    final sEcartPrice = article['sEcartPrice']?.toString() ?? '';
+    final sEcartPriceColor = article['sEcartPriceColor']?.toString().toLowerCase() ?? '';
+    final hasEcartPrice = sEcartPrice.isNotEmpty && sEcartPrice != '0' && sEcartPrice != '0.00 €';
+    final isEconomy = sEcartPriceColor == 'green';
+    
     final bool priceUnavailable =
-        currentPrice <= 0 ||
         article['sPrice'] == null ||
         article['sPrice'].toString().trim().isEmpty ||
         article['sPrice'].toString().toUpperCase().contains('INDISPONIBLE');
-    
-    // Vérifier si tous les prix sont identiques
-    final allPricesSame = _checkAllPricesSame();
     
     // Vérifier si c'est le pays de l'utilisateur
     final isUserCountry = _userCountryCode != null && 
@@ -1575,179 +1578,172 @@ class _PodiumScreenState extends State<PodiumScreen>
                     bottom: BorderSide(color: Colors.grey[300]!),
                   ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start, // Aligner en haut
-                  mainAxisSize: MainAxisSize.max, // ✅ Utiliser toute la largeur disponible
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Drapeau à gauche (toujours affiché) - Réduire la taille sur mobile pour faire de la place
-                    Container(
-                      margin: EdgeInsets.only(
-                        right: isVerySmallMobile ? 4 : (isSmallMobile ? 6 : 8), // ✅ Réduire la marge sur mobile
-                        top: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.grey[300]!, width: 0.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 2,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: article['sPaysDrapeau'] != null
-                            ? Image.network(
-                                ApiConfig.getProxiedImageUrl('https://jirig.be${article['sPaysDrapeau']}'),
-                                width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24), // ✅ Réduire la largeur sur mobile
-                                height: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 16), // ✅ Réduire la hauteur sur mobile
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  print('❌ Erreur chargement drapeau: ${article['sPaysDrapeau']}');
-                                  print('❌ URL complète: ${ApiConfig.getProxiedImageUrl('https://jirig.be${article['sPaysDrapeau']}')}');
-                                  return Container(
-                                    width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
-                                    height: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 16),
-                                    color: Colors.grey[200],
-                                    child: Icon(Icons.flag, size: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12), color: Colors.grey[400]),
-                                  );
-                                },
-                              )
-                            : Container(
-                                width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
-                                height: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 16),
-                                color: Colors.grey[200],
-                                child: Icon(Icons.flag, size: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12), color: Colors.grey[400]),
-                              ),
+                    // Nom du pays en haut (centré)
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        article['sPays'] ?? 'Pays',
+                        style: TextStyle(
+                          fontStyle: FontStyle.normal,
+                          fontSize: 16.0,
+                          fontWeight: FontWeight.w400,
+                          color: const Color.fromRGBO(0, 0, 0, 1.0),
+                          height: 24.0 / 16.0,
+                          letterSpacing: 0.0,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // Nom du pays, IKEA et icônes - Structure en colonne avec largeur maximale pour le texte
-                    Expanded( // ✅ Utiliser Expanded pour donner toute la largeur disponible au texte
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Nom du pays - Une seule ligne, s'adapte automatiquement à la largeur
-                          // Style: system-ui, normal, weight 400, size 16px, line height 24px, color black
-                          FittedBox( // ✅ Utiliser FittedBox pour adapter automatiquement la taille sans casser le texte
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              article['sPays'] ?? 'Pays',
-                              style: TextStyle(
-                                // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
-                                fontStyle: FontStyle.normal, // Style: normal
-                                fontSize: 16.0, // Size: 16px
-                                fontWeight: FontWeight.w400, // Weight: 400 (normal)
-                                color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
-                                height: 24.0 / 16.0, // Line Height: 24px / 16px = 1.5
-                                letterSpacing: 0.0, // Pas de letterSpacing
+                    SizedBox(height: isVerySmallMobile ? 4 : 6),
+                    // Row avec drapeau + IKEA d'un côté et icônes de l'autre
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Drapeau + IKEA à gauche
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Drapeau
+                            Container(
+                              margin: EdgeInsets.only(
+                                right: isVerySmallMobile ? 4 : (isSmallMobile ? 6 : 8),
                               ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1, // ✅ Une seule ligne
-                              overflow: TextOverflow.ellipsis, // ✅ Tronquer avec "..." si nécessaire (ne devrait pas arriver avec FittedBox)
-                            ),
-                          ),
-                          SizedBox(height: isVerySmallMobile ? 1 : 2),
-                          // IKEA
-                          FittedBox( // ✅ Utiliser FittedBox pour adapter automatiquement la taille
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              'IKEA',
-                              style: TextStyle(
-                                fontSize: isVerySmallMobile ? 9 : (isSmallMobile ? 10 : 11), // ✅ Taille réduite sur mobile
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          SizedBox(height: isVerySmallMobile ? 4 : 6), // ✅ Espacement avant les icônes
-                          // ✅ Icônes en dessous du nom (centrées) - Utiliser Wrap pour éviter l'overflow sur mobile
-                          Wrap(
-                            alignment: WrapAlignment.center, // ✅ Centrer les icônes horizontalement
-                            runAlignment: WrapAlignment.center, // ✅ Centrer les lignes verticalement
-                            spacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6), // ✅ Espacement réduit sur mobile
-                            runSpacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6),
-                            children: [
-                              // Icône Home si sMyHomeIcon correspond au pays de l'article
-                              Builder(
-                                builder: (context) {
-                                  // Récupérer le code pays de l'article (sLangueIso ou sPays)
-                                  final articleCountryCode = (article['sLangueIso'] ?? article['sPays'] ?? '').toString().toUpperCase();
-                                  // Récupérer sMyHomeIcon depuis les données du produit (au niveau global)
-                                  final sMyHomeIcon = _productData?['sMyHomeIcon']?.toString().toUpperCase() ?? '';
-                                  // Vérifier si sMyHomeIcon correspond au pays de cet article
-                                  final shouldShowHomeIcon = sMyHomeIcon.isNotEmpty && 
-                                      (articleCountryCode == sMyHomeIcon || 
-                                       articleCountryCode.contains(sMyHomeIcon) || 
-                                       sMyHomeIcon.contains(articleCountryCode));
-                                  
-                                  if (shouldShowHomeIcon) {
-                                    return Container(
-                                      padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)), // ✅ Padding réduit sur mobile
-                                      decoration: BoxDecoration(
-                                        color: Colors.green[400],
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.home, 
-                                        size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14), // ✅ Taille réduite sur mobile
-                                        color: Colors.white,
-                                      ),
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                },
-                              ),
-                              // Icône Panier si IsInBasket correspond au pays de l'article
-                              Builder(
-                                builder: (context) {
-                                  // Récupérer le code pays de l'article (sLangueIso ou sPays)
-                                  final articleCountryCode = (article['sLangueIso'] ?? article['sPays'] ?? '').toString().toUpperCase();
-                                  // Récupérer IsInBasket depuis les données du produit (au niveau global)
-                                  final IsInBasket = _productData?['IsInBasket']?.toString().toUpperCase() ?? '';
-                                  // Vérifier si IsInBasket correspond au pays de cet article
-                                  final shouldShowCartIcon = IsInBasket.isNotEmpty && 
-                                      (articleCountryCode == IsInBasket || 
-                                       articleCountryCode.contains(IsInBasket) || 
-                                       IsInBasket.contains(articleCountryCode));
-                                  
-                                  if (shouldShowCartIcon) {
-                                    return Container(
-                                      padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)), // ✅ Padding réduit sur mobile
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue[400],
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.shopping_cart, 
-                                        size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14), // ✅ Taille réduite sur mobile
-                                        color: Colors.white,
-                                      ),
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                },
-                              ),
-                              // Trophée pour la 1ère place (si pas de home icon)
-                              if (rank == 1 && (article['sMyHomeIcon'] == null || article['sMyHomeIcon'].toString().isEmpty))
-                                Container(
-                                  padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)), // ✅ Padding réduit sur mobile
-                                  decoration: const BoxDecoration(color: Color(0xFFFFD54F), shape: BoxShape.circle),
-                                  child: Icon(
-                                    Icons.emoji_events, 
-                                    size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14), // ✅ Taille réduite sur mobile
-                                    color: const Color(0xFF7A5F00),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.grey[300]!, width: 0.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 2,
+                                    offset: const Offset(0, 1),
                                   ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: article['sPaysDrapeau'] != null
+                                    ? Image.network(
+                                        ApiConfig.getProxiedImageUrl('https://jirig.be${article['sPaysDrapeau']}'),
+                                        width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
+                                        height: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 16),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          print('❌ Erreur chargement drapeau: ${article['sPaysDrapeau']}');
+                                          print('❌ URL complète: ${ApiConfig.getProxiedImageUrl('https://jirig.be${article['sPaysDrapeau']}')}');
+                                          return Container(
+                                            width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
+                                            height: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 16),
+                                            color: Colors.grey[200],
+                                            child: Icon(Icons.flag, size: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12), color: Colors.grey[400]),
+                                          );
+                                        },
+                                      )
+                                    : Container(
+                                        width: isVerySmallMobile ? 20 : (isSmallMobile ? 22 : 24),
+                                        height: isVerySmallMobile ? 13 : (isSmallMobile ? 14 : 16),
+                                        color: Colors.grey[200],
+                                        child: Icon(Icons.flag, size: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12), color: Colors.grey[400]),
+                                      ),
+                              ),
+                            ),
+                            // IKEA
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'IKEA',
+                                style: TextStyle(
+                                  fontSize: isVerySmallMobile ? 9 : (isSmallMobile ? 10 : 11),
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
                                 ),
-                            ],
-                          ),
-                        ],
-                      ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Icônes à droite
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6),
+                          runSpacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6),
+                          children: [
+                            // Icône Home si sMyHomeIcon correspond au pays de l'article
+                            Builder(
+                              builder: (context) {
+                                final articleCountryCode = (article['sLangueIso'] ?? article['sPays'] ?? '').toString().toUpperCase();
+                                final sMyHomeIcon = _productData?['sMyHomeIcon']?.toString().toUpperCase() ?? '';
+                                final shouldShowHomeIcon = sMyHomeIcon.isNotEmpty && 
+                                    (articleCountryCode == sMyHomeIcon || 
+                                     articleCountryCode.contains(sMyHomeIcon) || 
+                                     sMyHomeIcon.contains(articleCountryCode));
+                                
+                                if (shouldShowHomeIcon) {
+                                  return Container(
+                                    padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[400],
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.home, 
+                                      size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                            // Icône Panier si IsInBasket correspond au pays de l'article
+                            Builder(
+                              builder: (context) {
+                                final articleCountryCode = (article['sLangueIso'] ?? article['sPays'] ?? '').toString().toUpperCase();
+                                final IsInBasket = _productData?['IsInBasket']?.toString().toUpperCase() ?? '';
+                                final shouldShowCartIcon = IsInBasket.isNotEmpty && 
+                                    (articleCountryCode == IsInBasket || 
+                                     articleCountryCode.contains(IsInBasket) || 
+                                     IsInBasket.contains(articleCountryCode));
+                                
+                                if (shouldShowCartIcon) {
+                                  return Container(
+                                    padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue[400],
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.shopping_cart, 
+                                      size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                            // Trophée pour la 1ère place (si pas de home icon)
+                            if (rank == 1 && (article['sMyHomeIcon'] == null || article['sMyHomeIcon'].toString().isEmpty))
+                              Container(
+                                padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)),
+                                decoration: const BoxDecoration(color: Color(0xFFFFD54F), shape: BoxShape.circle),
+                                child: Icon(
+                                  Icons.emoji_events, 
+                                  size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                  color: const Color(0xFF7A5F00),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1767,21 +1763,19 @@ class _PodiumScreenState extends State<PodiumScreen>
               SizedBox(height: isVerySmallMobile ? 3 : 4),
               
               
-              // Badge d'écart de prix (seulement si les prix ne sont pas tous identiques)
-              if (!priceUnavailable && priceDifference.abs() > 0.01 && !allPricesSame)
+              // Badge d'écart de prix (utilise les données du backend)
+              if (!priceUnavailable && hasEcartPrice)
                 Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12),
                     vertical: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8),
                   ),
                   decoration: BoxDecoration(
-                    color: isEconomy ? const Color(0xFF86EFAC) : Colors.red[300], // Tailwind green-300
+                    color: isEconomy ? const Color(0xFF86EFAC) : Colors.red[300], // Tailwind green-300 ou rouge
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    isEconomy 
-                        ? '-${priceDifference.toStringAsFixed(2)}€'
-                        : '+${priceDifference.abs().toStringAsFixed(2)}€',
+                    sEcartPrice,
                     style: TextStyle(
                       fontSize: isVerySmallMobile ? 10 : (isSmallMobile ? 11 : 12),
                       fontWeight: FontWeight.bold,
@@ -2032,14 +2026,14 @@ class _PodiumScreenState extends State<PodiumScreen>
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start, // Aligner en haut
+            crossAxisAlignment: CrossAxisAlignment.center, // Centrer verticalement pour les icônes
             children: [
               // Drapeau
               if (country['sPaysDrapeau'] != null)
                 Container(
                   width: 24,
                   height: 16,
-                  margin: const EdgeInsets.only(right: 8, top: 2), // Top pour aligner avec le texte
+                  margin: const EdgeInsets.only(right: 8),
                   child: Image.network(
                     ApiConfig.getProxiedImageUrl('https://jirig.be${country['sPaysDrapeau']}'),
                     fit: BoxFit.cover,
@@ -2049,7 +2043,7 @@ class _PodiumScreenState extends State<PodiumScreen>
                   ),
                 ),
               
-              // Infos pays et icônes - Structure en colonne
+              // Infos pays - Structure en colonne
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2071,86 +2065,81 @@ class _PodiumScreenState extends State<PodiumScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
-                    // IKEA
-                    const Text(
-                      'IKEA',
-                      style: TextStyle(fontSize: 11, color: Colors.grey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: isVerySmallMobile ? 4 : 6), // ✅ Espacement avant les icônes (réduit sur mobile)
-                    // ✅ Icônes en dessous du nom - Utiliser Wrap pour éviter l'overflow sur mobile
-                    Wrap(
-                      alignment: WrapAlignment.center, // ✅ Centrer les icônes horizontalement
-                      runAlignment: WrapAlignment.center, // ✅ Centrer les lignes verticalement
-                      spacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6), // ✅ Espacement réduit sur mobile
-                      runSpacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6),
-                      children: [
-                        // Icône Home si sMyHomeIcon correspond au pays
-                        Builder(
-                          builder: (context) {
-                            // Récupérer le code pays (sLangueIso ou sPays)
-                            final countryCode = (country['sLangueIso'] ?? country['sPays'] ?? '').toString().toUpperCase();
-                            // Récupérer sMyHomeIcon depuis les données du produit (au niveau global)
-                            final sMyHomeIcon = _productData?['sMyHomeIcon']?.toString().toUpperCase() ?? '';
-                            // Vérifier si sMyHomeIcon correspond à ce pays
-                            final shouldShowHomeIcon = sMyHomeIcon.isNotEmpty && 
-                                (countryCode == sMyHomeIcon || 
-                                 countryCode.contains(sMyHomeIcon) || 
-                                 sMyHomeIcon.contains(countryCode));
-                            
-                            if (shouldShowHomeIcon) {
-                              return Container(
-                                padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)), // ✅ Padding réduit sur mobile
-                                decoration: BoxDecoration(
-                                  color: Colors.green[400],
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.home,
-                                  size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14), // ✅ Taille réduite sur mobile
-                                  color: Colors.white,
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                        // Icône Panier si IsInBasket correspond au pays
-                        Builder(
-                          builder: (context) {
-                            // Récupérer le code pays (sLangueIso ou sPays)
-                            final countryCode = (country['sLangueIso'] ?? country['sPays'] ?? '').toString().toUpperCase();
-                            // Récupérer IsInBasket depuis les données du produit (au niveau global)
-                            final IsInBasket = _productData?['IsInBasket']?.toString().toUpperCase() ?? '';
-                            // Vérifier si IsInBasket correspond à ce pays
-                            final shouldShowCartIcon = IsInBasket.isNotEmpty && 
-                                (countryCode == IsInBasket || 
-                                 countryCode.contains(IsInBasket) || 
-                                 IsInBasket.contains(countryCode));
-                            
-                            if (shouldShowCartIcon) {
-                              return Container(
-                                padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)), // ✅ Padding réduit sur mobile
-                                decoration: BoxDecoration(
-                                  color: Colors.blue[400],
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.shopping_cart,
-                                  size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14), // ✅ Taille réduite sur mobile
-                                  color: Colors.white,
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ],
-                    ),
                   ],
                 ),
+              ),
+              
+              // Icônes centrées verticalement au milieu du container
+              Builder(
+                builder: (context) {
+                  return Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6),
+                    runSpacing: isVerySmallMobile ? 3 : (isSmallMobile ? 4 : 6),
+                    children: [
+                      // Icône Home si sMyHomeIcon correspond au pays
+                      Builder(
+                        builder: (context) {
+                          // Récupérer le code pays (sLangueIso ou sPays)
+                          final countryCode = (country['sLangueIso'] ?? country['sPays'] ?? '').toString().toUpperCase();
+                          // Récupérer sMyHomeIcon depuis les données du produit (au niveau global)
+                          final sMyHomeIcon = _productData?['sMyHomeIcon']?.toString().toUpperCase() ?? '';
+                          // Vérifier si sMyHomeIcon correspond à ce pays
+                          final shouldShowHomeIcon = sMyHomeIcon.isNotEmpty && 
+                              (countryCode == sMyHomeIcon || 
+                               countryCode.contains(sMyHomeIcon) || 
+                               sMyHomeIcon.contains(countryCode));
+                          
+                          if (shouldShowHomeIcon) {
+                            return Container(
+                              padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)),
+                              decoration: BoxDecoration(
+                                color: Colors.green[400],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.home,
+                                size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                color: Colors.white,
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                      // Icône Panier si IsInBasket correspond au pays
+                      Builder(
+                        builder: (context) {
+                          // Récupérer le code pays (sLangueIso ou sPays)
+                          final countryCode = (country['sLangueIso'] ?? country['sPays'] ?? '').toString().toUpperCase();
+                          // Récupérer IsInBasket depuis les données du produit (au niveau global)
+                          final IsInBasket = _productData?['IsInBasket']?.toString().toUpperCase() ?? '';
+                          // Vérifier si IsInBasket correspond à ce pays
+                          final shouldShowCartIcon = IsInBasket.isNotEmpty && 
+                              (countryCode == IsInBasket || 
+                               countryCode.contains(IsInBasket) || 
+                               IsInBasket.contains(countryCode));
+                          
+                          if (shouldShowCartIcon) {
+                            return Container(
+                              padding: EdgeInsets.all(isVerySmallMobile ? 3 : (isSmallMobile ? 3 : 4)),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[400],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.shopping_cart,
+                                size: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                color: Colors.white,
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
               
               // Prix
@@ -2283,28 +2272,6 @@ class _PodiumScreenState extends State<PodiumScreen>
     );
   }
 
-
-  bool _checkAllPricesSame() {
-    if (_productData == null || _productData!['aComparaisonUi'] == null) {
-      return false;
-    }
-    
-    final articles = _productData!['aComparaisonUi'] as List;
-    if (articles.length < 2) return false;
-    
-    // Prendre le premier prix comme référence
-    final firstPrice = _extractPrice(articles.first['sPrice'] ?? '');
-    
-    // Vérifier si tous les autres prix sont identiques au premier
-    for (int i = 1; i < articles.length; i++) {
-      final price = _extractPrice(articles[i]['sPrice'] ?? '');
-      if ((price - firstPrice).abs() > 0.01) {
-        return false; // Prix différent trouvé
-      }
-    }
-    
-    return true; // Tous les prix sont identiques
-  }
 
   double _extractPrice(String priceString) {
     // ✅ Nettoyer la chaîne de prix (enlever €, espaces, etc.)

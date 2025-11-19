@@ -254,6 +254,15 @@ class TranslationService extends ChangeNotifier {
       'pt': 'Você está conectado. Redirecionando...',
       'nl': 'U bent ingelogd. Doorsturen...',
     },
+    'PODIUM_ENLARGE': {
+      'fr': 'Agrandir',
+      'en': 'Enlarge',
+      'de': 'Vergrößern',
+      'es': 'Ampliar',
+      'it': 'Ingrandisci',
+      'pt': 'Ampliar',
+      'nl': 'Vergroten',
+    },
 
     // ===== Fallbacks locaux pour les écrans de profil =====
     'PROFILE_LOGOUT': {

@@ -231,10 +231,20 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
               child: Row(
                 children: [
                   // Drapeau - ✅ Augmenter la taille pour une meilleure visibilité sur mobile
-                  Container(
+                  SizedBox(
                     width: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : (isMobile ? 40 : 28)),
                     height: isVerySmallMobile ? 22 : (isSmallMobile ? 25 : (isMobile ? 28 : 20)),
-                    child: _buildFlagImage(_selectedCountry!),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : (isMobile ? 40 : 28)),
+                          height: isVerySmallMobile ? 22 : (isSmallMobile ? 25 : (isMobile ? 28 : 20)),
+                          child: _buildFlagImage(_selectedCountry!),
+                        ),
+                      ),
+                    ),
                   ),
                   
                   SizedBox(width: isVerySmallMobile ? 10 : (isSmallMobile ? 12 : 14)),
@@ -792,11 +802,21 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                   color: isSelected ? const Color(0xFF2196F3).withOpacity(0.1) : Colors.white,
                   child: Row(
                     children: [
-                      // Drapeau image
-                      Container(
+                      // Drapeau image - avec clipping pour éviter la coupure
+                      SizedBox(
                         width: isVerySmallMobile ? 24 : (isSmallMobile ? 26 : 28),
                         height: isVerySmallMobile ? 18 : (isSmallMobile ? 19 : 20),
-                        child: _buildFlagImage(country),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: isVerySmallMobile ? 24 : (isSmallMobile ? 26 : 28),
+                              height: isVerySmallMobile ? 18 : (isSmallMobile ? 19 : 20),
+                              child: _buildFlagImage(country),
+                            ),
+                          ),
+                        ),
                       ),
                       
                       SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
@@ -834,61 +854,42 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
     // Utiliser l'image du drapeau depuis l'API ou les assets locaux
     final flagPath = country.flagImagePath;
     
-    // Obtenir la taille de l'écran pour adapter la taille du drapeau
-    final screenSize = MediaQuery.of(context).size;
-    final screenWidth = screenSize.width;
-    final isVerySmallMobile = screenWidth < 361;
-    final isSmallMobile = screenWidth < 431;
-    final isMobile = screenWidth < 768;
-    
-    // ✅ Taille adaptative du drapeau selon l'écran (plus grand sur mobile)
-    final flagWidth = isVerySmallMobile ? 32.0 : (isSmallMobile ? 36.0 : (isMobile ? 40.0 : 28.0));
-    final flagHeight = isVerySmallMobile ? 22.0 : (isSmallMobile ? 25.0 : (isMobile ? 28.0 : 20.0));
-    
     // Si le chemin commence par /img/ ou /public/, c'est une image depuis SNAL
     if (flagPath.startsWith('/img/') || flagPath.startsWith('/public/')) {
       // Utiliser le proxy pour charger l'image depuis SNAL
       final imageUrl = ApiConfig.getProxiedImageUrl(flagPath);
       
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Image.network(
-          imageUrl,
-          width: flagWidth,
-          height: flagHeight,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            // Fallback vers les assets locaux
-            return _buildLocalFlagImage(country.sPays, flagWidth, flagHeight);
-          },
-        ),
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          // Fallback vers les assets locaux
+          return _buildLocalFlagImage(country.sPays);
+        },
       );
     } else {
       // Utiliser les assets locaux
-      return _buildLocalFlagImage(country.sPays, flagWidth, flagHeight);
+      return _buildLocalFlagImage(country.sPays);
     }
   }
   
-  Widget _buildLocalFlagImage(String countryCode, double width, double height) {
+  Widget _buildLocalFlagImage(String countryCode) {
     // Charger depuis les assets locaux
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: Image.asset(
-        'assets/img/flags/${countryCode.toUpperCase()}.PNG',
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          // Fallback vers un emoji - ✅ Taille adaptative selon l'écran
-          final emojiSize = width * 0.65; // Proportionnel à la largeur du drapeau
-          return Center(
+    return Image.asset(
+      'assets/img/flags/${countryCode.toUpperCase()}.PNG',
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        // Fallback vers un emoji
+        return Center(
+          child: FittedBox(
+            fit: BoxFit.contain,
             child: Text(
               _getCountryFlagEmoji(countryCode),
-              style: TextStyle(fontSize: emojiSize),
+              style: const TextStyle(fontSize: 16),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
   
