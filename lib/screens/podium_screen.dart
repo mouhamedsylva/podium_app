@@ -41,6 +41,7 @@ class _PodiumScreenState extends State<PodiumScreen>
   bool _isAuthError = false; // Indique si c'est une erreur d'authentification
   int _countdownSeconds = 3; // Compteur pour la redirection
   Timer? _countdownTimer; // Timer pour le compteur
+  String? _loadingInLoader; // Valeur LOADING_IN_LOADER depuis le backend
   
   // Controllers d'animation (style "Explosion & Reveal" - différent des autres pages)
   late AnimationController _productController;
@@ -211,6 +212,23 @@ class _PodiumScreenState extends State<PodiumScreen>
 
   Future<void> _loadProductData() async {
     try {
+      // ✅ Récupérer LOADING_IN_LOADER depuis le backend (pas de traduction locale)
+      if (_loadingInLoader == null) {
+        try {
+          final infosStatus = await _apiService.getInfosStatus();
+          // getInfosStatus retourne un tableau, chercher LOADING_IN_LOADER dans le premier élément
+          if (infosStatus is List && infosStatus.isNotEmpty) {
+            final firstItem = infosStatus[0] as Map<String, dynamic>?;
+            _loadingInLoader = firstItem?['LOADING_IN_LOADER']?.toString();
+          } else if (infosStatus is Map<String, dynamic>) {
+            _loadingInLoader = infosStatus['LOADING_IN_LOADER']?.toString();
+          }
+          print('📦 LOADING_IN_LOADER récupéré depuis backend: $_loadingInLoader');
+        } catch (e) {
+          print('⚠️ Erreur lors de la récupération de LOADING_IN_LOADER: $e');
+        }
+      }
+      
       // ✅ Récupérer la quantité depuis l'URL (si venant de la wishlist)
       final uri = GoRouterState.of(context).uri;
       final iQuantiteFromUrl = uri.queryParameters['iQuantite'];
@@ -752,14 +770,15 @@ class _PodiumScreenState extends State<PodiumScreen>
     final translationService = Provider.of<TranslationService>(context, listen: true);
     
     // Précharger les traductions pour éviter les appels répétés
-    final loadingText = translationService.translate('SCANCODE_Processing');
+    final loadingText = translationService.translate('LOADING_IN_PROGRESS');
     final podiumMsg01 = translationService.translate('PODIUM_Msg01');
     final podiumMsg02 = translationService.translate('PODIUM_Msg02');
     final podiumMsg03 = translationService.translate('PODIUM_Msg03');
     final productcodeMsg08 = translationService.translate('PRODUCTCODE_Msg08');
     final productcodeMsg09 = translationService.translate('PRODUCTCODE_Msg09');
     final appHeaderHome = translationService.translate('APPHEADER_HOME');
-    final scancodeTitle = translationService.translate('SCANCODE_Title');
+    // ✅ Utiliser LOADING_IN_LOADER depuis le backend (pas de traduction locale)
+    final scancodeTitle = _loadingInLoader ?? translationService.translate('LOADING_IN_LOADER');
     final appHeaderWishlist = translationService.translate('APPHEADER_WISHLIST');
 
     return Scaffold(

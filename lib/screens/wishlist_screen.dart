@@ -1454,23 +1454,34 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         // ✅ Exclure AT (Autriche) et CH (Suisse)
         if (code.isNotEmpty && code != 'AT' && code != 'CH') {
-          // ✅ Récupérer le prix de CET article pour ce pays
-          final priceStr = article[code]?.toString() ?? 'N/A';
-          final price = _extractPriceFromString(priceStr);
-          final isPriceAvailable = price > 0;
+          // ✅ Récupérer le prix de CET article pour ce pays (comme SNAL: item[countryCode])
+          final priceStr = article[code]?.toString() ?? '';
+          
+          // ✅ Logique comme SNAL: si priceStr est null, undefined, vide, ou "Indisponible" → indisponible
+          // Sinon → disponible (même si c'est "Floute" ou autre)
+          final isPriceAvailable = priceStr.isNotEmpty && 
+                                   priceStr.toLowerCase() != 'n/a' &&
+                                   priceStr.toLowerCase() != 'indisponible' &&
+                                   priceStr.toLowerCase() != 'unavailable';
           
           // ✅ Corriger l'URL du drapeau (éviter le double https://jirig.be)
           final flagUrl = _normalizeFlagUrl(flag);
           
+          // ✅ Formatage du prix pour l'affichage (comme SNAL)
+          String displayPrice = priceStr;
+          if (priceStr.isEmpty || !isPriceAvailable) {
+            displayPrice = 'N/A'; // Sera traduit en "Indisponible" dans l'UI
+          }
+          
           print('🖼️ URL drapeau final: $flagUrl');
-          print('💰 Prix pour $code: $priceStr (disponible: $isPriceAvailable)');
+          print('💰 Prix pour $code: "$priceStr" (disponible: $isPriceAvailable)');
           
           allCountries.add({
             'code': code,
             'name': name.isNotEmpty ? name : code, // ✅ Fallback sur le code si nom manquant
             'flag': flagUrl, // ✅ URL avec proxy
-            'price': priceStr, // ✅ Prix réel pour cet article
-            'isAvailable': isPriceAvailable, // ✅ Indique si le prix est disponible
+            'price': displayPrice, // ✅ Prix réel pour cet article (ou "N/A" si indisponible)
+            'isAvailable': isPriceAvailable, // ✅ Indique si le prix est disponible (comme SNAL)
           });
         } else if (code == 'AT' || code == 'CH') {
           print('🚫 Pays exclu: $code (${code == 'AT' ? 'Autriche' : 'Suisse'})');
@@ -1478,9 +1489,17 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       }
       
       print('✅ ${allCountries.length} pays préparés pour le modal depuis get-infos-status');
-      
-      print('🌍 Pays disponibles: ${allCountries.length}');
+      print('🌍 Tous les pays disponibles pour l\'article: ${allCountries.map((c) => c['code']).toList()}');
       print('🌍 Pays actuellement sélectionné: $currentSelectedCountry');
+      
+      // ✅ Récupérer aussi tous les pays disponibles (pas seulement ceux avec un prix pour cet article)
+      // Cela permet d'afficher les pays sélectionnés dans CountryManagementModal même s'ils n'ont pas de prix pour cet article
+      final allAvailableCountries = _getAllAvailableCountries();
+      print('🌍 Tous les pays disponibles (tous pays): ${allAvailableCountries.map((c) => c['code']).toList()}');
+      
+      // ✅ Ne PAS filtrer ici - passer tous les pays disponibles à CountrySidebarModal
+      // Le filtrage se fera dans CountrySidebarModal selon les pays sélectionnés dans localStorage
+      // Cela permet d'afficher les nouveaux pays sélectionnés dans CountryManagementModal
       
       // ✅ Créer un NOUVEAU ValueNotifier local pour le modal (copie de l'article)
       // Cela évite les problèmes de dispose car chaque modal a son propre ValueNotifier
@@ -1495,11 +1514,20 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         syncListener = () {
           try {
             if (modalNotifier.value.isNotEmpty) {
-              modalNotifier.value = Map<String, dynamic>.from(sourceNotifier!.value);
+              // ✅ Copier toutes les données depuis sourceNotifier, y compris les prix pour tous les pays
+              final sourceValue = sourceNotifier!.value;
+              final updatedValue = Map<String, dynamic>.from(sourceValue);
+              
+              // ✅ Debug: Vérifier les prix dans sourceNotifier
+              print('🔄 syncListener - Clés de pays dans sourceNotifier: ${sourceValue.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
+              
+              // ✅ S'assurer que tous les prix sont copiés (y compris ceux des nouveaux pays sélectionnés)
+              modalNotifier.value = updatedValue;
+              print('🔄 modalNotifier mis à jour depuis sourceNotifier');
             }
           } catch (e) {
             // Le sourceNotifier a été disposé, ignorer
-            print('⚠️ Source notifier disposé, arrêt de la synchronisation');
+            print('⚠️ Source notifier disposé, arrêt de la synchronisation: $e');
           }
         };
         sourceNotifier.addListener(syncListener);
@@ -1514,6 +1542,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           return _CountrySidebarModal(
             articleNotifier: modalNotifier,
             availableCountries: allCountries,
+            allAvailableCountries: allAvailableCountries,
             currentSelected: currentSelectedCountry,
             homeCountryCode: _getHomeCountryCode(article),
             onCountrySelected: (String countryCode) async {
@@ -1976,22 +2005,87 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             if (sCodeArticleCrypt.isNotEmpty) {
               // Trouver l'article mis à jour dans la wishlist
               final pivotArray = _wishlistData?['pivotArray'] as List? ?? [];
+              
+              // ✅ Debug: Vérifier le contenu de pivotArray
+              print('📦 pivotArray contient ${pivotArray.length} articles');
+              if (pivotArray.isNotEmpty) {
+                final firstArticle = pivotArray[0] as Map<String, dynamic>?;
+                if (firstArticle != null) {
+                  print('📦 Premier article - clés de pays: ${firstArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
+                  print('📦 Premier article - ES: ${firstArticle['ES']}, FR: ${firstArticle['FR']}, PT: ${firstArticle['PT']}');
+                }
+              }
+              
               final updatedArticle = pivotArray.firstWhere(
                 (item) => (item['sCodeArticleCrypt']?.toString() ?? '') == sCodeArticleCrypt,
                 orElse: () => currentArticle,
               );
               
-              // Créer une copie de l'article avec les pays mis à jour
+              // ✅ Créer une copie PROFONDE de l'article avec TOUTES les propriétés (y compris les prix par pays)
+              // Utiliser Map.from pour copier toutes les clés, y compris ES, FR, NL, PT, etc.
               final updatedArticleCopy = Map<String, dynamic>.from(updatedArticle);
+              
+              // ✅ Debug: Vérifier les prix disponibles dans l'article mis à jour
+              print('📦 Article mis à jour depuis pivotArray - sCodeArticleCrypt: ${updatedArticleCopy['sCodeArticleCrypt']}');
+              print('📦 Article mis à jour - TOUTES les clés: ${updatedArticleCopy.keys.toList()}');
+              print('📦 Article mis à jour - clés de pays: ${updatedArticleCopy.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
+              
+              // ✅ Vérifier TOUS les pays disponibles dans l'article (pas seulement ceux normalisés)
+              final allCountryKeys = updatedArticleCopy.keys.where((k) => 
+                k.length == 2 && 
+                k.toUpperCase() == k && 
+                RegExp(r'^[A-Z]{2}$').hasMatch(k)
+              ).toList();
+              print('📦 Tous les pays avec prix dans l\'article: $allCountryKeys');
+              for (final countryKey in allCountryKeys) {
+                print('   💰 $countryKey: ${updatedArticleCopy[countryKey]}');
+              }
               
               // Vérifier que les pays sélectionnés sont bien dans localStorage
               final storedCountries = await LocalStorageService.getSelectedCountries();
               print('📋 Pays dans localStorage après sauvegarde: $storedCountries');
               print('📋 Pays normalisés: $normalizedCountries');
               
+              // ✅ S'assurer que tous les prix sont présents dans l'article
+              // L'article depuis pivotArray devrait déjà contenir tous les prix (ES, FR, NL, PT, etc.)
+              // Mais on vérifie quand même pour être sûr
+              for (final countryCode in normalizedCountries) {
+                final upperCode = countryCode.toUpperCase();
+                if (updatedArticleCopy.containsKey(upperCode)) {
+                  final price = updatedArticleCopy[upperCode];
+                  print('✅ Prix pour $upperCode présent dans updatedArticle: $price (type: ${price.runtimeType})');
+                } else {
+                  print('⚠️ Pas de prix pour $upperCode dans updatedArticle - essayer depuis currentArticle');
+                  // Essayer de le récupérer depuis l'article original
+                  if (currentArticle.containsKey(upperCode) && 
+                      currentArticle[upperCode] != null &&
+                      currentArticle[upperCode].toString().trim().isNotEmpty) {
+                    // Le prix existe dans l'article original, le copier
+                    updatedArticleCopy[upperCode] = currentArticle[upperCode];
+                    print('✅ Prix pour $upperCode copié depuis currentArticle: ${currentArticle[upperCode]}');
+                  } else {
+                    print('⚠️ Prix pour $upperCode non disponible dans currentArticle ni updatedArticle');
+                  }
+                }
+              }
+              
+              // ✅ S'assurer que TOUTES les propriétés sont copiées (y compris les prix par pays)
+              // Créer une copie complète avec toutes les clés
+              final newArticle = <String, dynamic>{};
+              
+              // Copier TOUTES les clés de updatedArticleCopy
+              for (final key in updatedArticleCopy.keys) {
+                newArticle[key] = updatedArticleCopy[key];
+              }
+              
               // Ajouter un timestamp pour forcer la mise à jour (nécessaire pour déclencher le listener)
-              final newArticle = Map<String, dynamic>.from(updatedArticleCopy);
               newArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+              
+              // ✅ Debug: Vérifier que tous les prix sont dans newArticle avant de mettre à jour le notifier
+              print('📦 newArticle avant mise à jour du notifier - clés de pays: ${newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
+              for (final countryKey in newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k))) {
+                print('   💰 $countryKey: ${newArticle[countryKey]}');
+              }
               
               // Forcer la mise à jour en créant un nouvel objet (nécessaire pour déclencher le listener)
               articleNotifier.value = Map<String, dynamic>.from(newArticle);
@@ -2456,7 +2550,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               ),
               const SizedBox(height: 16),
               Text(
-                translationService.translate('SCANCODE_Processing'),
+                translationService.translate('LOADING_IN_LOADER'),
                 style: const TextStyle(
                   fontSize: 16, // Taille réduite
                   fontWeight: FontWeight.w500,
@@ -4080,19 +4174,22 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // Récupérer les pays sélectionnés globalement
               final globalSelectedCountries = snapshot.data ?? [];
               
-              // Filtrer pour exclure le pays déjà affiché en haut et AT/CH
-              final availableCountries = globalSelectedCountries
+              // ✅ Filtrer pour exclure AT/CH uniquement, mais inclure tous les autres pays sélectionnés
+              // (y compris le displayCountry s'il fait partie des pays sélectionnés)
+              final filteredCountries = globalSelectedCountries
                   .where((code) => 
                     code.isNotEmpty && 
                     code != 'AT' && 
-                    code != 'CH' &&
-                    code != displayCountry?.toUpperCase()
+                    code != 'CH'
                   )
-                  .take(3) // Prendre les 3 premiers (comme SNAL countriesList.slice(0, 3))
                   .toList();
               
+              // ✅ Prendre les 3 premiers pays sélectionnés (comme SNAL countriesList.slice(0, 3))
+              // Inclure le displayCountry s'il fait partie des pays sélectionnés
+              final finalAvailableCountries = filteredCountries.take(3).toList();
+              
               // ✅ Ne pas afficher les drapeaux si aucun pays disponible
-              if (availableCountries.isEmpty) {
+              if (finalAvailableCountries.isEmpty) {
                 return Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -4123,7 +4220,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 );
               }
               
-              final countriesToShow = availableCountries;
+              final countriesToShow = finalAvailableCountries;
               final hasOnlyOneCountry = countriesToShow.length == 1;
               
               return Wrap(
@@ -5048,6 +5145,7 @@ class _CountryManagementData {
 class _CountrySidebarModal extends StatefulWidget {
   final ValueNotifier<Map<String, dynamic>> articleNotifier;
   final List<Map<String, dynamic>> availableCountries;
+  final List<Map<String, dynamic>> allAvailableCountries; // ✅ Tous les pays disponibles (pas seulement ceux avec un prix)
   final String currentSelected;
   final String? homeCountryCode;
   final Future<void> Function(String) onCountrySelected;
@@ -5057,6 +5155,7 @@ class _CountrySidebarModal extends StatefulWidget {
     Key? key,
     required this.articleNotifier,
     required this.availableCountries,
+    required this.allAvailableCountries,
     required this.currentSelected,
     required this.homeCountryCode,
     required this.onCountrySelected,
@@ -5101,7 +5200,14 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     _currentArticle = widget.articleNotifier.value;
     _initialHomeCountryCode = (widget.homeCountryCode ?? '').toUpperCase();
     _baseCountries = widget.availableCountries.map((c) => Map<String, dynamic>.from(c)).toList();
+    
+    // ✅ Initialiser _availableCountries de manière synchrone avec tous les pays de base
+    // La méthode asynchrone _initializeAvailableCountries() mettra à jour la liste ensuite
     _availableCountries = _baseCountries.map((c) => Map<String, dynamic>.from(c)).toList();
+    
+    // ✅ Filtrer les pays disponibles selon ceux sélectionnés dans localStorage (asynchrone)
+    _initializeAvailableCountries();
+    
     widget.articleNotifier.addListener(_onArticleNotifierChanged);
     
     _slideController = AnimationController(
@@ -5132,6 +5238,129 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     });
   }
 
+  /// Initialiser les pays disponibles selon ceux sélectionnés dans localStorage
+  Future<void> _initializeAvailableCountries({bool useSetState = false}) async {
+    try {
+      // Récupérer les pays sélectionnés depuis localStorage
+      final selectedCountries = await LocalStorageService.getSelectedCountries();
+      final selectedCodes = selectedCountries.map((c) => c.toUpperCase()).toSet();
+      
+      print('🌍 Pays sélectionnés dans localStorage: $selectedCodes');
+      print('📋 Pays de base disponibles: ${_baseCountries.map((c) => c['code']).toList()}');
+      
+      // ✅ Créer un map des pays de base pour un accès rapide
+      final baseCountriesMap = <String, Map<String, dynamic>>{};
+      for (final baseCountry in _baseCountries) {
+        final code = baseCountry['code']?.toString().toUpperCase() ?? '';
+        if (code.isNotEmpty) {
+          baseCountriesMap[code] = baseCountry;
+        }
+      }
+      
+      // ✅ Filtrer les pays sélectionnés et construire la liste
+      final filteredCountries = <Map<String, dynamic>>[];
+      final processedCodes = <String>{};
+      
+      // D'abord, ajouter les pays sélectionnés qui sont dans _baseCountries
+      for (final baseCountry in _baseCountries) {
+        final code = baseCountry['code']?.toString().toUpperCase() ?? '';
+        if (code.isNotEmpty && selectedCodes.contains(code)) {
+          filteredCountries.add(_buildCountryDetails(code));
+          processedCodes.add(code);
+        }
+      }
+      
+      // ✅ Ensuite, ajouter les pays sélectionnés qui ne sont PAS dans _baseCountries
+      // Ces pays ont été sélectionnés dans CountryManagementModal mais n'ont pas de prix pour cet article
+      // On doit les récupérer depuis widget.allAvailableCountries pour avoir leurs infos (nom, drapeau)
+      final allAvailableMap = <String, Map<String, dynamic>>{};
+      for (final country in widget.allAvailableCountries) {
+        final code = country['code']?.toString().toUpperCase() ?? '';
+        if (code.isNotEmpty) {
+          allAvailableMap[code] = country;
+        }
+      }
+      
+      for (final selectedCode in selectedCodes) {
+        if (!processedCodes.contains(selectedCode)) {
+          // Ce pays est sélectionné mais n'est pas dans _baseCountries
+          // Récupérer ses infos depuis widget.allAvailableCountries
+          final countryInfo = allAvailableMap[selectedCode];
+          if (countryInfo != null) {
+            // Construire les détails du pays avec les infos disponibles
+            // ✅ Passer aussi le prix depuis countryInfo si disponible
+            final priceFromInfo = countryInfo['price']?.toString() ?? '';
+            final isAvailableFromInfo = countryInfo['isAvailable'] as bool?;
+            print('💰 Prix pour $selectedCode depuis countryInfo: "$priceFromInfo", isAvailable: $isAvailableFromInfo');
+            
+            // ✅ Vérifier aussi directement dans _currentArticle (comme SNAL: item[countryCode])
+            final directPrice = _currentArticle[selectedCode]?.toString() ?? 
+                               _currentArticle[selectedCode.toUpperCase()]?.toString() ?? 
+                               _currentArticle[selectedCode.toLowerCase()]?.toString() ?? '';
+            print('💰 Prix direct depuis _currentArticle[$selectedCode]: "$directPrice"');
+            
+            // ✅ Utiliser le prix direct depuis l'article en priorité (comme SNAL)
+            final finalPrice = directPrice.isNotEmpty ? directPrice : priceFromInfo;
+            final countryDetails = _buildCountryDetails(
+              selectedCode,
+              nameOverride: countryInfo['name']?.toString(),
+              flagOverride: countryInfo['flag']?.toString(),
+              priceOverride: finalPrice,
+            );
+            
+            // ✅ Si isAvailable est déjà calculé dans countryInfo ET que le prix direct existe, utiliser isAvailableFromInfo
+            // Sinon, laisser _buildCountryDetails calculer isAvailable depuis le prix
+            if (isAvailableFromInfo != null && directPrice.isNotEmpty) {
+              // Si le prix direct existe, utiliser isAvailableFromInfo
+              countryDetails['isAvailable'] = isAvailableFromInfo;
+            } else if (directPrice.isNotEmpty) {
+              // Si le prix direct existe mais isAvailableFromInfo n'est pas défini, calculer depuis le prix direct
+              final hasDirectPrice = directPrice.isNotEmpty && 
+                                     directPrice.toLowerCase() != 'n/a' &&
+                                     directPrice.toLowerCase() != 'indisponible' &&
+                                     directPrice.toLowerCase() != 'unavailable';
+              countryDetails['isAvailable'] = hasDirectPrice;
+            }
+            
+            print('💰 Pays $selectedCode - isAvailable: ${countryDetails['isAvailable']}, price: ${countryDetails['price']}');
+            filteredCountries.add(countryDetails);
+            processedCodes.add(selectedCode);
+            print('✅ Ajout du pays sélectionné (non présent dans _baseCountries): $selectedCode');
+          } else {
+            print('⚠️ Pays sélectionné non trouvé dans allAvailableCountries: $selectedCode');
+          }
+        }
+      }
+      
+      // Si aucun pays n'est sélectionné, utiliser tous les pays de base (fallback)
+      final newAvailableCountries = filteredCountries.isNotEmpty 
+          ? filteredCountries 
+          : _baseCountries.map((c) => Map<String, dynamic>.from(c)).toList();
+      
+      // ✅ Toujours utiliser setState si le widget est monté pour mettre à jour l'UI
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _availableCountries = newAvailableCountries;
+        });
+      } else {
+        _availableCountries = newAvailableCountries;
+      }
+      
+      print('📊 Pays disponibles après initialisation: ${_availableCountries.map((c) => c['code']).toList()}');
+    } catch (e) {
+      print('❌ Erreur lors de l\'initialisation des pays disponibles: $e');
+      // Fallback sur tous les pays de base
+      final fallbackCountries = _baseCountries.map((c) => Map<String, dynamic>.from(c)).toList();
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _availableCountries = fallbackCountries;
+        });
+      } else {
+        _availableCountries = fallbackCountries;
+      }
+    }
+  }
+
   void _onArticleNotifierChanged() async {
     // ✅ Vérifier le flag de dispose en premier
     if (_isDisposed || !mounted) return;
@@ -5140,6 +5369,10 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     Map<String, dynamic> newArticle;
     try {
       newArticle = widget.articleNotifier.value;
+      
+      // ✅ Debug: Vérifier les prix disponibles dans newArticle
+      print('🔄 _onArticleNotifierChanged - Clés de pays dans newArticle: ${newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
+      print('🔄 _onArticleNotifierChanged - Exemple ES: ${newArticle['ES']}, PT: ${newArticle['PT']}, DE: ${newArticle['DE']}');
     } catch (e) {
       // Le ValueNotifier a été disposé, ne rien faire
       print('⚠️ ValueNotifier disposé, arrêt de la mise à jour');
@@ -5190,6 +5423,12 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     
     setState(() {
       _currentArticle = newArticle;
+      
+      // ✅ Debug: Vérifier les clés disponibles dans _currentArticle
+      print('📦 _currentArticle clés: ${_currentArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
+      print('📦 _currentArticle contient ES: ${_currentArticle.containsKey('ES')}, valeur: ${_currentArticle['ES']}');
+      print('📦 _currentArticle contient PT: ${_currentArticle.containsKey('PT')}, valeur: ${_currentArticle['PT']}');
+      
       // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
       final rawSpaysSelected = _currentArticle['spaysSelected'] ?? _currentArticle['sPaysSelected'];
       final bool isCountrySelected = rawSpaysSelected != null && 
@@ -5206,12 +5445,75 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
       // Reconstruire la liste en préservant l'ordre original des pays de base
       // Parcourir _baseCountries dans l'ordre et ne garder que les pays sélectionnés
       final orderedAvailableCountries = <Map<String, dynamic>>[];
+      final processedCodes = <String>{};
       
+      // D'abord, ajouter les pays sélectionnés qui sont dans _baseCountries
       for (final baseCountry in _baseCountries) {
         final code = baseCountry['code']?.toString().toUpperCase() ?? '';
         if (code.isNotEmpty && selectedCodes.contains(code)) {
           // Le pays est sélectionné, l'ajouter dans l'ordre original
+          // ✅ Utiliser _currentArticle qui vient d'être mis à jour
           orderedAvailableCountries.add(_buildCountryDetails(code));
+          processedCodes.add(code);
+        }
+      }
+      
+      // ✅ Ensuite, ajouter les pays sélectionnés qui ne sont PAS dans _baseCountries
+      // Ces pays ont été sélectionnés dans CountryManagementModal mais n'ont pas de prix pour cet article
+      final allAvailableMap = <String, Map<String, dynamic>>{};
+      for (final country in widget.allAvailableCountries) {
+        final code = country['code']?.toString().toUpperCase() ?? '';
+        if (code.isNotEmpty) {
+          allAvailableMap[code] = country;
+        }
+      }
+      
+      for (final selectedCode in selectedCodes) {
+        if (!processedCodes.contains(selectedCode)) {
+          // Ce pays est sélectionné mais n'est pas dans _baseCountries
+          // Récupérer ses infos depuis widget.allAvailableCountries
+          final countryInfo = allAvailableMap[selectedCode];
+          if (countryInfo != null) {
+            // Construire les détails du pays avec les infos disponibles
+            // ✅ Passer aussi le prix depuis countryInfo si disponible
+            final priceFromInfo = countryInfo['price']?.toString() ?? '';
+            final isAvailableFromInfo = countryInfo['isAvailable'] as bool?;
+            print('💰 Prix pour $selectedCode depuis countryInfo: "$priceFromInfo", isAvailable: $isAvailableFromInfo');
+            
+            // ✅ Vérifier aussi directement dans _currentArticle (comme SNAL: item[countryCode])
+            final directPrice = _currentArticle[selectedCode]?.toString() ?? 
+                               _currentArticle[selectedCode.toUpperCase()]?.toString() ?? 
+                               _currentArticle[selectedCode.toLowerCase()]?.toString() ?? '';
+            print('💰 Prix direct depuis _currentArticle[$selectedCode]: "$directPrice"');
+            
+            // ✅ Utiliser le prix direct depuis l'article en priorité (comme SNAL)
+            final finalPrice = directPrice.isNotEmpty ? directPrice : priceFromInfo;
+            final countryDetails = _buildCountryDetails(
+              selectedCode,
+              nameOverride: countryInfo['name']?.toString(),
+              flagOverride: countryInfo['flag']?.toString(),
+              priceOverride: finalPrice,
+            );
+            
+            // ✅ Si isAvailable est déjà calculé dans countryInfo ET que le prix direct existe, utiliser isAvailableFromInfo
+            // Sinon, laisser _buildCountryDetails calculer isAvailable depuis le prix
+            if (isAvailableFromInfo != null && directPrice.isNotEmpty) {
+              // Si le prix direct existe, utiliser isAvailableFromInfo
+              countryDetails['isAvailable'] = isAvailableFromInfo;
+            } else if (directPrice.isNotEmpty) {
+              // Si le prix direct existe mais isAvailableFromInfo n'est pas défini, calculer depuis le prix direct
+              final hasDirectPrice = directPrice.isNotEmpty && 
+                                     directPrice.toLowerCase() != 'n/a' &&
+                                     directPrice.toLowerCase() != 'indisponible' &&
+                                     directPrice.toLowerCase() != 'unavailable';
+              countryDetails['isAvailable'] = hasDirectPrice;
+            }
+            
+            print('💰 Pays $selectedCode - isAvailable: ${countryDetails['isAvailable']}, price: ${countryDetails['price']}');
+            orderedAvailableCountries.add(countryDetails);
+            processedCodes.add(selectedCode);
+            print('✅ Ajout du pays sélectionné (non présent dans _baseCountries): $selectedCode');
+          }
         }
       }
       
@@ -5296,20 +5598,54 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     String flag = flagOverride?.toString() ?? existing?['flag']?.toString() ?? '';
     flag = _normalizeFlagUrl(flag);
 
-    String rawPrice = priceOverride?.toString() ?? '';
-    if (rawPrice.trim().isEmpty && _currentArticle.containsKey(code)) {
+    // ✅ Logique comme SNAL: récupérer directement depuis l'article (item[countryCode])
+    // Priorité: 1) prix direct depuis l'article, 2) priceOverride, 3) existing
+    String rawPrice = '';
+    
+    // ✅ Debug: Vérifier toutes les clés possibles dans _currentArticle
+    print('🔍 _buildCountryDetails pour $code - Recherche du prix...');
+    print('   _currentArticle contient code ($code): ${_currentArticle.containsKey(code)}');
+    print('   _currentArticle contient normalized ($normalized): ${_currentArticle.containsKey(normalized)}');
+    print('   _currentArticle contient lowercase (${code.toLowerCase()}): ${_currentArticle.containsKey(code.toLowerCase())}');
+    if (_currentArticle.containsKey(code)) {
       rawPrice = _currentArticle[code]?.toString() ?? '';
-    } else if (rawPrice.trim().isEmpty && _currentArticle.containsKey(normalized)) {
+      print('   ✅ Prix trouvé avec code: "$rawPrice"');
+    } else if (_currentArticle.containsKey(normalized)) {
       rawPrice = _currentArticle[normalized]?.toString() ?? '';
-    } else if (rawPrice.trim().isEmpty && _currentArticle.containsKey(code.toLowerCase())) {
+      print('   ✅ Prix trouvé avec normalized: "$rawPrice"');
+    } else if (_currentArticle.containsKey(code.toLowerCase())) {
       rawPrice = _currentArticle[code.toLowerCase()]?.toString() ?? '';
+      print('   ✅ Prix trouvé avec lowercase: "$rawPrice"');
+    } else {
+      print('   ⚠️ Prix non trouvé dans _currentArticle avec aucune des clés');
     }
+    
+    // ✅ Si pas trouvé dans l'article, utiliser priceOverride
+    if (rawPrice.trim().isEmpty) {
+      rawPrice = priceOverride?.toString() ?? '';
+      if (rawPrice.isNotEmpty) {
+        print('   ✅ Prix trouvé dans priceOverride: "$rawPrice"');
+      }
+    }
+    
+    // ✅ Si toujours vide, utiliser existing
     if (rawPrice.trim().isEmpty) {
       rawPrice = existing?['price']?.toString() ?? '';
+      if (rawPrice.isNotEmpty) {
+        print('   ✅ Prix trouvé dans existing: "$rawPrice"');
+      }
     }
 
+    // ✅ Logique comme SNAL: si rawPrice est null, undefined, vide, ou "Indisponible" → indisponible
+    // Sinon → disponible (même si c'est "Floute" ou autre)
+    final hasPrice = rawPrice.isNotEmpty && 
+                     rawPrice.toLowerCase() != 'n/a' &&
+                     rawPrice.toLowerCase() != 'indisponible' &&
+                     rawPrice.toLowerCase() != 'unavailable';
+    
     final priceValue = _parsePrice(rawPrice);
-    final hasPrice = priceValue > 0;
+    
+    print('🔍 _buildCountryDetails pour $code: rawPrice="$rawPrice", hasPrice=$hasPrice, priceValue=$priceValue');
 
     String displayPrice = '';
     if (hasPrice) {
@@ -5369,12 +5705,14 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
       // Attendre que la sauvegarde soit terminée (la sauvegarde prend du temps)
       await Future.delayed(const Duration(milliseconds: 500));
       
-      // Forcer la mise à jour en déclenchant manuellement _onArticleNotifierChanged
+      // ✅ Réinitialiser les pays disponibles selon ceux sélectionnés dans localStorage
       if (!_isDisposed && mounted) {
         try {
-          // Vérifier que le ValueNotifier est encore valide
+          print('🔄 Réinitialisation des pays disponibles après sélection/désélection dans CountryManagementModal');
+          await _initializeAvailableCountries(useSetState: true);
+          
+          // Forcer la mise à jour en déclenchant manuellement _onArticleNotifierChanged
           final _ = widget.articleNotifier.value;
-          print('🔄 Forcer la mise à jour du SidebarModal après sélection/désélection');
           _onArticleNotifierChanged();
           
           // Forcer une deuxième mise à jour après un court délai pour s'assurer que localStorage est synchronisé
@@ -5382,13 +5720,14 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
           if (!_isDisposed && mounted) {
             try {
               final __ = widget.articleNotifier.value;
+              await _initializeAvailableCountries(useSetState: true);
               _onArticleNotifierChanged();
             } catch (e) {
               print('⚠️ ValueNotifier disposé lors de la deuxième mise à jour: $e');
             }
           }
         } catch (e) {
-          print('⚠️ ValueNotifier disposé, impossible de forcer la mise à jour: $e');
+          print('⚠️ Erreur lors de la réinitialisation des pays: $e');
         }
       }
     } catch (e) {

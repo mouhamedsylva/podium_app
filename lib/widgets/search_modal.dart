@@ -1022,7 +1022,7 @@ class _SearchModalState extends State<SearchModal>
               color: Color(0xFF1A1A1A),
             ),
             decoration: InputDecoration(
-              hintText: translationService.translate('FRONTPAGE_Msg06'), // ✅ Utilise la clé de traduction
+              hintText: translationService.translate('INPUT_IKEA_REFERENCE_OR_NAME'), // ✅ Utilise la clé de traduction
               hintStyle: TextStyle(
                 color: Colors.grey[400],
                 fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),

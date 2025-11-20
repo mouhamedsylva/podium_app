@@ -1278,7 +1278,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
         keyboardType: TextInputType.text, // ✅ Permettre texte ET chiffres
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
-          hintText: translationService.translate('FRONTPAGE_Msg06'),
+          hintText: translationService.translate('INPUT_IKEA_REFERENCE_OR_NAME'),
           hintStyle: TextStyle(color: Colors.grey[400]),
           // ✅ Icône search enlevée
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // ✅ Hauteur réduite
