@@ -97,45 +97,42 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Mettre à jour l'état après déconnexion (nettoyage local uniquement, sans endpoint backend)
-  /// ✅ CRITIQUE: Conserve iProfile et iBasket de l'utilisateur connecté
+  /// Mettre à jour l'état après déconnexion
+  /// Appelle l'endpoint backend /api/auth/disconnect pour créer un nouveau profil guest
+  /// et met à jour le profil local avec les nouveaux identifiants
   Future<void> onLogout() async {
     print('🔐 AuthNotifier: onLogout appelé');
     
     try {
-      // ✅ Récupérer le profil actuel pour vérifier que iProfile et iBasket sont conservés
-      final currentProfile = await LocalStorageService.getProfile();
-      final currentIProfile = currentProfile?['iProfile']?.toString() ?? '';
-      final currentIBasket = currentProfile?['iBasket']?.toString() ?? '';
+      // ✅ Appeler l'endpoint backend de déconnexion
+      // Cela crée un nouveau profil guest et met à jour les cookies
+      final apiService = ApiService();
+      await apiService.logout();
       
-      print('📋 Profil avant déconnexion:');
-      print('   iProfile: $currentIProfile (à CONSERVER)');
-      print('   iBasket: $currentIBasket (à CONSERVER)');
+      print('✅ Endpoint de déconnexion appelé avec succès');
       
-      // Nettoyer le profil local (supprime email et infos utilisateur, CONSERVE iProfile et iBasket)
-      await LocalStorageService.clearProfile();
-      
-      // ✅ Vérifier que iProfile et iBasket sont toujours présents après clearProfile()
-      final profileAfterClear = await LocalStorageService.getProfile();
-      final iProfileAfterClear = profileAfterClear?['iProfile']?.toString() ?? '';
-      final iBasketAfterClear = profileAfterClear?['iBasket']?.toString() ?? '';
-      
-      if (iProfileAfterClear == currentIProfile && iBasketAfterClear == currentIBasket) {
-        print('✅ iProfile et iBasket correctement conservés après déconnexion');
-      } else {
-        print('⚠️ ATTENTION: iProfile ou iBasket modifiés après clearProfile()');
-        print('   Avant: iProfile=$currentIProfile, iBasket=$currentIBasket');
-        print('   Après: iProfile=$iProfileAfterClear, iBasket=$iBasketAfterClear');
-      }
+      // Le profil local a déjà été mis à jour par ApiService.logout()
+      // avec les nouveaux identifiants guest (iProfile et iBasket)
+      // et les informations utilisateur ont été supprimées
       
       // Mettre à jour l'état local
       _isLoggedIn = false;
       _userInfo = null;
       
-      print('✅ Déconnexion réussie - Profil local nettoyé (iProfile et iBasket conservés)');
+      print('✅ Déconnexion réussie - Profil guest créé et profil local mis à jour');
     } catch (e) {
       print('❌ Erreur lors de la déconnexion: $e');
-      // En cas d'erreur, forcer quand même la déconnexion
+      print('❌ Stack trace: ${StackTrace.current}');
+      
+      // En cas d'erreur, nettoyer quand même le profil local
+      try {
+        await LocalStorageService.clearProfile();
+        print('⚠️ Profil local nettoyé manuellement après erreur de déconnexion');
+      } catch (clearError) {
+        print('❌ Erreur lors du nettoyage du profil: $clearError');
+      }
+      
+      // Forcer la déconnexion même en cas d'erreur
       _isLoggedIn = false;
       _userInfo = null;
     }

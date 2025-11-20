@@ -46,6 +46,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   bool _isCountrySidebarOpen = false; // Empêcher ouvertures multiples du sidebar
   final Map<String, ValueNotifier<Map<String, dynamic>>> _articleNotifiers = {};
   AuthNotifier? _authNotifier; // Référence pour le listener
+  bool _isHandlingAuthChange = false; // Garde pour éviter les appels multiples de _onAuthStateChanged
   
   // Variables pour le dropdown des baskets (comme SNAL-Project)
   List<Map<String, dynamic>> _baskets = []; // Liste des baskets disponibles
@@ -128,116 +129,129 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   void _onAuthStateChanged() async {
     if (!mounted || _authNotifier == null) return;
     
-    // Si l'utilisateur s'est connecté, recharger les baskets et la wishlist
-    if (_authNotifier!.isLoggedIn) {
-      print('✅ Utilisateur connecté - Rechargement des baskets et de la wishlist...');
-      
-      // ✅ CRITIQUE: Attendre que les cookies soient bien synchronisés après la connexion
-      // Le backend utilise les cookies pour identifier l'utilisateur
-      print('⏳ Attente de la synchronisation des cookies (3 secondes)...');
-      await Future.delayed(const Duration(seconds: 3));
-      
-      // ✅ VÉRIFICATION CRITIQUE: Vérifier que le profil local contient bien le nouveau iProfile
-      // Faire plusieurs tentatives pour s'assurer que le profil est bien synchronisé
-      Map<String, dynamic>? profileData;
-      String iProfile = '';
-      String sEmail = '';
-      int retryCount = 0;
-      const maxRetries = 3;
-      
-      while (retryCount < maxRetries && (iProfile.isEmpty || iProfile.startsWith('guest_') || sEmail.isEmpty)) {
-        profileData = await LocalStorageService.getProfile();
-        iProfile = profileData?['iProfile']?.toString() ?? '';
-        sEmail = profileData?['sEmail']?.toString() ?? '';
+    // ✅ GARDE: Éviter les appels multiples simultanés
+    if (_isHandlingAuthChange) {
+      print('⚠️ _onAuthStateChanged déjà en cours, ignoré');
+      return;
+    }
+    
+    _isHandlingAuthChange = true;
+    
+    try {
+      // Si l'utilisateur s'est connecté, recharger les baskets et la wishlist
+      if (_authNotifier!.isLoggedIn) {
+        print('✅ Utilisateur connecté - Rechargement des baskets et de la wishlist...');
         
-        print('🔍 Vérification du profil après connexion (tentative ${retryCount + 1}/$maxRetries):');
-        print('   iProfile: $iProfile');
-        print('   sEmail: $sEmail');
-        print('   Est connecté: ${sEmail.isNotEmpty}');
+        // ✅ CRITIQUE: Attendre que les cookies soient bien synchronisés après la connexion
+        // Le backend utilise les cookies pour identifier l'utilisateur
+        print('⏳ Attente de la synchronisation des cookies (3 secondes)...');
+        await Future.delayed(const Duration(seconds: 3));
         
-        if (iProfile.isEmpty || iProfile.startsWith('guest_') || sEmail.isEmpty) {
-          print('⚠️ Profil non synchronisé - Attente de 1 seconde...');
-          await Future.delayed(const Duration(seconds: 1));
-          retryCount++;
-        }
-      }
-      
-      if (iProfile.isNotEmpty && !iProfile.startsWith('guest_') && sEmail.isNotEmpty) {
-        print('✅ Profil valide détecté - Rechargement des baskets...');
-        print('   iProfile final: $iProfile');
-        print('   sEmail final: $sEmail');
+        // ✅ VÉRIFICATION CRITIQUE: Vérifier que le profil local contient bien le nouveau iProfile
+        // Faire plusieurs tentatives pour s'assurer que le profil est bien synchronisé
+        Map<String, dynamic>? profileData;
+        String iProfile = '';
+        String sEmail = '';
+        int retryCount = 0;
+        const maxRetries = 3;
         
-        // ✅ CRITIQUE: Recharger les baskets d'abord (pour obtenir tous les baskets de l'utilisateur)
-        // Le backend SNAL utilise le cookie GuestProfile pour identifier l'utilisateur
-        // et retourner tous ses baskets (y compris ceux créés sur le web)
-        await _loadBaskets();
-        
-        // ✅ Après avoir chargé les baskets, récupérer le premier basket (celui créé sur le web)
-        // Comme SNAL-Project ligne 3657-3659: fallback sur le premier basket
-        final updatedProfileData = await LocalStorageService.getProfile();
-        final firstIBasket = updatedProfileData?['iBasket']?.toString() ?? '';
-        
-        if (firstIBasket.isNotEmpty && mounted) {
-          print('✅ Rechargement de la wishlist avec le premier basket: $firstIBasket');
-          // Recharger la wishlist avec le premier basket (celui créé sur le web)
-          await _loadArticlesDirectly(iProfile, firstIBasket);
-        } else if (mounted) {
-          // Fallback: utiliser _loadWishlistData si pas de basket trouvé
-          await _loadWishlistData(force: true);
-        }
-      } else {
-        print('⚠️ Profil invalide ou non synchronisé - Réessayer dans 1 seconde...');
-        // Réessayer après un délai supplémentaire
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) {
-          await _loadBaskets();
+        while (retryCount < maxRetries && (iProfile.isEmpty || iProfile.startsWith('guest_') || sEmail.isEmpty)) {
+          profileData = await LocalStorageService.getProfile();
+          iProfile = profileData?['iProfile']?.toString() ?? '';
+          sEmail = profileData?['sEmail']?.toString() ?? '';
           
-          // ✅ Après avoir chargé les baskets, récupérer le premier basket
-          final updatedProfileData = await LocalStorageService.getProfile();
-          final firstIBasket = updatedProfileData?['iBasket']?.toString() ?? '';
-          final retryIProfile = updatedProfileData?['iProfile']?.toString() ?? '';
+          print('🔍 Vérification du profil après connexion (tentative ${retryCount + 1}/$maxRetries):');
+          print('   iProfile: $iProfile');
+          print('   sEmail: $sEmail');
+          print('   Est connecté: ${sEmail.isNotEmpty}');
           
-          if (firstIBasket.isNotEmpty && retryIProfile.isNotEmpty && mounted) {
-            print('✅ Rechargement de la wishlist avec le premier basket (retry): $firstIBasket');
-            await _loadArticlesDirectly(retryIProfile, firstIBasket);
-          } else if (mounted) {
-            await _loadWishlistData(force: true);
+          if (iProfile.isEmpty || iProfile.startsWith('guest_') || sEmail.isEmpty) {
+            print('⚠️ Profil non synchronisé - Attente de 1 seconde...');
+            await Future.delayed(const Duration(seconds: 1));
+            retryCount++;
           }
         }
+        
+        if (iProfile.isNotEmpty && !iProfile.startsWith('guest_') && sEmail.isNotEmpty) {
+          print('✅ Profil valide détecté - Rechargement des baskets...');
+          print('   iProfile final: $iProfile');
+          print('   sEmail final: $sEmail');
+          
+          // ✅ CRITIQUE: Recharger les baskets d'abord (pour obtenir tous les baskets de l'utilisateur)
+          // Le backend SNAL utilise le cookie GuestProfile pour identifier l'utilisateur
+          // et retourner tous ses baskets (y compris ceux créés sur le web)
+          await _loadBaskets();
+          
+          // ✅ Après avoir chargé les baskets, récupérer le premier basket (celui créé sur le web)
+          // Comme SNAL-Project ligne 3657-3659: fallback sur le premier basket
+          final updatedProfileData = await LocalStorageService.getProfile();
+          final firstIBasket = updatedProfileData?['iBasket']?.toString() ?? '';
+          
+          if (firstIBasket.isNotEmpty && mounted) {
+            print('✅ Rechargement de la wishlist avec le premier basket: $firstIBasket');
+            // Recharger la wishlist avec le premier basket (celui créé sur le web)
+            await _loadArticlesDirectly(iProfile, firstIBasket);
+          } else if (mounted) {
+            // Fallback: utiliser _loadWishlistData si pas de basket trouvé
+            await _loadWishlistData(force: true);
+          }
+        } else {
+          print('⚠️ Profil invalide ou non synchronisé - Réessayer dans 1 seconde...');
+          // Réessayer après un délai supplémentaire
+          await Future.delayed(const Duration(seconds: 1));
+          if (mounted) {
+            await _loadBaskets();
+            
+            // ✅ Après avoir chargé les baskets, récupérer le premier basket
+            final updatedProfileData = await LocalStorageService.getProfile();
+            final firstIBasket = updatedProfileData?['iBasket']?.toString() ?? '';
+            final retryIProfile = updatedProfileData?['iProfile']?.toString() ?? '';
+            
+            if (firstIBasket.isNotEmpty && retryIProfile.isNotEmpty && mounted) {
+              print('✅ Rechargement de la wishlist avec le premier basket (retry): $firstIBasket');
+              await _loadArticlesDirectly(retryIProfile, firstIBasket);
+            } else if (mounted) {
+              await _loadWishlistData(force: true);
+            }
+          }
+        }
+      } 
+      // Si l'utilisateur s'est déconnecté, vider la wishlist
+      else {
+        final articles = (_wishlistData?['pivotArray'] as List?) ?? [];
+        final hasArticles = articles.isNotEmpty;
+        
+        print('🚪 Utilisateur déconnecté - Vidage de la wishlist (${articles.length} articles)');
+        
+        setState(() {
+          _wishlistData = {
+            'meta': {
+              'iBestResultJirig': 0,
+              'iTotalPriceArticleSelected': 0.0,
+              'sResultatGainPerte': '0€',
+            },
+            'pivotArray': [],
+          };
+          _selectedBasketName = 'Wishlist (0 Art.)';
+          _baskets = []; // Vider aussi la liste des baskets
+          _selectedBasketIndex = null;
+          _hasLoaded = true;
+          _isLoading = false; // Arrêter le chargement
+        });
+        
+        // Nettoyer les notifiers d'articles
+        for (final notifier in _articleNotifiers.values) {
+          notifier.dispose();
+        }
+        _articleNotifiers.clear();
+        
+        print('✅ Wishlist vidée - Ne pas recharger automatiquement après déconnexion');
+        // ❌ NE PAS recharger automatiquement la wishlist après déconnexion
+        // L'utilisateur devra recharger manuellement ou naviguer vers une autre page
       }
-    } 
-    // Si l'utilisateur s'est déconnecté, vider la wishlist
-    else {
-      final articles = (_wishlistData?['pivotArray'] as List?) ?? [];
-      final hasArticles = articles.isNotEmpty;
-      
-      print('🚪 Utilisateur déconnecté - Vidage de la wishlist (${articles.length} articles)');
-      
-      setState(() {
-        _wishlistData = {
-          'meta': {
-            'iBestResultJirig': 0,
-            'iTotalPriceArticleSelected': 0.0,
-            'sResultatGainPerte': '0€',
-          },
-          'pivotArray': [],
-        };
-        _selectedBasketName = 'Wishlist (0 Art.)';
-        _baskets = []; // Vider aussi la liste des baskets
-        _selectedBasketIndex = null;
-        _hasLoaded = true;
-        _isLoading = false; // Arrêter le chargement
-      });
-      
-      // Nettoyer les notifiers d'articles
-      for (final notifier in _articleNotifiers.values) {
-        notifier.dispose();
-      }
-      _articleNotifiers.clear();
-      
-      print('✅ Wishlist vidée - Ne pas recharger automatiquement après déconnexion');
-      // ❌ NE PAS recharger automatiquement la wishlist après déconnexion
-      // L'utilisateur devra recharger manuellement ou naviguer vers une autre page
+    } finally {
+      // ✅ Libérer le garde après traitement
+      _isHandlingAuthChange = false;
     }
   }
   
@@ -3781,10 +3795,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                              article['sLangueIso'] ?? 
                              '';
     
-    print('🔍 _buildRightColumn - Pays sélectionné: $selectedCountry');
-    print('🔍 Article keys: ${article.keys.toList()}');
-    print('🔍 spaysSelected: ${article['spaysSelected']}');
-    print('🔍 sPaysSelected: ${article['sPaysSelected']}');
+    // Debug logs désactivés pour éviter la pollution des logs
+    // print('🔍 _buildRightColumn - Pays sélectionné: $selectedCountry');
+    // print('🔍 Article keys: ${article.keys.toList()}');
+    // print('🔍 spaysSelected: ${article['spaysSelected']}');
+    // print('🔍 sPaysSelected: ${article['sPaysSelected']}');
     
     double selectedPrice = 0.0;
     String? bestPriceCountry = '';
@@ -3805,7 +3820,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     if (selectedCountry?.isNotEmpty ?? false) {
       final priceStr = article[selectedCountry]?.toString() ?? '';
       selectedPrice = _extractPriceFromString(priceStr);
-      print('🔍 Prix trouvé pour $selectedCountry: $selectedPrice');
+      // Debug log désactivé pour éviter la pollution des logs
+      // print('🔍 Prix trouvé pour $selectedCountry: $selectedPrice');
     }
     
     // Si pas de prix trouvé pour le pays sélectionné, utiliser le meilleur prix
@@ -3920,7 +3936,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             children: [
               // Drapeaux fixes (Allemagne, Belgique, Espagne) - Responsive
               ...['DE', 'BE', 'ES'].map((countryCode) {
-                print('🏴 Affichage drapeau $countryCode - Mobile: $isMobile');
+                // Debug log désactivé
+                // print('🏴 Affichage drapeau $countryCode - Mobile: $isMobile');
                 // Récupérer IsInBasket depuis l'article
                 final IsInBasket = article['IsInBasket']?.toString().toUpperCase() ?? '';
                 // Vérifier si ce pays correspond à IsInBasket
@@ -4334,7 +4351,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     if (selectedCountry?.isNotEmpty ?? false) {
       final priceStr = article[selectedCountry]?.toString() ?? '';
       selectedPrice = _extractPriceFromString(priceStr);
-      print('🔍 Prix trouvé pour $selectedCountry: $selectedPrice');
+      // Debug log désactivé pour éviter la pollution des logs
+      // print('🔍 Prix trouvé pour $selectedCountry: $selectedPrice');
       
       // Si pas de prix trouvé pour ce pays, utiliser le meilleur prix
       if (selectedPrice <= 0 && (bestPriceCountry?.isNotEmpty ?? false)) {

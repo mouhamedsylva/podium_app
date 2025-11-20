@@ -2096,17 +2096,6 @@ class ApiService {
     }
   }
 
-  /// Déconnexion (méthode legacy - utilise disconnect() maintenant)
-  @Deprecated('Utilisez disconnect() à la place')
-  Future<void> logout() async {
-    try {
-      await disconnect();
-      print('✅ Déconnexion réussie');
-    } catch (e) {
-      print('❌ Erreur logout: $e');
-      rethrow;
-    }
-  }
 
   /// Mettre à jour les cookies avec les nouveaux identifiants
   Future<void> _updateCookiesWithNewIdentifiers(String newIProfile, String newIBasket) async {
@@ -2375,5 +2364,80 @@ class ApiService {
       }
     }
     return '';
+  }
+
+  /// Déconnexion de l'utilisateur (basé sur SNAL disconnect.post.ts)
+  /// Appelle l'endpoint /api/auth/disconnect pour créer un nouveau profil guest
+  /// et mettre à jour les cookies avec les nouveaux identifiants
+  Future<Map<String, dynamic>> logout() async {
+    try {
+      await initialize();
+      
+      print('\n' + '='*70);
+      print('🚪 LOGOUT: Déconnexion de l\'utilisateur');
+      print('='*70);
+      
+      // Récupérer le profil actuel pour conserver sPaysLangue et sPaysFav
+      final currentProfile = await LocalStorageService.getProfile();
+      final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+      final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+      
+      print('📋 Profil actuel avant déconnexion:');
+      print('   sPaysLangue: $sPaysLangue');
+      print('   sPaysFav: $sPaysFav');
+      
+      // Appeler l'endpoint de déconnexion (POST /api/auth/disconnect)
+      // Le backend utilise les cookies pour récupérer le profil guest
+      // et crée un nouveau profil anonyme avec iProfile=-99 et iBasket=-99
+      final response = await _dio!.post(
+        '/auth/disconnect',
+      );
+      
+      print('📡 Status Code: ${response.statusCode}');
+      print('📦 Response Data: ${response.data}');
+      
+      if (response.data != null && response.data is Map) {
+        final data = response.data as Map<String, dynamic>;
+        
+        if (data['success'] == true) {
+          print('✅ Déconnexion réussie');
+          print('   Nouveau iProfile: ${data['iProfile']}');
+          print('   Nouveau iBasket: ${data['iBasket']}');
+          
+          // Mettre à jour le profil local avec les nouveaux identifiants guest
+          // et conserver sPaysLangue et sPaysFav
+          final newIProfile = data['iProfile']?.toString() ?? '';
+          final newIBasket = data['iBasket']?.toString() ?? '';
+          
+          if (newIProfile.isNotEmpty && newIBasket.isNotEmpty) {
+            await LocalStorageService.saveProfile({
+              'iProfile': newIProfile,
+              'iBasket': newIBasket,
+              'sPaysLangue': sPaysLangue,
+              'sPaysFav': sPaysFav,
+              // Supprimer les informations utilisateur
+              'sEmail': '',
+              'sNom': '',
+              'sPrenom': '',
+              'sPhoto': '',
+            });
+            
+            print('💾 Profil guest mis à jour avec les nouveaux identifiants');
+          }
+          
+          return data;
+        } else {
+          print('⚠️ Déconnexion échouée: ${data['message'] ?? 'Erreur inconnue'}');
+          throw Exception(data['message']?.toString() ?? 'Erreur lors de la déconnexion');
+        }
+      }
+      
+      print('⚠️ Réponse invalide lors de la déconnexion');
+      throw Exception('Réponse invalide lors de la déconnexion');
+    } catch (e) {
+      print('❌ Erreur lors de la déconnexion: $e');
+      print('❌ Stack trace: ${StackTrace.current}');
+      rethrow;
+    }
   }
 }

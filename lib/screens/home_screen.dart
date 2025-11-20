@@ -293,37 +293,8 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
           ),
-          
-          const SizedBox(height: 16),
-          
-          // Sous-titre "Trouvez vos articles..." avec style spécifié
-          FadeTransition(
-            opacity: _titleFadeAnimation,
-            child: _buildSubtitle(translationService, isMobile),
-          ),
         ],
       ),
-    );
-  }
-
-  /// Construire le sous-titre "Trouvez vos articles..." avec le style spécifié
-  /// Style: system-ui, normal, weight 700, size 24px, line height 32px, color black
-  Widget _buildSubtitle(TranslationService translationService, bool isMobile) {
-    // Style selon les spécifications de l'image : system-ui, normal, weight 700, size 24px, line height 32px, color black
-    final subtitleStyle = TextStyle(
-      // fontFamily non spécifié = utilise la police système (équivalent à system-ui)
-      fontStyle: FontStyle.normal, // Style: normal
-      fontSize: 24.0, // Size: 24px
-      fontWeight: FontWeight.w700, // Weight: 700 (bold)
-      color: const Color.fromRGBO(0, 0, 0, 1.0), // Color: rgb(0, 0, 0) - noir
-      height: 32.0 / 24.0, // Line Height: 32px / 24px = 1.333
-      letterSpacing: 0.0, // Pas de letterSpacing
-    );
-    
-    return Text(
-      translationService.translateFromBackend('FRONTPAGE_Msg05') ?? 'Trouvez vos articles...',
-      style: subtitleStyle,
-      textAlign: TextAlign.center,
     );
   }
 

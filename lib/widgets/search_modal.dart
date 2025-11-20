@@ -622,33 +622,15 @@ class _SearchModalState extends State<SearchModal>
     }
   }
 
-  void _onInputCode(String value) {
-    String digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
+  /// ✅ ALIGNÉ AVEC product_search_screen.dart : Recherche textuelle libre
+  /// Accepte les lettres ET les chiffres, lance la recherche à partir de 3 caractères
+  void _onInputSearch(String value) {
+    final cleanQuery = value.trim();
     
-    if (digitsOnly.length > 9) {
-      digitsOnly = digitsOnly.substring(0, 9);
-    }
-
-    String formatted = '';
-    if (digitsOnly.length > 6) {
-      formatted = '${digitsOnly.substring(0, 3)}.${digitsOnly.substring(3, 6)}.${digitsOnly.substring(6)}';
-    } else if (digitsOnly.length > 3) {
-      formatted = '${digitsOnly.substring(0, 3)}.${digitsOnly.substring(3)}';
-    } else {
-      formatted = digitsOnly;
-    }
-
-    if (_searchController.text != formatted) {
-      _searchController.value = TextEditingValue(
-        text: formatted,
-        selection: TextSelection.fromPosition(
-          TextPosition(offset: formatted.length),
-        ),
-      );
-    }
-
-    if (digitsOnly.length >= 3) {
-      _searchProduct(digitsOnly);
+    // ✅ ALIGNÉ AVEC SNAL-PROJECT : Minimum 3 caractères pour lancer la recherche
+    // (useSearchArticle.ts ligne 19)
+    if (cleanQuery.length >= 3) {
+      _searchProduct(cleanQuery);
     } else {
       setState(() {
         _searchResults = [];
@@ -1032,8 +1014,8 @@ class _SearchModalState extends State<SearchModal>
           ),
           child: TextField(
             controller: _searchController,
-            onChanged: _onInputCode,
-            keyboardType: TextInputType.number,
+            onChanged: _onInputSearch, // ✅ Changé pour permettre les lettres
+            keyboardType: TextInputType.text, // ✅ Permettre texte ET chiffres
             style: TextStyle(
               fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
               fontWeight: FontWeight.w500,
