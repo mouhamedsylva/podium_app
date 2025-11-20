@@ -1374,9 +1374,21 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     print('   desc: ${article['desc']}');
     
     try {
-      final currentSelectedCountry = (defaultSelectedCountry?.toString() ?? '').isNotEmpty
-          ? defaultSelectedCountry!.toString()
-          : (article['spaysSelected'] ?? article['sPaysSelected'] ?? '');
+      // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
+      final rawSpaysSelected = article['spaysSelected'] ?? article['sPaysSelected'];
+      final bool isCountrySelected = rawSpaysSelected != null && 
+                                     rawSpaysSelected != '' && 
+                                     rawSpaysSelected != false &&
+                                     rawSpaysSelected != '-1' &&
+                                     rawSpaysSelected.toString().trim().isNotEmpty;
+      
+      // ✅ Utiliser defaultSelectedCountry si fourni ET si un pays est sélectionné, sinon utiliser spaysSelected s'il est valide, sinon vide
+      // Si isCountrySelected est false, ne pas utiliser defaultSelectedCountry (même s'il est fourni)
+      final currentSelectedCountry = isCountrySelected
+          ? ((defaultSelectedCountry?.toString() ?? '').isNotEmpty
+              ? defaultSelectedCountry!.toString()
+              : rawSpaysSelected.toString().trim())
+          : '';
       
       // ✅ Utiliser l'endpoint get-infos-status pour récupérer tous les pays
       print('🚀 Appel de getInfosStatus() pour récupérer tous les pays...');
@@ -1470,9 +1482,29 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       print('🌍 Pays disponibles: ${allCountries.length}');
       print('🌍 Pays actuellement sélectionné: $currentSelectedCountry');
       
-      // ✅ Créer un ValueNotifier pour l'article
-      final effectiveNotifier = articleNotifier ?? _ensureArticleNotifier(article);
-
+      // ✅ Créer un NOUVEAU ValueNotifier local pour le modal (copie de l'article)
+      // Cela évite les problèmes de dispose car chaque modal a son propre ValueNotifier
+      final modalNotifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(article));
+      
+      // ✅ Si un articleNotifier est fourni, écouter ses changements et mettre à jour le modalNotifier
+      ValueNotifier<Map<String, dynamic>>? sourceNotifier = articleNotifier;
+      VoidCallback? syncListener;
+      
+      if (sourceNotifier != null) {
+        // Écouter les changements du sourceNotifier et les propager au modalNotifier
+        syncListener = () {
+          try {
+            if (modalNotifier.value.isNotEmpty) {
+              modalNotifier.value = Map<String, dynamic>.from(sourceNotifier!.value);
+            }
+          } catch (e) {
+            // Le sourceNotifier a été disposé, ignorer
+            print('⚠️ Source notifier disposé, arrêt de la synchronisation');
+          }
+        };
+        sourceNotifier.addListener(syncListener);
+      }
+      
       // ✅ Utiliser showModalBottomSheet pour un vrai sidebar plein écran
       await showModalBottomSheet(
         context: context,
@@ -1480,22 +1512,35 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         backgroundColor: Colors.transparent,
         builder: (BuildContext modalContext) {
           return _CountrySidebarModal(
-            articleNotifier: effectiveNotifier,
+            articleNotifier: modalNotifier,
             availableCountries: allCountries,
             currentSelected: currentSelectedCountry,
             homeCountryCode: _getHomeCountryCode(article),
             onCountrySelected: (String countryCode) async {
               // Ne PAS fermer le modal - il restera ouvert et se mettra à jour
-              await _changeArticleCountry(article, countryCode, effectiveNotifier);
+              await _changeArticleCountry(article, countryCode, sourceNotifier);
             },
             onManageCountries: () => _openCountryManagementModal(
               presentationContext: modalContext,
-              articleNotifier: effectiveNotifier,
+              articleNotifier: sourceNotifier,
             ),
           );
         },
       ).whenComplete(() {
         _isCountrySidebarOpen = false;
+        // Nettoyer le listener et disposer le modalNotifier
+        if (syncListener != null && sourceNotifier != null) {
+          try {
+            sourceNotifier.removeListener(syncListener);
+          } catch (e) {
+            print('⚠️ Erreur lors du retrait du listener: $e');
+          }
+        }
+        try {
+          modalNotifier.dispose();
+        } catch (e) {
+          print('⚠️ Erreur lors de la disposition du modalNotifier: $e');
+        }
       });
     } catch (e) {
       print('❌ Erreur dans _openCountrySidebarForArticle: $e');
@@ -1551,7 +1596,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
       final selectedCountries = await _getCurrentSelectedCountries();
       final primaryCountryCode = await _getPrimaryCountryCode();
-      if (primaryCountryCode != null && primaryCountryCode.isNotEmpty && !selectedCountries.contains(primaryCountryCode)) {
+      // ✅ Ne pas ajouter le primaryCountryCode s'il est AT ou CH
+      if (primaryCountryCode != null && 
+          primaryCountryCode.isNotEmpty && 
+          primaryCountryCode != 'AT' && 
+          primaryCountryCode != 'CH' &&
+          !selectedCountries.contains(primaryCountryCode)) {
         selectedCountries.add(primaryCountryCode);
       }
 
@@ -1807,10 +1857,17 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     try {
       // D'abord, essayer de récupérer depuis le localStorage (pays ajoutés via le modal)
       final savedCountries = await LocalStorageService.getSelectedCountries();
-      final normalizedSaved = _normalizeCountriesList(savedCountries);
+      // ✅ Filtrer AT et CH qui ne figurent pas dans le projet
+      final normalizedSaved = _normalizeCountriesList(savedCountries)
+          .where((code) => code != 'AT' && code != 'CH')
+          .toList();
       if (normalizedSaved.isNotEmpty) {
         final primaryCountryCode = await _getPrimaryCountryCode();
-        if (primaryCountryCode != null && !normalizedSaved.contains(primaryCountryCode)) {
+        // ✅ Ne pas ajouter le primaryCountryCode s'il est AT ou CH
+        if (primaryCountryCode != null && 
+            primaryCountryCode != 'AT' && 
+            primaryCountryCode != 'CH' &&
+            !normalizedSaved.contains(primaryCountryCode)) {
           normalizedSaved.add(primaryCountryCode);
         }
         print('✅ Pays récupérés depuis localStorage: $normalizedSaved');
@@ -1840,7 +1897,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       );
 
       final primaryCountryCode = await _getPrimaryCountryCode();
-      if (primaryCountryCode != null && primaryCountryCode.isNotEmpty && !countries.contains(primaryCountryCode)) {
+      // ✅ Ne pas ajouter le primaryCountryCode s'il est AT ou CH
+      if (primaryCountryCode != null && 
+          primaryCountryCode.isNotEmpty && 
+          primaryCountryCode != 'AT' && 
+          primaryCountryCode != 'CH' &&
+          !countries.contains(primaryCountryCode)) {
         countries.add(primaryCountryCode);
       }
       
@@ -1985,18 +2047,18 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Changer le pays d'un article (comme SNAL avec updateDisplayChoice)
+  /// countryCode peut être un code pays pour sélectionner, ou '-1' pour désélectionner
   Future<void> _changeArticleCountry(Map<String, dynamic> article, String countryCode, [ValueNotifier<Map<String, dynamic>>? articleNotifier]) async {
     try {
       final sCodeArticleCrypt = article['sCodeArticleCrypt'] ?? '';
       final currentSelected = article['spaysSelected'] ?? article['sPaysSelected'] ?? '';
+      final isDeselecting = countryCode == '-1' || countryCode.isEmpty;
       
-      // Si on clique sur le pays déjà sélectionné, ne rien faire
-      if (countryCode == currentSelected) {
-        print('ℹ️ Pays déjà sélectionné: $countryCode');
-        return;
+      if (isDeselecting) {
+        print('🔄 Désélection du pays pour l\'article: $currentSelected → (aucun)');
+      } else {
+        print('🔄 Changement du pays pour l\'article: $currentSelected → $countryCode');
       }
-      
-      print('🔄 Changement du pays pour l\'article: $currentSelected → $countryCode');
       print('🔄 Appel API updateCountrySelected (CHANGEPAYS):');
 
       // ✅ Optimistic UI update immédiat (avant l'appel API)
@@ -2006,14 +2068,16 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           (item) => item['sCodeArticleCrypt'] == sCodeArticleCrypt
         );
         if (articleIndex != -1) {
-          pivotArray[articleIndex]['spaysSelected'] = countryCode;
-          pivotArray[articleIndex]['sPaysSelected'] = countryCode;
-          pivotArray[articleIndex]['sPays'] = countryCode;
+          // ✅ Si désélection (-1), mettre à vide, sinon mettre le code du pays
+          final newSelected = isDeselecting ? '' : countryCode;
+          pivotArray[articleIndex]['spaysSelected'] = newSelected;
+          pivotArray[articleIndex]['sPaysSelected'] = newSelected;
+          pivotArray[articleIndex]['sPays'] = newSelected;
           if (articleNotifier != null) {
             articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
           }
           if (mounted) setState(() {});
-          print('⚡ UI mise à jour immédiatement (optimistic) avec pays: $countryCode');
+          print('⚡ UI mise à jour immédiatement (optimistic) avec pays: ${isDeselecting ? "(aucun)" : countryCode}');
           unawaited(_loadWishlistData(force: true));
         }
       }
@@ -2024,13 +2088,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       print('   iBasket: $iBasket');
       print('   sCodeArticle: $sCodeArticleCrypt');
-      print('   sNewPaysSelected: $countryCode');
+      print('   sNewPaysSelected: ${isDeselecting ? "-1" : countryCode}');
       
       // ✅ Appeler l'endpoint update-country-selected (comme SNAL ligne 4075)
+      // Passer -1 pour désélectionner, sinon le code du pays
       final response = await _apiService.updateCountrySelected(
         iBasket: iBasket,
         sCodeArticle: sCodeArticleCrypt,
-        sNewPaysSelected: countryCode,
+        sNewPaysSelected: isDeselecting ? '-1' : countryCode,
       );
       
       print('📡 Response reçue de update-country-selected:');
@@ -2056,7 +2121,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             
             if (articleIndex != -1) {
               // ✅ Mettre à jour l'article avec le nouveau pays sélectionné (comme SNAL ligne 4090)
-              final newSelected = totals['sNewPaysSelected']?.toString() ?? countryCode;
+              // Si sNewPaysSelected est -1 ou vide, désélectionner (mettre à vide)
+              final rawNewSelected = totals['sNewPaysSelected']?.toString() ?? '';
+              final newSelected = (rawNewSelected == '-1' || rawNewSelected.isEmpty) ? '' : rawNewSelected;
               pivotArray[articleIndex]['spaysSelected'] = newSelected;
               pivotArray[articleIndex]['sPaysSelected'] = newSelected;
               pivotArray[articleIndex]['sPays'] = newSelected;
@@ -3778,6 +3845,66 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
   }
 
+  /// ✅ Helper pour construire une ligne de drapeau de pays avec icône panier si nécessaire
+  Widget _buildCountryFlagRow(
+    String countryCode,
+    Map<String, dynamic> article, {
+    bool isMobile = false,
+    bool isSmallMobile = false,
+  }) {
+    // Récupérer IsInBasket depuis l'article
+    final IsInBasket = article['IsInBasket']?.toString().toUpperCase() ?? '';
+    // Vérifier si ce pays correspond à IsInBasket
+    final isInBasketCountry = IsInBasket.isNotEmpty && 
+        (countryCode.toUpperCase() == IsInBasket || 
+         countryCode.toUpperCase().contains(IsInBasket) || 
+         IsInBasket.contains(countryCode.toUpperCase()));
+    
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          margin: EdgeInsets.only(right: isMobile ? 4 : 6),
+          width: isMobile ? 20 : 24,
+          height: isMobile ? 15 : 18,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: Image.network(
+              ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
+                return Container(
+                  color: Colors.grey[300],
+                  child: Icon(
+                    Icons.flag,
+                    size: isMobile ? 10 : 12,
+                    color: Colors.grey,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        // Icône panier si ce pays correspond à IsInBasket
+        if (isInBasketCountry)
+          Container(
+            margin: const EdgeInsets.only(left: 2),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Colors.blue[400],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.shopping_cart,
+              size: isMobile ? 10 : 12,
+              color: Colors.white,
+            ),
+          ),
+      ],
+    );
+  }
+
   /// Colonne droite - Prix et pays d'origine
   Widget _buildRightColumn(
     Map<String, dynamic> article,
@@ -3788,61 +3915,75 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     bool isSmallMobile = false,
     bool isVerySmallMobile = false,
   }) {
-    // ✅ Utiliser le pays sélectionné (spaysSelected avec minuscule - comme l'API le retourne)
-    String? selectedCountry = article['spaysSelected'] ?? // ✅ Minuscule 's' (comme l'API)
-                             article['sPaysSelected'] ??   // Fallback majuscule
-                             article['sPays'] ?? 
-                             article['sLangueIso'] ?? 
-                             '';
+    // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
+    // spaysSelected peut être null, '', false, ou un code pays
+    final rawSpaysSelected = article['spaysSelected'] ?? article['sPaysSelected'];
+    final bool isCountrySelected = rawSpaysSelected != null && 
+                                   rawSpaysSelected != '' && 
+                                   rawSpaysSelected != false &&
+                                   rawSpaysSelected.toString().trim().isNotEmpty;
     
-    // Debug logs désactivés pour éviter la pollution des logs
-    // print('🔍 _buildRightColumn - Pays sélectionné: $selectedCountry');
-    // print('🔍 Article keys: ${article.keys.toList()}');
-    // print('🔍 spaysSelected: ${article['spaysSelected']}');
-    // print('🔍 sPaysSelected: ${article['sPaysSelected']}');
+    // ✅ Utiliser le pays sélectionné si disponible, sinon utiliser le meilleur prix comme fallback
+    String? selectedCountry;
+    if (isCountrySelected) {
+      selectedCountry = rawSpaysSelected.toString().trim().toUpperCase();
+    }
     
     double selectedPrice = 0.0;
     String? bestPriceCountry = '';
-      double bestPrice = double.infinity;
+    double bestPrice = double.infinity;
     
     // Trouver le meilleur prix parmi tous les pays disponibles
-      for (final pays in paysListe) {
-        final sPays = pays['sPays'] ?? '';
-        final priceStr = article[sPays]?.toString() ?? '';
-        final price = _extractPriceFromString(priceStr);
-        
-        if (price > 0 && price < bestPrice) {
-          bestPrice = price;
+    for (final pays in paysListe) {
+      final sPays = pays['sPays'] ?? '';
+      final priceStr = article[sPays]?.toString() ?? '';
+      final price = _extractPriceFromString(priceStr);
+      
+      if (price > 0 && price < bestPrice) {
+        bestPrice = price;
         bestPriceCountry = sPays;
       }
     }
     
-    if (selectedCountry?.isNotEmpty ?? false) {
+    // Si un pays est sélectionné, utiliser son prix
+    if (isCountrySelected && selectedCountry?.isNotEmpty == true) {
       final priceStr = article[selectedCountry]?.toString() ?? '';
       selectedPrice = _extractPriceFromString(priceStr);
-      // Debug log désactivé pour éviter la pollution des logs
-      // print('🔍 Prix trouvé pour $selectedCountry: $selectedPrice');
     }
     
-    // Si pas de prix trouvé pour le pays sélectionné, utiliser le meilleur prix
-    if (selectedPrice <= 0 && (bestPriceCountry?.isNotEmpty ?? false)) {
-      print('⚠️ Pas de prix trouvé pour le pays sélectionné, utilisation du meilleur prix...');
-      selectedCountry = bestPriceCountry;
-      selectedPrice = bestPrice;
-      print('🔍 Meilleur prix utilisé: $selectedPrice pour $selectedCountry');
+    // ✅ Si pas de pays sélectionné, utiliser le meilleur prix UNIQUEMENT pour l'affichage du prix
+    // mais NE PAS considérer ce pays comme "sélectionné" (isCountrySelected reste false)
+    String? displayCountry = selectedCountry;
+    double displayPrice = selectedPrice;
+    if (!isCountrySelected) {
+      // Aucun pays sélectionné : afficher le meilleur prix en gris
+      if (bestPriceCountry?.isNotEmpty == true && bestPrice < double.infinity) {
+        displayCountry = bestPriceCountry;
+        displayPrice = bestPrice;
+      }
     }
     
-    if (selectedCountry != null && selectedCountry!.isNotEmpty && paysListe.isNotEmpty) {
+    if (displayCountry != null && displayCountry!.isNotEmpty && paysListe.isNotEmpty) {
       final pays = paysListe.firstWhere(
-        (p) => p['sPays'] == selectedCountry,
+        (p) => p['sPays'] == displayCountry,
         orElse: () => paysListe.first,
       );
       
-      final sDescr = pays['sDescr'] ?? selectedCountry;
+      final sDescr = pays['sDescr'] ?? displayCountry;
       final sFlag = pays['sFlag'] ?? '';
       
       // Vérifier si ce pays a le meilleur prix
-      final isBestPrice = selectedCountry == bestPriceCountry;
+      final isBestPrice = displayCountry == bestPriceCountry;
+      
+      // ✅ Couleurs selon si un pays est sélectionné (comme SNAL)
+      // Si isCountrySelected = false : container gris très clair, texte gris (même si on affiche le meilleur prix)
+      // Si isCountrySelected = true : vert, texte blanc
+      final buttonColor = isCountrySelected 
+          ? const Color(0xFF22C55F) // Vert #22C55F (comme SNAL green)
+          : Colors.grey[100]!; // ✅ Gris très clair pour le container (comme SNAL gray soft)
+      final textColor = isCountrySelected 
+          ? Colors.white 
+          : Colors.grey[400]!; // text-gray-400 (comme SNAL)
       
       return Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -3855,7 +3996,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             runSpacing: 2,
             children: [
               if (isBestPrice) ...[
-                // Médaille pour le meilleur prix (comme dans Optimal)
+                // ✅ Médaille toujours en noir (même si pas sélectionné)
                 const Text(
                   '🥇',
                   style: TextStyle(fontSize: 20),
@@ -3868,7 +4009,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   child: GestureDetector(
                     onTap: () => _openCountrySidebarForArticle(
                       sourceArticle ?? article,
-                      defaultSelectedCountry: selectedCountry ?? '',
+                      defaultSelectedCountry: isCountrySelected ? (selectedCountry ?? '') : '',
                       articleNotifier: articleNotifier,
                     ),
                     child: Text(
@@ -3878,7 +4019,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                       style: TextStyle(
                         fontSize: isMobile ? 13 : 16,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF212529),
+                        color: const Color(0xFF212529), // ✅ Toujours en noir
                         letterSpacing: -0.1,
                       ),
                     ),
@@ -3899,26 +4040,29 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           const SizedBox(height: 6),
           
           // Prix principal (tap ouvre le sidebar pays pour cet article)
+          // ✅ Container gris très clair si pas de pays sélectionné (comme SNAL variant="soft" color="gray")
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => _openCountrySidebarForArticle(
                 sourceArticle ?? article,
-                defaultSelectedCountry: selectedCountry ?? '',
+                defaultSelectedCountry: isCountrySelected ? (selectedCountry ?? '') : '',
                 articleNotifier: articleNotifier,
               ),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF22C55F), // Vert #22C55F
+                  color: buttonColor, // ✅ Gris très clair si pas sélectionné, vert si sélectionné
                   borderRadius: BorderRadius.circular(20), // Forme de capsule
                 ),
                 child: Text(
-                  '${selectedPrice.toStringAsFixed(2)} €',
-                  style: const TextStyle(
+                  displayPrice > 0 
+                      ? '${displayPrice.toStringAsFixed(2)} €'
+                      : 'N/A',
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: textColor, // ✅ text-gray-400 si pas sélectionné, blanc si sélectionné
                   ),
                 ),
               ),
@@ -3928,91 +4072,140 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           const SizedBox(height: 6),
           
           // Autres drapeaux + bouton + (Wrap pour éviter overflow)
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: isMobile ? 4 : 6,
-            runSpacing: 2,
-            children: [
-              // Drapeaux fixes (Allemagne, Belgique, Espagne) - Responsive
-              ...['DE', 'BE', 'ES'].map((countryCode) {
-                // Debug log désactivé
-                // print('🏴 Affichage drapeau $countryCode - Mobile: $isMobile');
-                // Récupérer IsInBasket depuis l'article
-                final IsInBasket = article['IsInBasket']?.toString().toUpperCase() ?? '';
-                // Vérifier si ce pays correspond à IsInBasket
-                final isInBasketCountry = IsInBasket.isNotEmpty && 
-                    (countryCode.toUpperCase() == IsInBasket || 
-                     countryCode.toUpperCase().contains(IsInBasket) || 
-                     IsInBasket.contains(countryCode.toUpperCase()));
-                
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
+          // ✅ Utiliser les pays sélectionnés globalement dans CountryManagementModal (comme SNAL countriesList.slice(0, 3))
+          // MAIS exclure le pays déjà affiché en haut (selectedCountry)
+          FutureBuilder<List<String>>(
+            future: _getCurrentSelectedCountries(),
+            builder: (context, snapshot) {
+              // Récupérer les pays sélectionnés globalement
+              final globalSelectedCountries = snapshot.data ?? [];
+              
+              // Filtrer pour exclure le pays déjà affiché en haut et AT/CH
+              final availableCountries = globalSelectedCountries
+                  .where((code) => 
+                    code.isNotEmpty && 
+                    code != 'AT' && 
+                    code != 'CH' &&
+                    code != displayCountry?.toUpperCase()
+                  )
+                  .take(3) // Prendre les 3 premiers (comme SNAL countriesList.slice(0, 3))
+                  .toList();
+              
+              // ✅ Ne pas afficher les drapeaux si aucun pays disponible
+              if (availableCountries.isEmpty) {
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: isMobile ? 4 : 6,
+                  runSpacing: 2,
                   children: [
-                    Container(
-                  margin: EdgeInsets.only(right: isMobile ? 4 : 6),
-                  width: isMobile ? 20 : 24,
-                  height: isMobile ? 15 : 18,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: Image.network(
-                      ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/' + countryCode + '.PNG'),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        print('❌ Erreur chargement drapeau ' + countryCode + ': ' + error.toString());
-                        return Container(
-                          color: Colors.grey[300],
-                          child: Icon(
-                            Icons.flag,
-                            size: isMobile ? 10 : 12,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                    ),
-                    // Icône panier si ce pays correspond à IsInBasket
-                    if (isInBasketCountry)
-                      Container(
-                        margin: const EdgeInsets.only(left: 2),
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[400],
+                    // Bouton + bleu uniquement (pas de drapeaux)
+                    GestureDetector(
+                      onTap: () => _openCountrySidebarForArticle(
+                        article,
+                        defaultSelectedCountry: isCountrySelected ? (selectedCountry ?? '') : '',
+                      ),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF007BFF),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
-                          Icons.shopping_cart,
-                          size: isMobile ? 10 : 12,
+                        child: const Icon(
+                          Icons.add,
+                          size: 14,
                           color: Colors.white,
                         ),
                       ),
+                    ),
                   ],
                 );
-              }).toList(),
+              }
               
-              // Bouton + bleu (ouvre le sidebar de sélection de pays pour cet article)
-              GestureDetector(
-                onTap: () => _openCountrySidebarForArticle(
-                  article,
-                  defaultSelectedCountry: selectedCountry ?? '',
-                ),
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  margin: const EdgeInsets.only(left: 6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF007BFF),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.add,
-                    size: 14,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
+              final countriesToShow = availableCountries;
+              final hasOnlyOneCountry = countriesToShow.length == 1;
+              
+              return Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: isMobile ? 4 : 6,
+                runSpacing: 2,
+                children: [
+                  // ✅ Si un seul pays, mettre le drapeau et le bouton + dans un Row centré
+                  if (hasOnlyOneCountry)
+                    Container(
+                      width: double.infinity,
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildCountryFlagRow(
+                            countriesToShow[0],
+                            article,
+                            isMobile: isMobile,
+                            isSmallMobile: isSmallMobile,
+                          ),
+                          // Bouton + bleu à côté du drapeau
+                          GestureDetector(
+                            onTap: () => _openCountrySidebarForArticle(
+                              article,
+                              defaultSelectedCountry: isCountrySelected ? (selectedCountry ?? '') : '',
+                            ),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              margin: EdgeInsets.only(left: isMobile ? 4 : 6),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF007BFF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    // Plusieurs pays : afficher les drapeaux puis le bouton +
+                    ...countriesToShow.map((countryCode) {
+                      return _buildCountryFlagRow(
+                        countryCode,
+                        article,
+                        isMobile: isMobile,
+                        isSmallMobile: isSmallMobile,
+                      );
+                    }).toList(),
+                    // Bouton + bleu (ouvre le sidebar de sélection de pays pour cet article)
+                    GestureDetector(
+                      onTap: () => _openCountrySidebarForArticle(
+                        article,
+                        defaultSelectedCountry: isCountrySelected ? (selectedCountry ?? '') : '',
+                      ),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        margin: const EdgeInsets.only(left: 6),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF007BFF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       );
@@ -4885,11 +5078,26 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
+  
+  bool _isDisposed = false; // ✅ Flag pour éviter les appels après dispose
 
   @override
   void initState() {
     super.initState();
-    _selectedCountry = widget.currentSelected;
+    // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
+    // Si spaysSelected est vide/false/null, aucun pays n'est sélectionné
+    final rawSpaysSelected = widget.currentSelected;
+    final bool isCountrySelected = rawSpaysSelected != null && 
+                                   rawSpaysSelected != '' && 
+                                   rawSpaysSelected != false &&
+                                   rawSpaysSelected != '-1' &&
+                                   rawSpaysSelected.toString().trim().isNotEmpty;
+    // ✅ Initialiser à vide si aucun pays n'est sélectionné
+    _selectedCountry = isCountrySelected ? rawSpaysSelected.toString().trim().toUpperCase() : '';
+    print('🔍 CountrySidebarModal initState:');
+    print('   widget.currentSelected: $rawSpaysSelected');
+    print('   isCountrySelected: $isCountrySelected');
+    print('   _selectedCountry initialisé à: "${_selectedCountry.isEmpty ? "(vide - aucun pays sélectionné)" : _selectedCountry}"');
     _currentArticle = widget.articleNotifier.value;
     _initialHomeCountryCode = (widget.homeCountryCode ?? '').toUpperCase();
     _baseCountries = widget.availableCountries.map((c) => Map<String, dynamic>.from(c)).toList();
@@ -4925,7 +5133,8 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
   }
 
   void _onArticleNotifierChanged() async {
-    if (!mounted) return;
+    // ✅ Vérifier le flag de dispose en premier
+    if (_isDisposed || !mounted) return;
     
     // Vérifier que le ValueNotifier n'est pas disposé avant de l'utiliser
     Map<String, dynamic> newArticle;
@@ -4939,6 +5148,20 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     
     // Récupérer les pays sélectionnés depuis localStorage pour reconstruire la liste
     final selectedCountries = await LocalStorageService.getSelectedCountries();
+    
+    // ✅ Vérifier que le widget est toujours monté et non disposé après l'opération async
+    if (_isDisposed || !mounted) return;
+    
+    // ✅ Vérifier à nouveau que le ValueNotifier n'est pas disposé
+    try {
+      // Vérifier que le ValueNotifier est encore valide
+      widget.articleNotifier.value;
+    } catch (e) {
+      // Le ValueNotifier a été disposé pendant l'opération async
+      print('⚠️ ValueNotifier disposé après opération async, arrêt de la mise à jour');
+      return;
+    }
+    
     final selectedCodes = selectedCountries.map((c) => c.toUpperCase()).toSet();
     
     print('🔄 _onArticleNotifierChanged - Pays sélectionnés: $selectedCodes');
@@ -4962,10 +5185,21 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     
     print('🔍 Comparaison: ancien=$currentAvailableCodes, nouveau=$newAvailableCodes, changé=$hasChanged');
     
+    // ✅ Vérifier une dernière fois que le widget est monté et non disposé avant setState
+    if (_isDisposed || !mounted) return;
+    
     setState(() {
       _currentArticle = newArticle;
-      final newSelectedCountry = _currentArticle['spaysSelected']?.toString() ?? '';
-      if (newSelectedCountry.isNotEmpty && newSelectedCountry != _selectedCountry) {
+      // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
+      final rawSpaysSelected = _currentArticle['spaysSelected'] ?? _currentArticle['sPaysSelected'];
+      final bool isCountrySelected = rawSpaysSelected != null && 
+                                     rawSpaysSelected != '' && 
+                                     rawSpaysSelected != false &&
+                                     rawSpaysSelected != '-1' &&
+                                     rawSpaysSelected.toString().trim().isNotEmpty;
+      // ✅ Mettre à jour _selectedCountry : vide si désélectionné, sinon le code du pays
+      final newSelectedCountry = isCountrySelected ? rawSpaysSelected.toString().trim().toUpperCase() : '';
+      if (newSelectedCountry != _selectedCountry) {
         _selectedCountry = newSelectedCountry;
       }
 
@@ -5110,12 +5344,18 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 
   @override
   void dispose() {
+    // ✅ Marquer comme disposé AVANT de retirer le listener
+    _isDisposed = true;
+    
     // Retirer le listener de manière sécurisée
+    // Vérifier d'abord si le ValueNotifier est encore valide
     try {
+      // Tester si le ValueNotifier est encore accessible
+      final _ = widget.articleNotifier.value;
       widget.articleNotifier.removeListener(_onArticleNotifierChanged);
     } catch (e) {
-      // Le ValueNotifier a peut-être déjà été disposé, ignorer l'erreur
-      print('⚠️ Erreur lors de la suppression du listener: $e');
+      // Le ValueNotifier a été disposé, ignorer l'erreur
+      print('⚠️ ValueNotifier déjà disposé, impossible de retirer le listener: $e');
     }
     _slideController.dispose();
     super.dispose();
@@ -5130,7 +5370,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
       await Future.delayed(const Duration(milliseconds: 500));
       
       // Forcer la mise à jour en déclenchant manuellement _onArticleNotifierChanged
-      if (mounted) {
+      if (!_isDisposed && mounted) {
         try {
           // Vérifier que le ValueNotifier est encore valide
           final _ = widget.articleNotifier.value;
@@ -5139,7 +5379,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
           
           // Forcer une deuxième mise à jour après un court délai pour s'assurer que localStorage est synchronisé
           await Future.delayed(const Duration(milliseconds: 200));
-          if (mounted) {
+          if (!_isDisposed && mounted) {
             try {
               final __ = widget.articleNotifier.value;
               _onArticleNotifierChanged();
@@ -5157,26 +5397,36 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
   }
 
   Future<void> _handleCountryChange(String countryCode, {bool closeModal = false}) async {
-    if (_selectedCountry == countryCode || _isChanging) {
-      return; // Ne rien faire si c'est déjà le pays sélectionné ou si un changement est en cours
+    if (_isChanging) {
+      return; // Un changement est déjà en cours
     }
 
-    // Vérifier si le pays a un prix disponible
-    final country = _availableCountries.firstWhere(
-      (c) => c['code'] == countryCode,
-      orElse: () => {},
-    );
-    final isAvailable = country['isAvailable'] ?? false;
-    if (!isAvailable) {
-      print('ℹ️ Pays $countryCode sélectionné sans prix disponible – tentative de mise à jour.');
+    // ✅ Vérifier si c'est le même pays (comme SNAL isSame)
+    // Si oui, désélectionner (passer -1), sinon sélectionner
+    final isSame = _selectedCountry.toUpperCase() == countryCode.toUpperCase();
+    final countryToSelect = isSame ? '-1' : countryCode; // ✅ Passer -1 pour désélectionner (comme SNAL)
+    
+    print('🔄 ${isSame ? "Désélection" : "Sélection"} du pays: $countryCode');
+
+    // Vérifier si le pays a un prix disponible (seulement si on sélectionne)
+    if (!isSame) {
+      final country = _availableCountries.firstWhere(
+        (c) => c['code'] == countryCode,
+        orElse: () => {},
+      );
+      final isAvailable = country['isAvailable'] ?? false;
+      if (!isAvailable) {
+        print('ℹ️ Pays $countryCode sélectionné sans prix disponible – tentative de mise à jour.');
+      }
     }
 
     setState(() {
       _isChanging = true;
-      _selectedCountry = countryCode;
+      // ✅ Mettre à jour _selectedCountry : vide si désélection, sinon le code du pays
+      _selectedCountry = isSame ? '' : countryCode;
     });
 
-    final changeFuture = widget.onCountrySelected(countryCode);
+    final changeFuture = widget.onCountrySelected(countryToSelect);
 
     if (closeModal) {
       changeFuture.whenComplete(() {
@@ -5206,12 +5456,21 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
   }
 
   Widget _buildSelectedCountryAndPrice() {
-    final selectedCountryCode = _currentArticle['spaysSelected']?.toString() ?? '';
-    final homeCountryCode = _resolveHomeCountryCode();
+    // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
+    final rawSpaysSelected = _currentArticle['spaysSelected'] ?? _currentArticle['sPaysSelected'];
+    final bool isCountrySelected = rawSpaysSelected != null && 
+                                   rawSpaysSelected != '' && 
+                                   rawSpaysSelected != false &&
+                                   rawSpaysSelected != '-1' &&
+                                   rawSpaysSelected.toString().trim().isNotEmpty;
     
-    if (selectedCountryCode.isEmpty) {
+    // ✅ Ne rien afficher si aucun pays n'est sélectionné
+    if (!isCountrySelected) {
       return const SizedBox.shrink();
     }
+    
+    final selectedCountryCode = rawSpaysSelected.toString().trim().toUpperCase();
+    final homeCountryCode = _resolveHomeCountryCode();
     
     // Trouver les données du pays sélectionné
     final selectedCountryData = _availableCountries.firstWhere(
@@ -5307,6 +5566,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     const neutralBorder = Color(0xFFE5E7EB);
     const selectedBackground = Color(0xFFE6F9EF);
     const selectedBorder = Color(0xFF34D399);
+    const buttonBlueColor = Color(0xFF60A5FA); // ✅ Couleur unique pour texte et bordure
 
     // Utilisation sécurisée de MediaQuery pour éviter les erreurs
     final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 1024;
@@ -5550,7 +5810,8 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                             final flag = country['flag']?.toString() ?? '';
                   final price = country['price']?.toString() ?? 'N/A';
                   final isAvailable = country['isAvailable'] ?? false;
-                  final isSelected = code == _selectedCountry;
+                  // ✅ Vérifier si le pays est sélectionné (comme SNAL isSelected)
+                  final isSelected = _selectedCountry.isNotEmpty && code.toUpperCase() == _selectedCountry.toUpperCase();
                   final isBest = code == bestCountryCode;
                   final normalizedCode = code.toUpperCase();
                   final isHomeCountry = homeCountryCode.isNotEmpty && normalizedCode == homeCountryCode;
@@ -5822,40 +6083,64 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                 ),
                 child: Column(
                   children: [
-                    // Bouton Ajouter/Supprimer un pays
+                    // Bouton Ajouter/Supprimer un pays (pill-shaped, blanc avec bordure bleue)
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: OutlinedButton(
                         onPressed: () {
                           _openManagementDialog();
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[100],
-                          foregroundColor: Colors.black,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: buttonBlueColor, // ✅ Même couleur que la bordure
                           padding: EdgeInsets.symmetric(
                             vertical: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
+                            horizontal: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(30), // Pill-shaped
+                            side: BorderSide(color: buttonBlueColor, width: 1.5), // ✅ Bordure avec même couleur que le texte
                           ),
                           elevation: 0,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.swap_horiz,
-                              size: isVerySmallMobile ? 16 : (isSmallMobile ? 17 : 18),
-                              color: Colors.black,
+                            // Icône drapeau avec plus
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Icon(
+                                  Icons.flag,
+                                  size: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22),
+                                  color: buttonBlueColor, // ✅ Même couleur
+                                ),
+                                Positioned(
+                                  right: -2,
+                                  top: -2,
+                                  child: Container(
+                                    width: isVerySmallMobile ? 10 : 12,
+                                    height: isVerySmallMobile ? 10 : 12,
+                                    decoration: BoxDecoration(
+                                      color: buttonBlueColor, // ✅ Même couleur
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.add,
+                                      size: 8,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            SizedBox(width: isVerySmallMobile ? 6 : (isSmallMobile ? 7 : 8)),
+                            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 10 : 12)),
                             Text(
                               manageCountriesLabel,
                               style: TextStyle(
                                 fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black,
+                                color: buttonBlueColor, // ✅ Même couleur que la bordure
                               ),
                             ),
                           ],
@@ -5865,20 +6150,20 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 
                     SizedBox(height: isVerySmallMobile ? 10 : (isSmallMobile ? 12 : 16)),
 
-                    // Bouton Fermer
+                    // Bouton Fermer (bleu solide, rectangulaire)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[100],
-                          foregroundColor: Colors.black,
+                          backgroundColor: buttonBlueColor, // ✅ Même couleur
+                          foregroundColor: Colors.white, // Texte blanc
                           padding: EdgeInsets.symmetric(
-                            vertical: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
+                            vertical: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22), // Hauteur augmentée
+                            horizontal: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20),
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(8), // Coins arrondis modérés
                           ),
                           elevation: 0,
                         ),
@@ -5887,6 +6172,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
                           style: TextStyle(
                             fontSize: isVerySmallMobile ? 14 : (isSmallMobile ? 15 : 16),
                             fontWeight: FontWeight.w600,
+                            color: Colors.white, // Texte blanc
                           ),
                         ),
                       ),
