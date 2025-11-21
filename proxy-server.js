@@ -3320,11 +3320,14 @@ app.use('/api', createProxyMiddleware({
       '/api/get-basket-user',  // Récupération de tous les baskets - géré spécifiquement
       '/api/get-info-profil',
       '/api/profile/update',   // Mise à jour du profil - géré spécifiquement
+      '/api/update-info-profil',   // Mise à jour du profil (PUT) - géré spécifiquement
       '/api/get-ikea-store-list',
       '/api/tiles',
       '/api/nominatim'
     ];
-    return !excludedPaths.includes(pathname);
+    // ✅ CORRECTION: Vérifier aussi si le pathname commence par un excludedPath (pour les routes avec paramètres)
+    const isExcluded = excludedPaths.some(excluded => pathname.startsWith(excluded));
+    return !isExcluded;
   },
   onError: (err, req, res) => {
     console.error('❌ Proxy Error:', err.message);

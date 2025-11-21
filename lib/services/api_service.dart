@@ -2227,7 +2227,8 @@ class ApiService {
       print('   Code postal: ' + (profileData['zip']?.toString() ?? ''));
       print('   Ville: ' + (profileData['city']?.toString() ?? ''));
 
-      // Récupérer iProfile, iBasket et préférences depuis le stockage local
+      // ✅ CORRECTION: Recharger le profil depuis localStorage pour avoir les dernières valeurs
+      // (sPaysLangue peut avoir été modifié juste avant cet appel)
       final gp = await LocalStorageService.getProfile();
       final iProfile = gp?['iProfile']?.toString();
       final iBasket = gp?['iBasket']?.toString() ?? '';
@@ -2257,15 +2258,69 @@ class ApiService {
 
       final effectivePaysFavString = effectivePaysFavList.join(',');
 
-      final sPaysLangue = gp?['sPaysLangue']?.toString() ?? '';
+      // ✅ CORRECTION: Récupérer sPaysLangue depuis localStorage (qui contient la dernière valeur mise à jour)
+      // Si sPaysLangue est passé dans profileData, l'utiliser, sinon utiliser celui de localStorage
+      final sPaysLangue = profileData['sPaysLangue']?.toString() ?? 
+                          gp?['sPaysLangue']?.toString() ?? '';
+      
+      print('📤 sPaysLangue utilisé pour l\'API: $sPaysLangue');
+      print('   Depuis profileData: ${profileData['sPaysLangue']}');
+      print('   Depuis localStorage: ${gp?['sPaysLangue']}');
 
       if (iProfile == null || iProfile.isEmpty) {
         throw Exception('iProfile manquant – impossible de mettre à jour le profil');
       }
 
-      // Mapper les champs Flutter vers le format SNAL (comme le proxy)
+      // ✅ CORRECTION: Récupérer TOUS les champs depuis profileData et localStorage
+      // Le backend attend tous ces champs dans le body (comme SNAL-Project)
+      final sNom = profileData['Nom']?.toString() ?? gp?['sNom']?.toString() ?? '';
+      final sPrenom = profileData['Prenom']?.toString() ?? gp?['sPrenom']?.toString() ?? '';
+      final sEmail = profileData['email']?.toString() ?? gp?['sEmail']?.toString() ?? '';
+      final sTel = profileData['tel']?.toString() ?? gp?['sTel']?.toString() ?? '';
+      final sRue = profileData['rue']?.toString() ?? gp?['sRue']?.toString() ?? '';
+      final sZip = profileData['zip']?.toString() ?? gp?['sZip']?.toString() ?? '';
+      final sCity = profileData['city']?.toString() ?? gp?['sCity']?.toString() ?? '';
+      final sPhoto = profileData['photo']?.toString() ?? gp?['sPhoto']?.toString() ?? '';
+      
+      // ✅ CORRECTION: iPays doit être un code numérique (comme "15" pour FR, "16" pour BE)
+      // et non un code ISO. Il doit venir du localStorage (iPays) ou être extrait depuis le profil
+      // Dans SNAL-Project, iPays vient de response.iPays?.toString() qui est un code numérique
+      String? iPays = gp?['iPays']?.toString() ?? '';
+      
+      // Si iPays n'est pas dans localStorage, essayer de le récupérer depuis profileData
+      if (iPays.isEmpty) {
+        iPays = profileData['iPays']?.toString() ?? '';
+      }
+      
+      // Si toujours vide, laisser vide (le backend gérera avec "")
+      
+      // Extraire sLangue depuis sPaysLangue (format: "FR/fr" -> sLangue = "fr")
+      String sLangue = '';
+      if (sPaysLangue.isNotEmpty && sPaysLangue.contains('/')) {
+        sLangue = sPaysLangue.split('/')[1];
+      } else {
+        sLangue = gp?['sLangue']?.toString() ?? 'fr';
+      }
+      
+      final sTypeAccount = gp?['sTypeAccount']?.toString() ?? 'EMAIL';
+
+      // Mapper les champs Flutter vers le format SNAL (comme le backend l'attend)
+      // ✅ CORRECTION: S'assurer que tous les champs sont des strings (pas null)
+      // Le backend attend des strings, et utilise ?? "" pour les valeurs manquantes
       final snalProfileData = {
-        'sPaysFav': effectivePaysFavString,
+        'sNom': sNom.isNotEmpty ? sNom : '',
+        'sPrenom': sPrenom.isNotEmpty ? sPrenom : '',
+        'sPhoto': sPhoto.isNotEmpty ? sPhoto : '',
+        'sRue': sRue.isNotEmpty ? sRue : '',
+        'sZip': sZip.isNotEmpty ? sZip : '',
+        'sCity': sCity.isNotEmpty ? sCity : '',
+        'iPays': iPays?.isNotEmpty == true ? iPays! : '',
+        'sTel': sTel.isNotEmpty ? sTel : '',
+        'sPaysFav': effectivePaysFavString.isNotEmpty ? effectivePaysFavString : '',
+        'sPaysLangue': sPaysLangue.isNotEmpty ? sPaysLangue : '',
+        'sEmail': sEmail.isNotEmpty ? sEmail : '',
+        'sTypeAccount': sTypeAccount.isNotEmpty ? sTypeAccount : 'EMAIL',
+        'sLangue': sLangue.isNotEmpty ? sLangue : 'fr',
       };
 
       print('📤 Données mappées SNAL: ' + snalProfileData.toString());
@@ -2273,6 +2328,7 @@ class ApiService {
       print('📤 iBasket: $iBasket');
       print('📤 sPaysFav envoyé: $effectivePaysFavList');
       print('📤 sPaysLangue envoyé: $sPaysLangue');
+      print('📤 iPays envoyé: $iPays');
 
       // ✅ CORRECTION: Ajouter explicitement les headers X-IProfile et X-IBasket
       // Appel direct SNAL (PUT) – l'intercepteur ajoutera GuestProfile aux headers/cookies

@@ -26,6 +26,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   Country? _selectedCountry;
   Map<String, String>? _userInfo;
   final ProfileService _profileService = ProfileService();
+  bool _hasLoadedOnce = false;
 
   @override
   void initState() {
@@ -37,8 +38,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // ✅ Recharger les données quand l'écran devient visible (pour voir les mises à jour après sauvegarde)
-    // Utiliser une vérification pour éviter les rechargements inutiles
-    if (!_isLoading) {
+    // Recharger seulement si on a déjà chargé une fois (pour éviter les rechargements multiples au premier chargement)
+    if (_hasLoadedOnce && !_isLoading) {
+      print('🔄 didChangeDependencies - rechargement des données');
       _loadProfileData();
     }
   }
@@ -90,18 +92,26 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       final selected = await settingsService.getSelectedCountry();
       if (selected != null) {
         _selectedCountry = selected;
-        final langue = selected.sPaysLangue;
-        if (langue != null && langue.isNotEmpty) {
-          _sPaysLangue = langue;
-        } else {
-          _sPaysLangue = selected.sPays;
+        // ✅ CORRECTION: Ne pas écraser _sPaysLangue s'il est déjà défini depuis LocalStorageService
+        // _sPaysLangue a la priorité car il est mis à jour dans profile_screen
+        // Utiliser _selectedCountry seulement comme fallback si _sPaysLangue est vide
+        if (_sPaysLangue.isEmpty) {
+          final langue = selected.sPaysLangue;
+          if (langue != null && langue.isNotEmpty) {
+            _sPaysLangue = langue;
+          } else {
+            _sPaysLangue = selected.sPays;
+          }
         }
       }
     } catch (e) {
       print('⚠️ Impossible de récupérer le pays sélectionné: $e');
     } finally {
       _sPaysFav = _normalizeCountriesString(_sPaysFav);
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _hasLoadedOnce = true; // Marquer qu'on a chargé au moins une fois
+      });
     }
   }
 
@@ -255,19 +265,32 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   }
 
   Widget _buildMainCountrySection(bool isMobile) {
-    String countryCode = _getCountryCodeFromLangue(_sPaysLangue);
-    String countryName = _getCountryNameFromCode(countryCode);
-
-    if (_selectedCountry != null) {
+    // ✅ CORRECTION: Donner la priorité à _sPaysLangue (depuis LocalStorageService)
+    // car c'est la source de vérité mise à jour dans profile_screen
+    // Utiliser _selectedCountry seulement comme fallback si _sPaysLangue est vide
+    String countryCode;
+    String countryName;
+    
+    if (_sPaysLangue.isNotEmpty) {
+      // Priorité à _sPaysLangue (mis à jour dans profile_screen)
+      countryCode = _getCountryCodeFromLangue(_sPaysLangue);
+      countryName = _getCountryNameFromCode(countryCode);
+    } else if (_selectedCountry != null) {
+      // Fallback vers _selectedCountry si _sPaysLangue est vide
       countryCode = _selectedCountry!.countryCode.toUpperCase();
       countryName = _selectedCountry!.sDescr;
+    } else {
+      // Valeur par défaut
+      countryCode = 'FR';
+      countryName = 'France';
     }
     
     // Debug pour voir les données utilisées
     print('🔍 DEBUG Pays principal:');
     print('   _sPaysLangue: $_sPaysLangue');
-    print('   countryCode: $countryCode');
-    print('   countryName: $countryName');
+    print('   _selectedCountry: ${_selectedCountry?.countryCode}');
+    print('   countryCode (utilisé): $countryCode');
+    print('   countryName (utilisé): $countryName');
 
     return Consumer<TranslationService>(
       builder: (context, translationService, child) {

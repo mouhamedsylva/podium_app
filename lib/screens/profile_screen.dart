@@ -671,6 +671,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // ✅ Sauvegarder immédiatement dans localStorage
       await LocalStorageService.saveProfile(updatedProfile);
       
+      // ✅ Attendre un court délai pour s'assurer que localStorage est bien mis à jour
+      await Future.delayed(const Duration(milliseconds: 100));
+      
       setState(() {
         _profile = updatedProfile;
       });
@@ -679,7 +682,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final isLoggedIn = await LocalStorageService.isLoggedIn();
       if (isLoggedIn) {
         // Synchroniser avec l'API en arrière-plan (sans bloquer l'UI)
-        _syncMainCountryWithAPI(newCountryLangue);
+        // Utiliser await pour s'assurer que la synchronisation se fait correctement
+        await _syncMainCountryWithAPI(newCountryLangue);
       }
     } catch (e) {
       print('Erreur lors de la mise à jour du pays principal: $e');
@@ -690,15 +694,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _syncMainCountryWithAPI(String newCountryLangue) async {
     try {
       final apiService = Provider.of<ApiService>(context, listen: false);
-      // ✅ CORRECTION: Récupérer le profil depuis localStorage (qui contient les nouvelles données)
+      // ✅ CORRECTION: Recharger le profil depuis localStorage juste avant l'appel API
+      // pour s'assurer d'avoir la dernière valeur de sPaysLangue
+      await Future.delayed(const Duration(milliseconds: 200));
       final currentProfile = await LocalStorageService.getProfile();
       if (currentProfile == null) {
         print('❌ Impossible de récupérer le profil depuis localStorage pour la synchronisation');
         return;
       }
       
+      // ✅ Vérifier que sPaysLangue est bien mis à jour dans localStorage
+      final sPaysLangueInStorage = currentProfile['sPaysLangue']?.toString() ?? '';
+      if (sPaysLangueInStorage != newCountryLangue) {
+        print('⚠️ sPaysLangue dans localStorage ($sPaysLangueInStorage) ne correspond pas à la nouvelle valeur ($newCountryLangue)');
+        // Forcer la mise à jour
+        currentProfile['sPaysLangue'] = newCountryLangue;
+        await LocalStorageService.saveProfile(currentProfile);
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
       // ✅ CORRECTION: Utiliser les données du localStorage (qui contient les dernières modifications)
       // plutôt que _profile qui peut être obsolète
+      // ✅ IMPORTANT: Inclure explicitement sPaysLangue dans updateData pour garantir qu'il est envoyé
       final updateData = {
         'Prenom': currentProfile['sPrenom']?.toString() ?? '',
         'Nom': currentProfile['sNom']?.toString() ?? '',
@@ -708,10 +725,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'zip': currentProfile['sZip']?.toString() ?? '',
         'city': currentProfile['sCity']?.toString() ?? '',
         'token': currentProfile['token']?.toString() ?? '',
+        // ✅ CORRECTION: Inclure explicitement sPaysLangue pour garantir qu'il est envoyé à l'API
+        'sPaysLangue': newCountryLangue, // Utiliser la nouvelle valeur directement
       };
       
       print('📤 Synchronisation pays principal avec l\'API:');
       print('   sPaysLangue depuis localStorage: ${currentProfile['sPaysLangue']}');
+      print('   sPaysLangue attendu: $newCountryLangue');
       print('   sPaysFav depuis localStorage: ${currentProfile['sPaysFav']}');
       
       // Mettre à jour via l'API (qui utilisera sPaysLangue et sPaysFav depuis localStorage)
