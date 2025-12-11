@@ -24,6 +24,7 @@ import '../services/auth_notifier.dart';
 import '../utils/web_utils.dart';
 import 'package:animations/animations.dart';
 import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({Key? key}) : super(key: key);
@@ -51,6 +52,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   // Variables pour le dropdown des baskets (comme SNAL-Project)
   List<Map<String, dynamic>> _baskets = []; // Liste des baskets disponibles
   int? _selectedBasketIndex; // Index du basket sélectionné (localId)
+  OverlayEntry? _currentSwipeHintOverlay; // Pour gérer l'overlay du message de swipe
   
   // ✨ ANIMATIONS - Style "Cascade Fluide" (différent des 3 autres pages)
   late AnimationController _buttonsController;
@@ -569,50 +571,270 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         }
         
         // ✅ CRITIQUE: Sélectionner le basket comme SNAL-Project
-        // SNAL utilise TOUJOURS le premier basket de la liste (ligne 3657-3658 de wishlist/[icode].vue)
-        // Le premier basket est celui retourné par la procédure stockée (trié)
+        // PRIORITÉ 1: Utiliser l'iBasket de l'URL s'il est présent (venant du podium)
+        // PRIORITÉ 2: Utiliser l'iBasket du profil
+        // PRIORITÉ 3: Utiliser le premier basket
         if (_baskets.isNotEmpty) {
           final profileData = await LocalStorageService.getProfile();
-          final currentIBasket = profileData?['iBasket']?.toString() ?? '';
           final sEmail = profileData?['sEmail']?.toString() ?? '';
           
-          // ✅ Si l'utilisateur vient de se connecter, utiliser TOUJOURS le premier basket
-          // (comme SNAL-Project ligne 3657-3658 de wishlist/[icode].vue)
-          // Le premier basket est celui retourné par la procédure stockée (trié)
-          bool shouldUseFirstBasket = sEmail.isNotEmpty; // Utilisateur connecté
-          
-          int? foundIndex;
-          if (!shouldUseFirstBasket && currentIBasket.isNotEmpty) {
-            // Si utilisateur non connecté, chercher le basket correspondant au iBasket actuel
-            foundIndex = _baskets.indexWhere(
-              (basket) => basket['iBasket']?.toString() == currentIBasket,
-            );
+          // ✅ PRIORITÉ 1: Vérifier si un iBasket est passé dans l'URL (venant du podium)
+          String? iBasketFromUrl;
+          String? basketNameFromUrl;
+          try {
+            final uri = GoRouterState.of(context).uri;
+            final iBasketParam = uri.queryParameters['iBasket'];
+            final basketNameParam = uri.queryParameters['basketName'];
+            print('🔍 Paramètres URL: ${uri.queryParameters}');
+            print('🔍 iBasketParam brut: $iBasketParam');
+            print('🔍 basketNameParam brut: $basketNameParam');
+            if (iBasketParam != null && iBasketParam.isNotEmpty) {
+              iBasketFromUrl = Uri.decodeComponent(iBasketParam);
+              print('🛒 iBasket récupéré depuis l\'URL (décodé): $iBasketFromUrl');
+              print('🛒 Longueur: ${iBasketFromUrl.length}');
+            } else {
+              print('⚠️ Aucun iBasket trouvé dans l\'URL');
+            }
+            if (basketNameParam != null && basketNameParam.isNotEmpty) {
+              basketNameFromUrl = Uri.decodeComponent(basketNameParam);
+              print('🛒 Nom du basket récupéré depuis l\'URL (décodé): $basketNameFromUrl');
+            } else {
+              print('⚠️ Aucun nom de basket trouvé dans l\'URL');
+            }
+          } catch (e) {
+            print('⚠️ Erreur lors de la récupération de l\'iBasket depuis l\'URL: $e');
           }
           
-          // Si trouvé ET utilisateur non connecté, utiliser cet index
-          if (foundIndex != null && foundIndex >= 0 && !shouldUseFirstBasket) {
+          // Déterminer quel iBasket utiliser
+          String? iBasketToUse;
+          if (iBasketFromUrl != null && iBasketFromUrl.isNotEmpty) {
+            iBasketToUse = iBasketFromUrl;
+            print('✅ Utilisation de l\'iBasket depuis l\'URL (priorité absolue)');
+          } else {
+            iBasketToUse = profileData?['iBasket']?.toString() ?? '';
+            print('✅ Utilisation de l\'iBasket depuis le profil');
+          }
+          
+          // ✅ PRIORITÉ 0: Vérifier si un index est sauvegardé dans le localStorage
+          // Si oui, l'utiliser en priorité ABSOLUE (même si un iBasket est dans l'URL)
+          // C'est la sélection manuelle de l'utilisateur qui doit être préservée
+          int? savedIndex;
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            savedIndex = prefs.getInt('selectedBasketIndex');
+            if (savedIndex != null && savedIndex >= 0 && savedIndex < _baskets.length) {
+              final savedBasket = _baskets[savedIndex];
+              final savedIBasket = savedBasket['iBasket']?.toString() ?? '';
+              if (savedIBasket.isNotEmpty) {
+                print('✅ Index sauvegardé trouvé: $savedIndex (basket: ${savedBasket['label']})');
+                print('   iBasket du basket sauvegardé: $savedIBasket');
+                print('   iBasket de l\'URL: $iBasketFromUrl');
+                
+                // ✅ PRIORITÉ ABSOLUE: Utiliser l'index sauvegardé si valide
+                // Même si l'iBasket de l'URL ne correspond pas, on préserve la sélection manuelle
+                _selectedBasketIndex = savedIndex;
+                _selectedBasketName = savedBasket['label']?.toString() ?? 'Wishlist';
+                print('✅ Utilisation de l\'index sauvegardé (priorité absolue): $savedIndex');
+                
+                // Mettre à jour le profil avec l'iBasket du basket sauvegardé
+                if (profileData != null) {
+                  await LocalStorageService.saveProfile({
+                    ...profileData,
+                    'iBasket': savedIBasket,
+                  });
+                  print('💾 Profil mis à jour avec l\'iBasket sauvegardé: $savedIBasket');
+                }
+                
+                // ✅ CRITIQUE: Sortir de la logique de recherche pour éviter toute réinitialisation
+                if (mounted) {
+                  setState(() {});
+                }
+                print('✅ Retour anticipé - Index sauvegardé utilisé, pas de réinitialisation');
+                return; // ✅ RETOURNER ICI pour éviter de réinitialiser l'index
+              } else {
+                print('⚠️ Index sauvegardé invalide: iBasket vide pour l\'index $savedIndex');
+              }
+            } else {
+              print('⚠️ Index sauvegardé invalide ou hors limites: $savedIndex (baskets: ${_baskets.length})');
+            }
+          } catch (e) {
+            print('⚠️ Erreur lors de la récupération de l\'index sauvegardé: $e');
+          }
+          
+          // ✅ PRIORITÉ: Si un iBasket est passé dans l'URL (venant du podium), l'utiliser TOUJOURS
+          // Sinon, si l'utilisateur vient de se connecter, utiliser le premier basket
+          // (comme SNAL-Project ligne 3657-3658 de wishlist/[icode].vue)
+          // Le premier basket est celui retourné par la procédure stockée (trié)
+          bool shouldUseFirstBasket = sEmail.isNotEmpty && iBasketFromUrl == null; // Utilisateur connecté ET pas d'iBasket dans l'URL
+          
+          int foundIndex = -1;
+          // ✅ Chercher le basket correspondant au iBasket à utiliser (même si utilisateur connecté)
+          if (iBasketToUse.isNotEmpty) {
+            print('🔍 Recherche du basket avec iBasket: $iBasketToUse (longueur: ${iBasketToUse.length})');
+            foundIndex = _baskets.indexWhere(
+              (basket) {
+                final basketIBasket = basket['iBasket']?.toString() ?? '';
+                final match = basketIBasket == iBasketToUse;
+                if (!match && basketIBasket.isNotEmpty) {
+                  print('   ⚠️ Comparaison: "$basketIBasket" != "$iBasketToUse"');
+                }
+                return match;
+              },
+            );
+            if (foundIndex >= 0) {
+              print('✅ Basket trouvé avec iBasket: index $foundIndex, nom: ${_baskets[foundIndex]['label']}');
+            } else {
+              print('⚠️ Basket non trouvé avec iBasket: $iBasketToUse');
+              print('   🔍 Baskets disponibles (${_baskets.length}):');
+              for (var i = 0; i < _baskets.length; i++) {
+                final basketIBasket = _baskets[i]['iBasket']?.toString() ?? '';
+                print('      $i: "${_baskets[i]['label']}" - iBasket: "$basketIBasket" (longueur: ${basketIBasket.length})');
+              }
+              
+              // ✅ FALLBACK: Si l'iBasket n'est pas trouvé mais qu'un nom de basket est fourni, chercher par nom
+              if (basketNameFromUrl != null && basketNameFromUrl.isNotEmpty) {
+                print('🔄 Tentative de recherche par nom du basket: $basketNameFromUrl');
+                foundIndex = _baskets.indexWhere(
+                  (basket) {
+                    final basketLabel = basket['label']?.toString() ?? '';
+                    final match = basketLabel == basketNameFromUrl;
+                    if (match) {
+                      print('   ✅ Basket trouvé par nom: index ${_baskets.indexOf(basket)}, nom: $basketLabel');
+                    }
+                    return match;
+                  },
+                );
+                if (foundIndex >= 0) {
+                  print('✅ Basket trouvé avec nom (fallback): index $foundIndex, nom: ${_baskets[foundIndex]['label']}');
+                  // Mettre à jour iBasketToUse avec le vrai iBasket du basket trouvé
+                  final foundBasket = _baskets[foundIndex];
+                  final foundIBasket = foundBasket['iBasket']?.toString() ?? '';
+                  if (foundIBasket.isNotEmpty) {
+                    iBasketToUse = foundIBasket;
+                    print('✅ iBasket mis à jour avec celui du basket trouvé: $iBasketToUse');
+                  }
+                } else {
+                  print('⚠️ Basket non trouvé avec nom: $basketNameFromUrl');
+                }
+              }
+            }
+          }
+          
+          // ✅ Si trouvé, utiliser cet index (même si utilisateur connecté, si iBasket vient de l'URL)
+          if (foundIndex >= 0) {
             _selectedBasketIndex = foundIndex;
             final selectedBasket = _baskets[foundIndex];
             _selectedBasketName = selectedBasket['label']?.toString() ?? 'Wishlist';
-            print('✅ Basket sélectionné (correspond au iBasket actuel): index $foundIndex, nom: $_selectedBasketName');
-          } else {
-            // ✅ PRIORITÉ: Utiliser le PREMIER basket (comme SNAL-Project)
-            // C'est le basket existant créé sur le web, pas le iBasketMagikLink de la connexion
-            _selectedBasketIndex = 0;
-            final firstBasket = _baskets[0];
-            final firstIBasket = firstBasket['iBasket']?.toString() ?? '';
-            _selectedBasketName = firstBasket['label']?.toString() ?? 'Wishlist';
+            print('✅ Basket sélectionné (correspond au iBasket utilisé): index $foundIndex, nom: $_selectedBasketName');
             
-            if (profileData != null && firstIBasket.isNotEmpty) {
-              // ✅ CRITIQUE: Mettre à jour le profil avec le premier basket (celui créé sur le web)
+            // ✅ CRITIQUE: Sauvegarder l'index du basket sélectionné dans le localStorage
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt('selectedBasketIndex', foundIndex);
+              print('💾 Index du basket sélectionné sauvegardé: $foundIndex');
+            } catch (e) {
+              print('⚠️ Erreur lors de la sauvegarde de l\'index: $e');
+            }
+            
+            // ✅ Mettre à jour le profil avec le basket sélectionné
+            if (profileData != null && iBasketToUse.isNotEmpty) {
               await LocalStorageService.saveProfile({
                 ...profileData,
-                'iBasket': firstIBasket, // Utiliser le premier basket au lieu du iBasketMagikLink
+                'iBasket': iBasketToUse,
               });
-              print('✅ Premier basket sélectionné (basket existant créé sur le web):');
-              print('   iBasket: $firstIBasket');
-              print('   nom: $_selectedBasketName');
-              print('   ⚠️ Ce basket remplace le iBasketMagikLink de la connexion');
+              print('💾 Profil mis à jour avec l\'iBasket sélectionné: $iBasketToUse');
+            }
+          } else {
+            // ✅ Si pas de basket trouvé, essayer de restaurer l'index sauvegardé
+            bool shouldPreserveSelection = false;
+            int? savedIndex;
+            
+            // ✅ PRIORITÉ 1: Vérifier si un index est sauvegardé dans le localStorage
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              savedIndex = prefs.getInt('selectedBasketIndex');
+              if (savedIndex != null && savedIndex >= 0 && savedIndex < _baskets.length) {
+                final savedBasket = _baskets[savedIndex];
+                final savedIBasket = savedBasket['iBasket']?.toString() ?? '';
+                if (savedIBasket.isNotEmpty) {
+                  shouldPreserveSelection = true;
+                  _selectedBasketIndex = savedIndex;
+                  _selectedBasketName = savedBasket['label']?.toString() ?? 'Wishlist';
+                  print('✅ Restauration du basket depuis localStorage (index $savedIndex): $_selectedBasketName');
+                  // Mettre à jour le profil avec l'iBasket du basket restauré
+                  if (profileData != null) {
+                    await LocalStorageService.saveProfile({
+                      ...profileData,
+                      'iBasket': savedIBasket,
+                    });
+                    print('💾 Profil mis à jour avec l\'iBasket restauré: $savedIBasket');
+                  }
+                }
+              }
+            } catch (e) {
+              print('⚠️ Erreur lors de la récupération de l\'index sauvegardé: $e');
+            }
+            
+            // ✅ PRIORITÉ 2: Si pas d'index sauvegardé, préserver l'index actuel s'il est valide
+            if (!shouldPreserveSelection && 
+                _selectedBasketIndex != null && 
+                _selectedBasketIndex! >= 0 && 
+                _selectedBasketIndex! < _baskets.length) {
+              // Vérifier que le basket sélectionné existe toujours
+              final currentBasket = _baskets[_selectedBasketIndex!];
+              final currentIBasket = currentBasket['iBasket']?.toString() ?? '';
+              final profileIBasket = profileData?['iBasket']?.toString() ?? '';
+              
+              // Préserver si :
+              // 1. L'iBasket du profil correspond au basket sélectionné, OU
+              // 2. On ne vient pas d'une redirection depuis le podium (pas d'iBasket dans l'URL)
+              if (currentIBasket.isNotEmpty && 
+                  (currentIBasket == profileIBasket || iBasketFromUrl == null)) {
+                shouldPreserveSelection = true;
+                _selectedBasketName = currentBasket['label']?.toString() ?? 'Wishlist';
+                print('✅ Préservation du basket sélectionné (index $_selectedBasketIndex): $_selectedBasketName');
+                print('   iBasket du basket: $currentIBasket');
+                print('   iBasket du profil: $profileIBasket');
+                print('   iBasket de l\'URL: $iBasketFromUrl');
+                // Mettre à jour le profil avec l'iBasket du basket préservé
+                if (profileData != null) {
+                  await LocalStorageService.saveProfile({
+                    ...profileData,
+                    'iBasket': currentIBasket,
+                  });
+                  print('💾 Profil mis à jour avec l\'iBasket préservé: $currentIBasket');
+                }
+              }
+            }
+            
+            if (!shouldPreserveSelection) {
+              // ✅ PRIORITÉ: Utiliser le PREMIER basket (comme SNAL-Project)
+              // C'est le basket existant créé sur le web, pas le iBasketMagikLink de la connexion
+              _selectedBasketIndex = 0;
+              final firstBasket = _baskets[0];
+              final firstIBasket = firstBasket['iBasket']?.toString() ?? '';
+              _selectedBasketName = firstBasket['label']?.toString() ?? 'Wishlist';
+              
+              // Sauvegarder l'index du premier basket
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('selectedBasketIndex', 0);
+                print('💾 Index du premier basket sauvegardé: 0');
+              } catch (e) {
+                print('⚠️ Erreur lors de la sauvegarde de l\'index: $e');
+              }
+              
+              if (profileData != null && firstIBasket.isNotEmpty) {
+                // ✅ CRITIQUE: Mettre à jour le profil avec le premier basket (celui créé sur le web)
+                await LocalStorageService.saveProfile({
+                  ...profileData,
+                  'iBasket': firstIBasket, // Utiliser le premier basket au lieu du iBasketMagikLink
+                });
+                print('✅ Premier basket sélectionné (basket existant créé sur le web):');
+                print('   iBasket: $firstIBasket');
+                print('   nom: $_selectedBasketName');
+                print('   ⚠️ Ce basket remplace le iBasketMagikLink de la connexion');
+              }
             }
           }
         }
@@ -655,6 +877,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       // Mettre à jour le nom du basket sélectionné
       final basketLabel = selectedBasket['label']?.toString() ?? 'Wishlist';
       _selectedBasketName = basketLabel;
+      
+      // ✅ CRITIQUE: Sauvegarder l'index du basket sélectionné dans le localStorage
+      // pour pouvoir le restaurer lors du rechargement
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('selectedBasketIndex', newIndex);
+      print('💾 Index du basket sélectionné sauvegardé: $newIndex');
       
       // Mettre à jour le profil avec le nouveau iBasket
       final profileData = await LocalStorageService.getProfile();
@@ -841,21 +1069,56 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   Future<void> _goToPodium(String sCodeArticle, String sCodeArticleCrypt, int iQuantite) async {
     try {
       print('🏆 Navigation vers podium: $sCodeArticle (crypt: $sCodeArticleCrypt) avec quantité: $iQuantite');
+      print('🔍 État actuel des baskets:');
+      print('   Nombre de baskets: ${_baskets.length}');
+      print('   Index sélectionné: $_selectedBasketIndex');
+      print('   Nom du basket sélectionné: $_selectedBasketName');
       
-      // Récupérer iBasket depuis le LocalStorage (comme SNAL)
-      final profileData = await LocalStorageService.getProfile();
-      final iBasket = profileData?['iBasket']?.toString() ?? '';
+      // ✅ PRIORITÉ: Utiliser l'iBasket du basket actuellement sélectionné dans le dropdown
+      // au lieu de celui du profil (qui peut être obsolète)
+      String? iBasket;
+      if (_baskets.isNotEmpty && 
+          _selectedBasketIndex != null && 
+          _selectedBasketIndex! >= 0 && 
+          _selectedBasketIndex! < _baskets.length) {
+        final selectedIndex = _selectedBasketIndex!;
+        iBasket = _baskets[selectedIndex]['iBasket']?.toString();
+        print('✅ iBasket récupéré depuis le basket sélectionné:');
+        print('   Index: $selectedIndex');
+        print('   Nom: ${_baskets[selectedIndex]['label']}');
+        print('   iBasket: $iBasket (longueur: ${iBasket?.length ?? 0})');
+        
+        // Vérifier que l'iBasket n'est pas vide
+        if (iBasket == null || iBasket.isEmpty) {
+          print('⚠️ iBasket vide pour le basket sélectionné, utilisation du fallback');
+          iBasket = null; // Forcer le fallback
+        }
+      } else {
+        print('⚠️ Pas de basket sélectionné valide:');
+        print('   _baskets.isNotEmpty: ${_baskets.isNotEmpty}');
+        print('   _selectedBasketIndex: $_selectedBasketIndex');
+        if (_baskets.isNotEmpty) {
+          print('   _baskets.length: ${_baskets.length}');
+        }
+      }
       
-      print('🛒 iBasket récupéré: $iBasket');
+      // Fallback: Si pas de basket sélectionné, utiliser celui du profil
+      if (iBasket == null || iBasket.isEmpty) {
+        final profileData = await LocalStorageService.getProfile();
+        iBasket = profileData?['iBasket']?.toString() ?? '';
+        print('🛒 iBasket récupéré depuis le profil (fallback): $iBasket (longueur: ${iBasket.length})');
+      }
       
       // Construire l'URL avec les paramètres (comme SNAL-Project)
       // Le podium Flutter attend le code normal dans l'URL et le crypté en query param
       if (iBasket.isNotEmpty) {
         // Avec iBasket, crypt ET quantité dans les query params
-        context.go('/podium/$sCodeArticle?crypt=$sCodeArticleCrypt&iBasket=$iBasket&iQuantite=$iQuantite');
+        context.go('/podium/$sCodeArticle?crypt=$sCodeArticleCrypt&iBasket=${Uri.encodeComponent(iBasket)}&iQuantite=$iQuantite');
+        print('✅ Navigation vers podium avec iBasket: $iBasket');
       } else {
         // Sans iBasket mais avec crypt et quantité
         context.go('/podium/$sCodeArticle?crypt=$sCodeArticleCrypt&iQuantite=$iQuantite');
+        print('⚠️ Navigation vers podium sans iBasket');
       }
     } catch (e) {
       print('❌ Erreur lors de la navigation vers le podium: $e');
@@ -1127,8 +1390,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         // Afficher le message de succès (sans await pour ne pas bloquer l'UI)
         _showNotiflixSuccessDialog(
-          title: _translationService.translate('SUCCESS_TITLE'),
-          message: _translationService.translate('SUCCESS_DELETE_ARTICLE'),
+          title: _translationService.translate('SUCCESS_TITTLE'),
+          message: _translationService.translate('SUCCES_DELETE_ARTICLE'),
         );
         
       } else {
@@ -1566,6 +1829,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             onManageCountries: () => _openCountryManagementModal(
               presentationContext: modalContext,
               articleNotifier: sourceNotifier,
+              modalNotifier: modalNotifier,
             ),
           );
         },
@@ -1662,6 +1926,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   Future<List<Map<String, dynamic>>?> _openCountryManagementModal({
     BuildContext? presentationContext,
     ValueNotifier<Map<String, dynamic>>? articleNotifier,
+    ValueNotifier<Map<String, dynamic>>? modalNotifier,
   }) async {
     print('🔧 Ouverture du modal de gestion des pays');
     final dialogBaseContext = presentationContext ?? (mounted ? context : null);
@@ -1711,6 +1976,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 onSave: (selectedCountries) => _saveCountryChanges(
                   selectedCountries,
                   articleNotifier: articleNotifier,
+                  modalNotifier: modalNotifier,
                 ),
               ),
             ),
@@ -1733,14 +1999,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       },
     );
     
-    // Si des pays ont été sauvegardés (updatedCountries != null), rediriger vers wishlist
-    if (updatedCountries != null && mounted) {
-      // Attendre un court délai pour que le modal se ferme complètement
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (mounted) {
-        context.go('/wishlist');
-      }
-    }
+    // ✅ CORRECTION: Ne pas rediriger vers /wishlist
+    // Le CountrySidebarModal restera ouvert après la fermeture du CountryManagementModal
+    // Cela permet à l'utilisateur de continuer à sélectionner un pays pour l'article
     
     return updatedCountries;
   }
@@ -1974,8 +2235,17 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   Future<List<Map<String, dynamic>>?> _saveCountryChanges(
     List<String> selectedCountries, {
     ValueNotifier<Map<String, dynamic>>? articleNotifier,
+    ValueNotifier<Map<String, dynamic>>? modalNotifier,
   }) async {
     print('💾 Sauvegarde des changements de pays: $selectedCountries');
+    
+    // ✅ Construire les métadonnées (nom, drapeau) pour les pays sélectionnés AVANT les blocs try-catch
+    // Cela permet d'utiliser metadataByCode dans les return statements des catch/if
+    final allMetadata = _getAllAvailableCountries();
+    final metadataByCode = {
+      for (final country in allMetadata)
+        (country['code']?.toString().toUpperCase() ?? ''): country,
+    };
     
     try {
       final normalizedCountries = LinkedHashSet<String>.from(
@@ -2012,15 +2282,59 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       if (response != null && response['success'] == true) {
         print('✅ Pays sauvegardés avec succès');
         
-        // Recharger les données de la wishlist (comme SNAL-Project appelle fetchDataLastBasket)
+        // Recharger les données de la wishlist
         await _loadWishlistData(force: true);
         
-        // Attendre un peu pour s'assurer que _wishlistData est bien mis à jour
-        await Future.delayed(const Duration(milliseconds: 500));
+        // ✅ CORRECTION CRITIQUE: Mettre à jour modalNotifier IMMÉDIATEMENT après le rechargement
+        // Cela garantit que le modal affiche les nouveaux prix dès que les données sont chargées
+        if (modalNotifier != null && _wishlistData != null) {
+          try {
+            final pivotArray = _wishlistData!['pivotArray'] as List? ?? [];
+            if (pivotArray.isNotEmpty) {
+              // ✅ Récupérer le sCodeArticleCrypt depuis le modalNotifier actuel pour trouver le bon article
+              final currentModalArticle = modalNotifier.value;
+              final modalArticleCrypt = currentModalArticle['sCodeArticleCrypt']?.toString() ?? '';
+              
+              // ✅ Chercher l'article correspondant dans pivotArray
+              Map<String, dynamic>? articleToUse;
+              if (modalArticleCrypt.isNotEmpty) {
+                for (final item in pivotArray) {
+                  final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
+                  if (itemCrypt == modalArticleCrypt) {
+                    articleToUse = item as Map<String, dynamic>;
+                    print('✅ Article trouvé dans pivotArray pour modalNotifier: $modalArticleCrypt');
+                    break;
+                  }
+                }
+              }
+              
+              // ✅ Si pas trouvé, utiliser le premier article de pivotArray
+              if (articleToUse == null && pivotArray.isNotEmpty) {
+                articleToUse = pivotArray[0] as Map<String, dynamic>;
+                print('⚠️ Article non trouvé, utilisation du premier article de pivotArray pour modalNotifier');
+              }
+              
+              if (articleToUse != null) {
+                // ✅ Créer une copie complète avec TOUS les prix depuis pivotArray
+                final updatedArticle = Map<String, dynamic>.from(articleToUse);
+                modalNotifier.value = updatedArticle;
+                print('✅ modalNotifier mis à jour IMMÉDIATEMENT depuis pivotArray après rechargement');
+                print('   📦 Clés de pays dans modalNotifier: ${updatedArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
+                for (final key in updatedArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k))) {
+                  print('   💰 $key: ${updatedArticle[key]}');
+                }
+              }
+            }
+          } catch (e) {
+            print('⚠️ Erreur lors de la mise à jour immédiate du modalNotifier: $e');
+          }
+        }
 
         // Mettre à jour l'article dans le notifier si fourni (pour mettre à jour le SidebarModal)
         if (articleNotifier != null) {
           try {
+            // Attendre un peu pour s'assurer que localStorage est bien synchronisé
+            await Future.delayed(const Duration(milliseconds: 300));
             
             // Vérifier si le notifier est toujours valide en accédant à sa valeur
             final currentArticle = articleNotifier.value;
@@ -2074,32 +2388,58 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 print('⚠️ Article non trouvé dans pivotArray, utilisation de currentArticle');
               }
               
-              // ✅ Créer une copie PROFONDE de l'article avec TOUTES les propriétés (y compris les prix par pays)
-              // Utiliser Map.from pour copier toutes les clés, y compris ES, FR, NL, PT, etc.
-              final updatedArticleCopy = Map<String, dynamic>.from(updatedArticle);
+              // ✅ CORRECTION CRITIQUE: Copier TOUS les prix directement depuis pivotArray
+              // Le backend retourne TOUS les prix dans pivotArray (FR, PT, NL, etc.)
+              // Il faut les copier TOUS dès le début, sans vérifications multiples
               
-              // ✅ IMPORTANT: Copier TOUS les prix depuis pivotArray pour TOUS les pays sélectionnés
-              // Même si l'article trouvé ne contient pas tous les prix, chercher dans tous les articles de pivotArray
-              // Cette étape est CRITIQUE car l'article dans pivotArray contient tous les prix après le rechargement
-              print('🔍 Recherche des prix pour les pays sélectionnés: $normalizedCountries');
+              // ✅ D'abord, trouver l'article dans pivotArray qui correspond à sCodeArticleCrypt
+              Map<String, dynamic>? articleFromPivot;
+              for (final item in pivotArray) {
+                final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
+                if (itemCrypt == sCodeArticleCrypt) {
+                  articleFromPivot = item as Map<String, dynamic>;
+                  print('✅ Article trouvé dans pivotArray: $sCodeArticleCrypt');
+                  break;
+                }
+              }
+              
+              // ✅ Si pas trouvé, utiliser le premier article de pivotArray
+              if (articleFromPivot == null && pivotArray.isNotEmpty) {
+                articleFromPivot = pivotArray[0] as Map<String, dynamic>;
+                print('⚠️ Article non trouvé, utilisation du premier article de pivotArray');
+              }
+              
+              // ✅ Créer une copie PROFONDE de l'article avec TOUTES les propriétés
+              // Utiliser l'article depuis pivotArray qui contient TOUS les prix
+              final updatedArticleCopy = Map<String, dynamic>.from(articleFromPivot ?? updatedArticle);
+              
+              // ✅ CORRECTION CRITIQUE: Copier TOUS les prix depuis articleFromPivot (qui vient de pivotArray)
+              // Le backend retourne TOUS les prix dans pivotArray (FR: "9.99 €", PT: "9.99 €", NL: "9.99 €")
+              // Il faut les copier TOUS, même ceux qui ne sont pas dans normalizedCountries
+              if (articleFromPivot != null) {
+                print('📦 Copie de TOUS les prix depuis articleFromPivot (pivotArray)...');
+                final allCountryKeys = articleFromPivot.keys.where((k) => 
+                  k.length == 2 && 
+                  k.toUpperCase() == k && 
+                  RegExp(r'^[A-Z]{2}$').hasMatch(k)
+                ).toList();
+                print('   📋 Clés de pays trouvées: $allCountryKeys');
+                
+                // ✅ Copier TOUS les prix depuis articleFromPivot
+                for (final key in allCountryKeys) {
+                  final priceValue = articleFromPivot[key];
+                  updatedArticleCopy[key] = priceValue; // ✅ Copier même si null
+                  print('   ✅ Prix $key copié: $priceValue');
+                }
+              }
+              
+              print('🔍 Vérification des prix pour les pays sélectionnés: $normalizedCountries');
               for (final countryCode in normalizedCountries) {
                 final upperCode = countryCode.toUpperCase();
-                // Toujours chercher dans pivotArray pour s'assurer d'avoir le prix le plus récent
-                bool priceFound = false;
-                // Chercher dans tous les articles de pivotArray
-                for (final item in pivotArray) {
-                  if (item.containsKey(upperCode) && 
-                      item[upperCode] != null &&
-                      item[upperCode].toString().trim().isNotEmpty) {
-                    final price = item[upperCode];
-                    updatedArticleCopy[upperCode] = price;
-                    print('✅ Prix pour $upperCode copié depuis pivotArray: $price');
-                    priceFound = true;
-                    break;
-                  }
-                }
-                if (!priceFound) {
-                  print('⚠️ Prix pour $upperCode non trouvé dans pivotArray');
+                if (updatedArticleCopy.containsKey(upperCode)) {
+                  print('   ✅ $upperCode: ${updatedArticleCopy[upperCode]}');
+                } else {
+                  print('   ❌ $upperCode: MANQUANT dans updatedArticleCopy');
                 }
               }
               
@@ -2136,12 +2476,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   bool priceFound = false;
                   
                   // ✅ D'abord, chercher dans l'article avec le même sCodeArticleCrypt
+                  // ✅ CORRECTION: Copier même si c'est "Indisponible" ou null
                   for (final item in pivotArray) {
                     final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
                     if (itemCrypt == sCodeArticleCrypt) {
-                      if (item.containsKey(upperCode) && 
-                          item[upperCode] != null &&
-                          item[upperCode].toString().trim().isNotEmpty) {
+                      if (item.containsKey(upperCode)) {
+                        // ✅ Copier même si c'est null ou "Indisponible"
                         updatedArticleCopy[upperCode] = item[upperCode];
                         print('✅ Prix pour $upperCode copié depuis pivotArray (même sCodeArticleCrypt): ${item[upperCode]}');
                         priceFound = true;
@@ -2151,11 +2491,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   }
                   
                   // ✅ Si pas trouvé, chercher dans tous les articles de pivotArray (au cas où sCodeArticleCrypt a changé)
+                  // ✅ CORRECTION: Copier même si c'est "Indisponible" ou null
                   if (!priceFound) {
                     for (final item in pivotArray) {
-                      if (item.containsKey(upperCode) && 
-                          item[upperCode] != null &&
-                          item[upperCode].toString().trim().isNotEmpty) {
+                      if (item.containsKey(upperCode)) {
+                        // ✅ Copier même si c'est null ou "Indisponible"
                         updatedArticleCopy[upperCode] = item[upperCode];
                         print('✅ Prix pour $upperCode copié depuis pivotArray (n\'importe quel article): ${item[upperCode]}');
                         priceFound = true;
@@ -2165,9 +2505,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   }
                   
                   // ✅ Si toujours pas trouvé, essayer depuis currentArticle
-                  if (!priceFound && currentArticle.containsKey(upperCode) && 
-                      currentArticle[upperCode] != null &&
-                      currentArticle[upperCode].toString().trim().isNotEmpty) {
+                  // ✅ CORRECTION: Copier même si c'est "Indisponible" ou null
+                  if (!priceFound && currentArticle.containsKey(upperCode)) {
                     updatedArticleCopy[upperCode] = currentArticle[upperCode];
                     print('✅ Prix pour $upperCode copié depuis currentArticle: ${currentArticle[upperCode]}');
                   } else if (!priceFound) {
@@ -2183,21 +2522,26 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // Le backend retourne tous les prix dans pivotArray (FR, DE, NL, PT, etc.)
               // Il faut les copier TOUS pour que _buildCountryDetails puisse les trouver
               if (foundArticle != null) {
-                // ✅ Copier TOUS les prix depuis foundArticle (qui vient de pivotArray)
+                // ✅ CORRECTION CRITIQUE: Copier TOUS les prix depuis foundArticle (qui vient de pivotArray)
+                // Même ceux qui sont "Indisponible" ou null
                 for (final key in foundArticle.keys) {
                   // ✅ Copier toutes les clés qui sont des codes de pays (2 lettres majuscules)
                   if (key.length == 2 && 
                       key.toUpperCase() == key && 
                       RegExp(r'^[A-Z]{2}$').hasMatch(key)) {
                     final priceValue = foundArticle[key];
+                    // ✅ CORRECTION: Copier TOUJOURS, même si c'est null, "Indisponible", ou vide
+                    updatedArticleCopy[key] = priceValue; // ✅ Copier même si null
                     if (priceValue != null && priceValue.toString().trim().isNotEmpty) {
-                      updatedArticleCopy[key] = priceValue;
                       print('✅ Prix $key copié depuis foundArticle: $priceValue');
+                    } else {
+                      print('⚠️ Prix $key copié depuis foundArticle (null/vide/indisponible): $priceValue');
                     }
                   }
                 }
               } else {
                 // ✅ Si foundArticle est null, chercher dans tous les articles de pivotArray
+                // ✅ CORRECTION CRITIQUE: Copier TOUS les prix, même ceux qui sont "Indisponible" ou null
                 for (final item in pivotArray) {
                   final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
                   if (itemCrypt == sCodeArticleCrypt) {
@@ -2207,9 +2551,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                           key.toUpperCase() == key && 
                           RegExp(r'^[A-Z]{2}$').hasMatch(key)) {
                         final priceValue = item[key];
+                        // ✅ CORRECTION: Copier TOUJOURS, même si c'est null, "Indisponible", ou vide
+                        updatedArticleCopy[key] = priceValue; // ✅ Copier même si null
                         if (priceValue != null && priceValue.toString().trim().isNotEmpty) {
-                          updatedArticleCopy[key] = priceValue;
                           print('✅ Prix $key copié depuis pivotArray: $priceValue');
+                        } else {
+                          print('⚠️ Prix $key copié depuis pivotArray (null/vide/indisponible): $priceValue');
                         }
                       }
                     }
@@ -2226,10 +2573,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                     updatedArticleCopy[upperCode] == null ||
                     updatedArticleCopy[upperCode].toString().trim().isEmpty) {
                   // Chercher dans tous les articles de pivotArray
+                  // ✅ CORRECTION: Copier même si c'est "Indisponible" ou null
                   for (final item in pivotArray) {
-                    if (item.containsKey(upperCode) && 
-                        item[upperCode] != null &&
-                        item[upperCode].toString().trim().isNotEmpty) {
+                    if (item.containsKey(upperCode)) {
+                      // ✅ Copier même si c'est null ou "Indisponible"
                       updatedArticleCopy[upperCode] = item[upperCode];
                       print('✅ Prix pour $upperCode copié depuis pivotArray (vérification finale): ${item[upperCode]}');
                       break;
@@ -2238,41 +2585,121 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 }
               }
               
-              // ✅ IMPORTANT: Copier TOUS les prix depuis foundArticle (qui vient de pivotArray)
-              // Le backend retourne TOUS les prix dans pivotArray (FR, DE, NL, PT, etc.)
-              // Il faut les copier TOUS pour que _buildCountryDetails puisse les trouver
-              if (foundArticle != null) {
-                // ✅ Copier TOUS les prix depuis foundArticle (qui vient de pivotArray)
-                for (final key in foundArticle.keys) {
+              // ✅ CORRECTION CRITIQUE: Copier TOUS les prix depuis pivotArray, même "Indisponible"
+              // Le backend retourne TOUS les prix dans pivotArray (BE, DE, ES, IT, NL, etc.)
+              // Il faut les copier TOUS (y compris "Indisponible") pour que _buildCountryDetails puisse les trouver
+              
+              // ✅ D'abord, utiliser foundArticle s'il existe
+              Map<String, dynamic>? sourceArticle = foundArticle;
+              
+              // ✅ Si foundArticle est null, chercher dans tous les articles de pivotArray
+              if (sourceArticle == null) {
+                for (final item in pivotArray) {
+                  final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
+                  if (itemCrypt == sCodeArticleCrypt) {
+                    sourceArticle = item as Map<String, dynamic>?;
+                    print('✅ Article trouvé dans pivotArray avec sCodeArticleCrypt: $sCodeArticleCrypt');
+                    break;
+                  }
+                }
+              }
+              
+              // ✅ Si toujours null, utiliser le premier article de pivotArray (fallback)
+              if (sourceArticle == null && pivotArray.isNotEmpty) {
+                sourceArticle = pivotArray[0] as Map<String, dynamic>?;
+                print('⚠️ Utilisation du premier article de pivotArray comme fallback');
+              }
+              
+              // ✅ CORRECTION CRITIQUE: Copier TOUS les prix depuis sourceArticle (y compris "Indisponible")
+              // MAIS aussi vérifier que TOUS les prix sont bien copiés, même ceux qui existent déjà dans updatedArticleCopy
+              if (sourceArticle != null) {
+                print('📦 Copie de TOUS les prix depuis sourceArticle...');
+                print('📦 sourceArticle contient les clés: ${sourceArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
+                
+                // ✅ CORRECTION CRITIQUE: Copier TOUS les prix depuis sourceArticle, EN ÉCRASANT ceux qui existent déjà
+                // Cela garantit que les prix les plus récents depuis pivotArray sont utilisés
+                // ✅ IMPORTANT: Copier même si c'est "Indisponible", null, ou vide
+                // Le backend retourne TOUS les prix dans pivotArray, même ceux qui sont "Indisponible"
+                for (final key in sourceArticle.keys) {
                   // ✅ Copier toutes les clés qui sont des codes de pays (2 lettres majuscules)
                   if (key.length == 2 && 
                       key.toUpperCase() == key && 
                       RegExp(r'^[A-Z]{2}$').hasMatch(key)) {
-                    final priceValue = foundArticle[key];
+                    final priceValue = sourceArticle[key];
+                    // ✅ CORRECTION CRITIQUE: Copier TOUJOURS, même si c'est null, "Indisponible", ou vide
+                    // Cela garantit que la clé existe dans updatedArticleCopy pour que _buildCountryDetails puisse la trouver
+                    // ✅ IMPORTANT: Écraser même si la clé existe déjà dans updatedArticleCopy
+                    // pour s'assurer qu'on utilise les prix les plus récents depuis pivotArray
+                    updatedArticleCopy[key] = priceValue; // ✅ Copier même si null
                     if (priceValue != null && priceValue.toString().trim().isNotEmpty) {
-                      updatedArticleCopy[key] = priceValue;
-                      print('✅ Prix $key copié depuis foundArticle: $priceValue');
+                      print('   ✅ Prix $key copié (écrasé si existait): $priceValue');
+                    } else {
+                      print('   ⚠️ Prix $key copié (null/vide/indisponible): $priceValue');
+                    }
+                  }
+                }
+                
+                // ✅ CORRECTION CRITIQUE: Vérifier que TOUS les pays sélectionnés ont un prix après la copie
+                // Si un pays sélectionné n'a pas de prix dans sourceArticle, chercher dans TOUS les articles de pivotArray
+                for (final countryCode in normalizedCountries) {
+                  final upperCode = countryCode.toUpperCase();
+                  if (!updatedArticleCopy.containsKey(upperCode) || 
+                      updatedArticleCopy[upperCode] == null ||
+                      updatedArticleCopy[upperCode].toString().trim().isEmpty) {
+                    print('   ⚠️ Prix manquant pour $upperCode dans sourceArticle, recherche dans TOUS les articles de pivotArray...');
+                    // ✅ Chercher dans TOUS les articles de pivotArray
+                    // ✅ CORRECTION: Copier même si c'est "Indisponible" ou null
+                    for (final item in pivotArray) {
+                      if (item.containsKey(upperCode)) {
+                        // ✅ Copier même si c'est null ou "Indisponible"
+                        updatedArticleCopy[upperCode] = item[upperCode];
+                        print('   ✅ Prix $upperCode trouvé dans un autre article de pivotArray et ajouté: ${item[upperCode]}');
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                // ✅ CORRECTION CRITIQUE: Vérifier spécifiquement PT (le pays qui pose problème)
+                if (updatedArticleCopy.containsKey('PT') && updatedArticleCopy['PT'] != null) {
+                  print('   ✅ PT présent dans updatedArticleCopy après copie: ${updatedArticleCopy['PT']}');
+                } else {
+                  print('   ❌ PT MANQUANT ou null dans updatedArticleCopy après copie depuis sourceArticle');
+                  print('   🔍 Vérification dans sourceArticle: PT = ${sourceArticle['PT']}');
+                  // ✅ Si PT est manquant dans sourceArticle, chercher dans TOUS les articles de pivotArray
+                  // ✅ CORRECTION: Copier même si c'est "Indisponible" ou null
+                  print('   🔍 Recherche de PT dans TOUS les articles de pivotArray...');
+                  for (final item in pivotArray) {
+                    if (item.containsKey('PT')) {
+                      // ✅ Copier même si c'est null ou "Indisponible"
+                      updatedArticleCopy['PT'] = item['PT'];
+                      print('   ✅ PT trouvé dans un autre article de pivotArray et ajouté: ${item['PT']}');
+                      break;
                     }
                   }
                 }
               } else {
-                // ✅ Si foundArticle est null, chercher dans tous les articles de pivotArray
-                for (final item in pivotArray) {
-                  final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
-                  if (itemCrypt == sCodeArticleCrypt) {
-                    // ✅ Copier TOUS les prix depuis cet article
-                    for (final key in item.keys) {
+                print('❌ Aucun article source trouvé dans pivotArray');
+                // ✅ Si aucun article source, copier TOUS les prix depuis le premier article de pivotArray
+                // ✅ CORRECTION CRITIQUE: Copier même les prix null ou "Indisponible"
+                if (pivotArray.isNotEmpty) {
+                  final firstArticle = pivotArray[0] as Map<String, dynamic>?;
+                  if (firstArticle != null) {
+                    print('📦 Copie de TOUS les prix depuis le premier article de pivotArray (fallback)...');
+                    for (final key in firstArticle.keys) {
                       if (key.length == 2 && 
                           key.toUpperCase() == key && 
                           RegExp(r'^[A-Z]{2}$').hasMatch(key)) {
-                        final priceValue = item[key];
+                        final priceValue = firstArticle[key];
+                        // ✅ CORRECTION CRITIQUE: Copier TOUJOURS, même si c'est null, "Indisponible", ou vide
+                        updatedArticleCopy[key] = priceValue; // ✅ Copier même si null
                         if (priceValue != null && priceValue.toString().trim().isNotEmpty) {
-                          updatedArticleCopy[key] = priceValue;
-                          print('✅ Prix $key copié depuis pivotArray: $priceValue');
+                          print('   ✅ Prix $key copié depuis premier article: $priceValue');
+                        } else {
+                          print('   ⚠️ Prix $key copié depuis premier article (null/vide/indisponible): $priceValue');
                         }
                       }
                     }
-                    break;
                   }
                 }
               }
@@ -2285,38 +2712,193 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               newArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
               
               // ✅ Debug: Vérifier que tous les prix sont dans newArticle avant de mettre à jour le notifier
-              print('📦 newArticle avant mise à jour du notifier - clés de pays: ${newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
-              for (final countryKey in newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k))) {
+              final allCountryKeysInNew = newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList();
+              print('📦 newArticle avant mise à jour du notifier - clés de pays: $allCountryKeysInNew');
+              for (final countryKey in allCountryKeysInNew) {
                 print('   💰 $countryKey: ${newArticle[countryKey]}');
+              }
+              
+              // ✅ CORRECTION CRITIQUE: Vérifier spécifiquement PT (le pays qui pose problème)
+              if (newArticle.containsKey('PT')) {
+                print('   ✅ PT présent dans newArticle: ${newArticle['PT']}');
+              } else {
+                print('   ❌ PT MANQUANT dans newArticle !');
+                print('   🔍 Vérification dans updatedArticleCopy: PT = ${updatedArticleCopy['PT']}');
+                // ✅ Si PT est manquant, essayer de le récupérer directement depuis pivotArray
+                for (final item in pivotArray) {
+                  if (item.containsKey('PT') && item['PT'] != null) {
+                    newArticle['PT'] = item['PT'];
+                    print('   ✅ PT récupéré directement depuis pivotArray et ajouté à newArticle: ${item['PT']}');
+                    break;
+                  }
+                }
               }
               
               // ✅ Vérifier spécifiquement les pays sélectionnés
               print('📋 Vérification finale des prix pour les pays sélectionnés:');
               for (final countryCode in normalizedCountries) {
                 final upperCode = countryCode.toUpperCase();
-                if (newArticle.containsKey(upperCode)) {
+                if (newArticle.containsKey(upperCode) && 
+                    newArticle[upperCode] != null &&
+                    newArticle[upperCode].toString().trim().isNotEmpty) {
                   print('   ✅ $upperCode: ${newArticle[upperCode]}');
                 } else {
-                  print('   ❌ $upperCode: MANQUANT');
+                  print('   ❌ $upperCode: MANQUANT ou vide');
+                  // ✅ Dernière tentative : récupérer depuis pivotArray
+                  bool found = false;
+                  for (final item in pivotArray) {
+                    if (item.containsKey(upperCode) && item[upperCode] != null) {
+                      newArticle[upperCode] = item[upperCode];
+                      print('   ✅ $upperCode récupéré depuis pivotArray et ajouté à newArticle: ${item[upperCode]}');
+                      found = true;
+                      break;
+                    }
+                  }
+                  if (!found) {
+                    print('   ❌ $upperCode non trouvé dans pivotArray');
+                  }
                 }
               }
               
-              // Forcer la mise à jour en créant un nouvel objet (nécessaire pour déclencher le listener)
-              articleNotifier.value = Map<String, dynamic>.from(newArticle);
-              print('🔄 Article mis à jour dans le notifier (première fois)');
+              // ✅ CORRECTION CRITIQUE: Vérifier spécifiquement PT une dernière fois
+              if (newArticle.containsKey('PT') && 
+                  newArticle['PT'] != null &&
+                  newArticle['PT'].toString().trim().isNotEmpty) {
+                print('   ✅ PT présent dans newArticle FINAL: ${newArticle['PT']}');
+              } else {
+                print('   ❌ PT MANQUANT ou vide dans newArticle FINAL !');
+                print('   🔍 Dernière tentative: recherche dans pivotArray...');
+                for (final item in pivotArray) {
+                  if (item.containsKey('PT') && item['PT'] != null) {
+                    newArticle['PT'] = item['PT'];
+                    print('   ✅ PT récupéré depuis pivotArray et ajouté à newArticle: ${item['PT']}');
+                    break;
+                  }
+                }
+              }
               
-              // Forcer une deuxième mise à jour après un court délai pour s'assurer que le listener est déclenché
-              await Future.delayed(const Duration(milliseconds: 150));
+              // ✅ CORRECTION CRITIQUE: Vérifier que le notifier n'est pas disposé avant de le mettre à jour
+              // Si le notifier est disposé, on ne peut pas le mettre à jour, mais les prix sont dans pivotArray
+              // et seront disponibles au prochain rechargement ou si on force la mise à jour de modalNotifier
+              bool notifierUpdated = false;
               try {
-                if (articleNotifier.value['sCodeArticleCrypt'] == sCodeArticleCrypt) {
-                  // Créer un nouvel objet avec un nouveau timestamp pour forcer le listener
-                  final secondUpdate = Map<String, dynamic>.from(newArticle);
-                  secondUpdate['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
-                  articleNotifier.value = Map<String, dynamic>.from(secondUpdate);
-                  print('🔄 Article mis à jour dans le notifier (deuxième fois)');
+                // Tester si le notifier est toujours valide en accédant à sa valeur
+                final _ = articleNotifier.value;
+                
+                // ✅ CORRECTION CRITIQUE: Forcer la mise à jour en créant un nouvel objet (nécessaire pour déclencher le listener)
+                // Ajouter un timestamp pour forcer la mise à jour même si les données sont identiques
+                final firstUpdate = Map<String, dynamic>.from(newArticle);
+                firstUpdate['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+                articleNotifier.value = Map<String, dynamic>.from(firstUpdate);
+                notifierUpdated = true;
+                print('🔄 Article mis à jour dans le notifier (première fois)');
+                print('   📦 Clés de pays dans newArticle: ${newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
+                
+                // ✅ Forcer une deuxième mise à jour après un court délai pour s'assurer que le listener est déclenché
+                await Future.delayed(const Duration(milliseconds: 200));
+                try {
+                  // Vérifier à nouveau que le notifier n'est pas disposé
+                  final currentValue = articleNotifier.value;
+                  if (currentValue['sCodeArticleCrypt'] == sCodeArticleCrypt) {
+                    // Créer un nouvel objet avec un nouveau timestamp pour forcer le listener
+                    final secondUpdate = Map<String, dynamic>.from(newArticle);
+                    secondUpdate['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch + 1;
+                    articleNotifier.value = Map<String, dynamic>.from(secondUpdate);
+                    print('🔄 Article mis à jour dans le notifier (deuxième fois)');
+                    
+                    // ✅ Forcer une troisième mise à jour après un autre délai pour garantir que le listener est déclenché
+                    await Future.delayed(const Duration(milliseconds: 200));
+                    try {
+                      final thirdValue = articleNotifier.value;
+                      if (thirdValue['sCodeArticleCrypt'] == sCodeArticleCrypt) {
+                        final thirdUpdate = Map<String, dynamic>.from(newArticle);
+                        thirdUpdate['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch + 2;
+                        articleNotifier.value = Map<String, dynamic>.from(thirdUpdate);
+                        print('🔄 Article mis à jour dans le notifier (troisième fois)');
+                      }
+                    } catch (e) {
+                      print('ℹ️ Notifier disposé lors de la troisième mise à jour: $e');
+                    }
+                  }
+                } catch (e) {
+                  print('ℹ️ Notifier disposé lors de la deuxième mise à jour: $e');
                 }
               } catch (e) {
-                print('ℹ️ Notifier disposé lors de la deuxième mise à jour: $e');
+                print('❌ Notifier disposé AVANT la mise à jour, impossible de propager les prix: $e');
+                print('   ⚠️ Tentative de mise à jour via _articleNotifiers...');
+                
+                // ✅ CORRECTION CRITIQUE: Même si le notifier est disposé, on peut mettre à jour
+                // le notifier dans _articleNotifiers directement, ce qui permettra au modal
+                // de récupérer les nouveaux prix lors de la prochaine reconstruction
+                try {
+                  final articleKey = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
+                  final existingNotifier = _articleNotifiers[articleKey];
+                  if (existingNotifier != null) {
+                    // Créer un nouveau notifier avec les nouveaux prix si l'ancien est disposé
+                    try {
+                      existingNotifier.value = Map<String, dynamic>.from(newArticle);
+                      notifierUpdated = true;
+                      print('✅ Notifier mis à jour via _articleNotifiers malgré dispose');
+                    } catch (e2) {
+                      // Le notifier est vraiment disposé, créer un nouveau
+                      print('   ⚠️ Notifier vraiment disposé, création d\'un nouveau...');
+                      final newNotifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(newArticle));
+                      _articleNotifiers[articleKey] = newNotifier;
+                      notifierUpdated = true;
+                      print('✅ Nouveau notifier créé dans _articleNotifiers');
+                    }
+                  } else {
+                    // Créer un nouveau notifier s'il n'existe pas
+                    final newNotifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(newArticle));
+                    _articleNotifiers[articleKey] = newNotifier;
+                    notifierUpdated = true;
+                    print('✅ Nouveau notifier créé dans _articleNotifiers (n\'existait pas)');
+                  }
+                } catch (e3) {
+                  print('   ⚠️ Impossible de mettre à jour via _articleNotifiers: $e3');
+                }
+              }
+              
+              // ✅ CORRECTION CRITIQUE: Toujours mettre à jour _wishlistData['pivotArray'] avec les nouveaux prix
+              // Cela garantit que les prix sont disponibles même si le notifier est disposé
+              if (_wishlistData != null && pivotArray.isNotEmpty) {
+                // Trouver l'article correspondant dans pivotArray et mettre à jour _wishlistData
+                for (final item in pivotArray) {
+                  final itemCrypt = item['sCodeArticleCrypt']?.toString() ?? '';
+                  if (itemCrypt == sCodeArticleCrypt) {
+                    // Mettre à jour l'article dans _wishlistData avec les nouveaux prix
+                    final articleIndex = (_wishlistData!['pivotArray'] as List).indexWhere(
+                      (a) => (a['sCodeArticleCrypt']?.toString() ?? '') == sCodeArticleCrypt
+                    );
+                    if (articleIndex >= 0) {
+                      // ✅ CORRECTION CRITIQUE: Copier TOUS les prix depuis newArticle vers l'article dans pivotArray
+                      // Cela garantit que les prix sont disponibles dans _wishlistData
+                      for (final key in newArticle.keys) {
+                        if (key.length == 2 && 
+                            key.toUpperCase() == key && 
+                            RegExp(r'^[A-Z]{2}$').hasMatch(key)) {
+                          (_wishlistData!['pivotArray'] as List)[articleIndex][key] = newArticle[key];
+                        }
+                      }
+                      print('✅ Prix mis à jour dans _wishlistData pour l\'article $sCodeArticleCrypt');
+                      print('   📦 Clés de pays mises à jour: ${newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
+                      
+                      // ✅ CORRECTION CRITIQUE: Mettre à jour modalNotifier directement depuis _wishlistData
+                      // Cela garantit que le modal affiche les nouveaux prix même si sourceNotifier est disposé
+                      if (modalNotifier != null) {
+                        try {
+                          final updatedArticleFromPivot = Map<String, dynamic>.from((_wishlistData!['pivotArray'] as List)[articleIndex]);
+                          modalNotifier.value = updatedArticleFromPivot;
+                          print('✅ modalNotifier mis à jour directement depuis _wishlistData');
+                          print('   📦 Clés de pays dans modalNotifier: ${updatedArticleFromPivot.keys.where((k) => k.length == 2 && k.toUpperCase() == k && RegExp(r'^[A-Z]{2}$').hasMatch(k)).toList()}');
+                        } catch (e) {
+                          print('⚠️ Impossible de mettre à jour modalNotifier: $e');
+                        }
+                      }
+                    }
+                    break;
+                  }
+                }
               }
             }
           } catch (e) {
@@ -2325,13 +2907,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
         }
 
-        // Construire les métadonnées (nom, drapeau) pour les pays sélectionnés
-        final allMetadata = _getAllAvailableCountries();
-        final metadataByCode = {
-          for (final country in allMetadata)
-            (country['code']?.toString().toUpperCase() ?? ''): country,
-        };
-
+        // ✅ metadataByCode est déjà déclaré au début de la fonction, pas besoin de le redéclarer
         final enriched = normalizedCountries.map((code) {
           final meta = metadataByCode[code] ?? const {};
           final flag = _normalizeFlagUrl(meta['flag']?.toString());
@@ -2684,6 +3260,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         final articleCount = pivotArray.length;
         _selectedBasketName = 'Wishlist ($articleCount Art.)';
         
+        // ✅ CRITIQUE: Mettre à jour aussi le label du basket dans _baskets pour que le dropdown affiche le bon nombre
+        if (_selectedBasketIndex != null && 
+            _selectedBasketIndex! >= 0 && 
+            _selectedBasketIndex! < _baskets.length) {
+          _baskets[_selectedBasketIndex!]['label'] = 'Wishlist ($articleCount Art.)';
+          print('✅ Label du basket mis à jour dans _baskets: Wishlist ($articleCount Art.)');
+        }
+        
         // Rafraîchir l'interface
         setState(() {});
         
@@ -2871,64 +3455,52 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 Expanded(
                   child: Container(
                     constraints: BoxConstraints(
-                      maxWidth: isMobile ? 200 : 250,
-                    ),
-                    height: isMobile ? 44 : 48,
-                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: const Color(0xFFCED4DA)),
-                      borderRadius: BorderRadius.circular(10),
+                      maxWidth: isMobile ? 180 : 250,
                     ),
                     child: baskets.isEmpty
-                        ? Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _selectedBasketName ?? (_translationService.translate('WISHLIST_EMPTY') ?? 'Wishlist (0 Art.)'),
-                                  style: TextStyle(
-                                    fontSize: isMobile ? 14 : 16,
-                                    color: const Color(0xFF212529),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Icon(
-                                Icons.keyboard_arrow_down,
-                                color: const Color(0xFF6C757D),
-                                size: isMobile ? 20 : 24,
-                              ),
-                            ],
-                          )
-                        : DropdownButton<int>(
-                            value: _selectedBasketIndex,
-                            isExpanded: true,
-                            underline: const SizedBox.shrink(),
-                            icon: Icon(
-                              Icons.keyboard_arrow_down,
-                              color: const Color(0xFF6C757D),
-                              size: isMobile ? 20 : 24,
+                        ? Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 12 : 16,
+                              vertical: isMobile ? 10 : 12,
                             ),
-                            items: baskets.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final basket = entry.value;
-                              return DropdownMenuItem<int>(
-                                value: index,
-                                child: Text(
-                                  basket['label']?.toString() ?? 'Wishlist',
-                                  style: TextStyle(
-                                    fontSize: isMobile ? 14 : 16,
-                                    color: const Color(0xFF212529),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(
+                                color: const Color(0xFFCED4DA),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (int? newIndex) {
-                              _handleBasketChange(newIndex);
-                            },
-                          ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _selectedBasketName ?? (_translationService.translate('WISHLIST_EMPTY') ?? 'Wishlist (0 Art.)'),
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 14 : 16,
+                                      color: const Color(0xFF212529),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: const Color(0xFF6C757D),
+                                  size: isMobile ? 20 : 24,
+                                ),
+                              ],
+                            ),
+                          )
+                        : _buildBasketDropdownWithSwipe(baskets, isMobile),
                   ),
                 ),
                 
@@ -3182,6 +3754,320 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
   }
 
+  /// Widget personnalisé pour le dropdown avec swipe pour les PDF
+  Widget _buildBasketDropdownWithSwipe(List<Map<String, dynamic>> baskets, bool isMobile) {
+    final selectedBasket = _selectedBasketIndex != null && _selectedBasketIndex! >= 0 && _selectedBasketIndex! < baskets.length
+        ? baskets[_selectedBasketIndex!]
+        : null;
+    final selectedLabel = selectedBasket?['label']?.toString() ?? 'Wishlist';
+    final isSelectedPdf = selectedLabel.toLowerCase().contains('.pdf');
+    
+    // Vérifier s'il y a des PDF dans la liste
+    final hasPdfBaskets = baskets.any((basket) {
+      final label = basket['label']?.toString() ?? '';
+      return label.toLowerCase().contains('.pdf');
+    });
+    
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return PopupMenuButton<int>(
+          // Centrer le menu en dessous du bouton
+          // Sur mobile, le menu a la même largeur que le bouton (180), donc offset 0
+          offset: Offset(isMobile ? 0 : -65, isMobile ? 48 : 52),
+          constraints: BoxConstraints(
+            maxWidth: isMobile ? 180 : 380, // Limiter la largeur du menu
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          color: Colors.white,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 12 : 16,
+          vertical: isMobile ? 10 : 12,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(
+            color: const Color(0xFFCED4DA),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                selectedLabel,
+                style: TextStyle(
+                  fontSize: isMobile ? 14 : 16,
+                  color: const Color(0xFF212529),
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.keyboard_arrow_down,
+              color: const Color(0xFF6C757D),
+              size: isMobile ? 20 : 24,
+            ),
+          ],
+        ),
+      ),
+      onSelected: (int? index) {
+        if (index != null && mounted) {
+          _handleBasketChange(index);
+        }
+      },
+      // S'assurer que le menu se ferme après sélection
+      onCanceled: () {},
+      itemBuilder: (BuildContext context) {
+        return List.generate(baskets.length, (index) {
+          final basket = baskets[index];
+          final label = basket['label']?.toString() ?? 'Wishlist';
+          final isPdf = label.toLowerCase().contains('.pdf');
+          final isLast = index == baskets.length - 1;
+          
+          return PopupMenuItem<int>(
+            value: index,
+            padding: EdgeInsets.zero,
+            // Permettre les gestes du Dismissible en ne bloquant pas les interactions
+            enabled: true,
+            child: SizedBox(
+              width: double.infinity, // Prendre toute la largeur disponible
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _BasketListItemWithSwipe(
+                    basket: basket,
+                    index: index,
+                    isPdf: isPdf,
+                    isSelected: _selectedBasketIndex == index,
+                    isMobile: isMobile,
+                    onTap: () {
+                      // Le clic est géré par InkWell dans PopupMenuItem
+                    },
+                    onDelete: isPdf ? () async {
+                      // Fermer le menu de manière sûre
+                      if (context.mounted) {
+                        Navigator.of(context, rootNavigator: false).pop();
+                      }
+                      // Attendre un peu pour que le menu se ferme
+                      await Future.delayed(const Duration(milliseconds: 100));
+                      if (mounted) {
+                        await _deleteBasketPdf(basket);
+                      }
+                    } : null,
+                  ),
+                  if (!isLast)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Colors.grey[200],
+                      indent: 16,
+                      endIndent: 16,
+                    ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+          // Détecter quand le menu s'ouvre pour afficher le message
+          onOpened: () {
+            // Afficher le message d'alerte à chaque fois sur mobile, s'il y a des PDF
+            if (isMobile && hasPdfBaskets && mounted) {
+              // Attendre un peu pour que le menu soit complètement ouvert
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (mounted) {
+                  _showSwipeHintMessage();
+                }
+              });
+            }
+          },
+        );
+      },
+    );
+  }
+  
+  /// Afficher le message d'alerte pour indiquer qu'on peut swiper pour supprimer
+  void _showSwipeHintMessage() {
+    if (!mounted) return;
+    
+    // Retirer le message précédent s'il existe
+    if (_currentSwipeHintOverlay != null) {
+      _currentSwipeHintOverlay!.remove();
+      _currentSwipeHintOverlay = null;
+    }
+    
+    // Utiliser un OverlayEntry pour positionner le message en bas à droite
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 80, // Au-dessus de la barre de navigation
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Builder(
+            builder: (builderContext) {
+              final translationService = Provider.of<TranslationService>(builderContext, listen: true);
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF17A2B8), // Vert info
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.swipe_left,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        translationService.translate('SWIPE_TO_DELETE_HINT'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    
+    overlay.insert(overlayEntry);
+    _currentSwipeHintOverlay = overlayEntry;
+    
+    // Retirer le message après 4 secondes
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _currentSwipeHintOverlay == overlayEntry) {
+        overlayEntry.remove();
+        _currentSwipeHintOverlay = null;
+      }
+    });
+  }
+
+  /// Supprimer un panier PDF
+  Future<void> _deleteBasketPdf(Map<String, dynamic> basket) async {
+    final iBasket = basket['iBasket']?.toString() ?? '';
+    if (iBasket.isEmpty) {
+      _showErrorDialog(
+        _translationService.translate('ERROR') ?? 'Erreur',
+        _translationService.translate('WISHLIST_ERROR_INVALID_BASKET') ?? 'Panier invalide',
+      );
+      return;
+    }
+    
+    // Confirmation avant suppression
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            _translationService.translate('DELETE') ?? 'Supprimer',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            _translationService.translate('WISHLIST_DELETE_PDF_CONFIRM') ?? 
+            'Êtes-vous sûr de vouloir supprimer ce projet PDF ?',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                _translationService.translate('CANCEL') ?? 'Annuler',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[600],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(_translationService.translate('DELETE') ?? 'Supprimer'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (confirmed != true) return;
+    
+    try {
+      final result = await _apiService.deleteBasketPdf(iBasket: iBasket);
+      
+      if (result != null && result['success'] == true) {
+        // Recharger la liste des baskets
+        await _loadBaskets();
+        
+        // Afficher un message de succès
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _translationService.translate('WISHLIST_PDF_DELETED') ?? 
+                'Projet PDF supprimé avec succès',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        _showErrorDialog(
+          _translationService.translate('ERROR') ?? 'Erreur',
+          result?['message'] ?? result?['error'] ?? 
+          (_translationService.translate('WISHLIST_ERROR_DELETE_PDF') ?? 'Erreur lors de la suppression'),
+        );
+      }
+    } catch (e) {
+      print('❌ Erreur suppression PDF: $e');
+      _showErrorDialog(
+        _translationService.translate('ERROR') ?? 'Erreur',
+        _translationService.translate('WISHLIST_ERROR_DELETE_PDF') ?? 'Erreur lors de la suppression du projet PDF',
+      );
+    }
+  }
+
   /// Partage/Téléchargement du projet PDF (comme SNAL: GET /projet-download)
   Future<void> _shareProjetPdf() async {
     try {
@@ -3213,7 +4099,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       if (articles.isEmpty) {
         print('❌ Impossible de partager: aucun article dans le panier');
-        _showErrorDialog('Panier vide', 'Ajoutez au moins un article avant de générer le PDF.');
+        _showErrorDialog(_translationService.translate('WISHLIST_Msg18'), _translationService.translate('ALERT_PDF'));
         return;
       }
       
@@ -5455,6 +6341,63 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
   /// Initialiser les pays disponibles selon ceux sélectionnés dans localStorage
   Future<void> _initializeAvailableCountries({bool useSetState = false}) async {
     try {
+      // ✅ CORRECTION: Mettre à jour _currentArticle depuis widget.articleNotifier AVANT de construire les pays
+      // Cela garantit que les prix des nouveaux pays ajoutés sont disponibles
+      try {
+        _currentArticle = Map<String, dynamic>.from(widget.articleNotifier.value);
+        print('🔄 _initializeAvailableCountries - _currentArticle mis à jour depuis articleNotifier');
+        
+        // ✅ Debug: Afficher tous les prix disponibles dans _currentArticle
+        final allCountryKeys = _currentArticle.keys.where((k) => 
+          k.length == 2 && 
+          k.toUpperCase() == k && 
+          RegExp(r'^[A-Z]{2}$').hasMatch(k)
+        ).toList();
+        print('📦 Tous les prix dans _currentArticle (initialisation):');
+        for (final key in allCountryKeys) {
+          print('   💰 $key: ${_currentArticle[key]}');
+        }
+        
+        // ✅ CORRECTION CRITIQUE: Si des prix sont manquants dans _currentArticle,
+        // cela signifie que le notifier n'a pas été mis à jour avec les nouveaux prix.
+        // Dans ce cas, on doit forcer la mise à jour depuis widget.articleNotifier.value
+        // qui pourrait avoir été mis à jour par syncListener même si sourceNotifier est disposé
+        final sCodeArticleCrypt = _currentArticle['sCodeArticleCrypt']?.toString() ?? '';
+        if (sCodeArticleCrypt.isNotEmpty) {
+          // Récupérer les pays sélectionnés pour vérifier les prix manquants
+          final selectedCountries = await LocalStorageService.getSelectedCountries();
+          final selectedCodes = selectedCountries.map((c) => c.toUpperCase()).toSet();
+          final missingPrices = <String>[];
+          for (final countryCode in selectedCodes) {
+            if (!_currentArticle.containsKey(countryCode) || 
+                _currentArticle[countryCode] == null ||
+                _currentArticle[countryCode].toString().trim().isEmpty) {
+              missingPrices.add(countryCode);
+            }
+          }
+          
+          if (missingPrices.isNotEmpty) {
+            print('⚠️ Prix manquants détectés dans _currentArticle pour: $missingPrices');
+            print('   🔍 Tentative de récupération depuis widget.articleNotifier.value...');
+            try {
+              final notifierValue = widget.articleNotifier.value;
+              for (final countryCode in missingPrices) {
+                if (notifierValue.containsKey(countryCode) && 
+                    notifierValue[countryCode] != null &&
+                    notifierValue[countryCode].toString().trim().isNotEmpty) {
+                  _currentArticle[countryCode] = notifierValue[countryCode];
+                  print('   ✅ Prix $countryCode récupéré depuis widget.articleNotifier.value: ${notifierValue[countryCode]}');
+                }
+              }
+            } catch (e) {
+              print('   ⚠️ Erreur lors de la récupération depuis widget.articleNotifier.value: $e');
+            }
+          }
+        }
+      } catch (e) {
+        print('⚠️ Impossible de mettre à jour _currentArticle: $e');
+      }
+      
       // Récupérer les pays sélectionnés depuis localStorage
       final selectedCountries = await LocalStorageService.getSelectedCountries();
       final selectedCodes = selectedCountries.map((c) => c.toUpperCase()).toSet();
@@ -5471,21 +6414,25 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
         }
       }
       
-      // ✅ Filtrer les pays sélectionnés et construire la liste
+      // ✅ CORRECTION CRITIQUE: Construire TOUJOURS la liste complète des pays sélectionnés
+      // Cela garantit que tous les pays sélectionnés sont affichés, même ceux qui viennent d'être ajoutés
       final filteredCountries = <Map<String, dynamic>>[];
       final processedCodes = <String>{};
       
-      // D'abord, ajouter les pays sélectionnés qui sont dans _baseCountries
+      // ✅ Étape 1: Ajouter les pays sélectionnés qui sont dans _baseCountries (avec leurs prix)
       for (final baseCountry in _baseCountries) {
         final code = baseCountry['code']?.toString().toUpperCase() ?? '';
         if (code.isNotEmpty && selectedCodes.contains(code)) {
-          filteredCountries.add(_buildCountryDetails(code));
+          // ✅ _currentArticle a été mis à jour, donc _buildCountryDetails peut récupérer les prix
+          final countryDetails = _buildCountryDetails(code);
+          filteredCountries.add(countryDetails);
           processedCodes.add(code);
+          print('✅ Pays ajouté depuis _baseCountries (init): $code - prix: ${countryDetails['price']}');
         }
       }
       
-      // ✅ Ensuite, ajouter les pays sélectionnés qui ne sont PAS dans _baseCountries
-      // Ces pays ont été sélectionnés dans CountryManagementModal mais n'ont pas de prix pour cet article
+      // ✅ Étape 2: Ajouter les pays sélectionnés qui ne sont PAS dans _baseCountries
+      // Ces pays ont été sélectionnés dans CountryManagementModal et ont maintenant des prix dans _currentArticle
       // On doit les récupérer depuis widget.allAvailableCountries pour avoir leurs infos (nom, drapeau)
       final allAvailableMap = <String, Map<String, dynamic>>{};
       for (final country in widget.allAvailableCountries) {
@@ -5495,29 +6442,48 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
         }
       }
       
+      // ✅ CORRECTION CRITIQUE: Parcourir TOUS les pays sélectionnés
       for (final selectedCode in selectedCodes) {
         if (!processedCodes.contains(selectedCode)) {
-          // Ce pays est sélectionné mais n'est pas dans _baseCountries
+          // Ce pays est sélectionné mais n'a pas encore été ajouté
           // Récupérer ses infos depuis widget.allAvailableCountries
           final countryInfo = allAvailableMap[selectedCode];
           if (countryInfo != null) {
             // Construire les détails du pays avec les infos disponibles
-            // ✅ _buildCountryDetails récupère maintenant automatiquement le prix depuis l'article original
+            // ✅ _buildCountryDetails récupère automatiquement le prix depuis _currentArticle (mis à jour)
             // On passe seulement les infos de base (nom, drapeau) et laisse _buildCountryDetails gérer le prix
             final countryDetails = _buildCountryDetails(
               selectedCode,
               nameOverride: countryInfo['name']?.toString(),
               flagOverride: countryInfo['flag']?.toString(),
-              // ✅ Ne pas passer priceOverride, laisser _buildCountryDetails récupérer depuis l'article original
+              // ✅ Ne pas passer priceOverride, laisser _buildCountryDetails récupérer depuis _currentArticle
             );
             
-            print('💰 Pays $selectedCode - isAvailable: ${countryDetails['isAvailable']}, price: ${countryDetails['price']}');
+            print('💰 Pays $selectedCode ajouté (init) - isAvailable: ${countryDetails['isAvailable']}, price: ${countryDetails['price']}');
+            print('   📦 Prix dans _currentArticle: ${_currentArticle[selectedCode]}');
             filteredCountries.add(countryDetails);
             processedCodes.add(selectedCode);
-            print('✅ Ajout du pays sélectionné (non présent dans _baseCountries): $selectedCode');
+            print('✅ Ajout du pays sélectionné (init): $selectedCode');
           } else {
-            print('⚠️ Pays sélectionné non trouvé dans allAvailableCountries: $selectedCode');
+            // ✅ Fallback: Si le pays n'est pas dans allAvailableCountries, créer un pays basique
+            print('⚠️ Pays $selectedCode non trouvé dans allAvailableCountries (init), création d\'un pays basique');
+            final countryDetails = _buildCountryDetails(selectedCode);
+            filteredCountries.add(countryDetails);
+            processedCodes.add(selectedCode);
+            print('✅ Pays basique créé (init): $selectedCode - prix: ${countryDetails['price']}');
           }
+        }
+      }
+      
+      // ✅ CORRECTION CRITIQUE: Vérifier qu'on a bien tous les pays sélectionnés
+      final missingCountries = selectedCodes.difference(processedCodes);
+      if (missingCountries.isNotEmpty) {
+        print('⚠️ Pays sélectionnés manquants dans la liste finale (init): $missingCountries');
+        // Essayer de les ajouter quand même
+        for (final missingCode in missingCountries) {
+          final countryDetails = _buildCountryDetails(missingCode);
+          filteredCountries.add(countryDetails);
+          print('✅ Pays manquant ajouté (init): $missingCode - prix: ${countryDetails['price']}');
         }
       }
       
@@ -5536,6 +6502,13 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
       }
       
       print('📊 Pays disponibles après initialisation: ${_availableCountries.map((c) => c['code']).toList()}');
+      print('📊 Nombre de pays: ${_availableCountries.length}');
+      for (final country in _availableCountries) {
+        final code = country['code']?.toString() ?? '';
+        final price = country['price']?.toString() ?? 'N/A';
+        final isAvailable = country['isAvailable'] ?? false;
+        print('   💰 $code: $price (disponible: $isAvailable)');
+      }
     } catch (e) {
       print('❌ Erreur lors de l\'initialisation des pays disponibles: $e');
       // Fallback sur tous les pays de base
@@ -5554,19 +6527,34 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     // ✅ Vérifier le flag de dispose en premier
     if (_isDisposed || !mounted) return;
     
-    // Vérifier que le ValueNotifier n'est pas disposé avant de l'utiliser
-    Map<String, dynamic> newArticle;
+    print('🔄 ========== _onArticleNotifierChanged DÉCLENCHÉ ==========');
+    
+    // ✅ CORRECTION CRITIQUE: Récupérer IMMÉDIATEMENT la valeur la plus récente depuis articleNotifier.value
+    // Ne pas utiliser newArticle qui pourrait être une ancienne référence
+    Map<String, dynamic> latestArticle;
     try {
-      newArticle = widget.articleNotifier.value;
+      latestArticle = widget.articleNotifier.value;
+      print('✅ Article récupéré depuis articleNotifier.value');
       
-      // ✅ Debug: Vérifier les prix disponibles dans newArticle
-      print('🔄 _onArticleNotifierChanged - Clés de pays dans newArticle: ${newArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
-      print('🔄 _onArticleNotifierChanged - Exemple ES: ${newArticle['ES']}, PT: ${newArticle['PT']}, DE: ${newArticle['DE']}');
+      // ✅ Debug: Afficher TOUS les prix disponibles
+      final allCountryKeys = latestArticle.keys.where((k) => 
+        k.length == 2 && 
+        k.toUpperCase() == k && 
+        RegExp(r'^[A-Z]{2}$').hasMatch(k)
+      ).toList();
+      print('📦 TOUS les prix dans articleNotifier.value:');
+      for (final key in allCountryKeys) {
+        print('   💰 $key: ${latestArticle[key]}');
+      }
     } catch (e) {
-      // Le ValueNotifier a été disposé, ne rien faire
-      print('⚠️ ValueNotifier disposé, arrêt de la mise à jour');
+      print('⚠️ ValueNotifier disposé, arrêt de la mise à jour: $e');
       return;
     }
+    
+    // ✅ CORRECTION CRITIQUE: Mettre à jour _currentArticle IMMÉDIATEMENT avec la valeur la plus récente
+    // Cela garantit que _buildCountryDetails() peut toujours trouver les prix
+    _currentArticle = Map<String, dynamic>.from(latestArticle);
+    print('✅ _currentArticle mis à jour depuis articleNotifier.value');
     
     // Récupérer les pays sélectionnés depuis localStorage pour reconstruire la liste
     final selectedCountries = await LocalStorageService.getSelectedCountries();
@@ -5574,49 +6562,16 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     // ✅ Vérifier que le widget est toujours monté et non disposé après l'opération async
     if (_isDisposed || !mounted) return;
     
-    // ✅ Vérifier à nouveau que le ValueNotifier n'est pas disposé
-    try {
-      // Vérifier que le ValueNotifier est encore valide
-      widget.articleNotifier.value;
-    } catch (e) {
-      // Le ValueNotifier a été disposé pendant l'opération async
-      print('⚠️ ValueNotifier disposé après opération async, arrêt de la mise à jour');
-      return;
-    }
-    
     final selectedCodes = selectedCountries.map((c) => c.toUpperCase()).toSet();
     
-    print('🔄 _onArticleNotifierChanged - Pays sélectionnés: $selectedCodes');
-    print('📋 Pays de base disponibles: ${_baseCountries.map((c) => c['code']).toList()}');
-    
-    // Vérifier si les pays disponibles ont changé
-    final currentAvailableCodes = _availableCountries
-        .map((c) => c['code']?.toString().toUpperCase() ?? '')
-        .where((code) => code.isNotEmpty)
-        .toSet();
-    
-    final baseCodes = _baseCountries
-        .map((c) => c['code']?.toString().toUpperCase() ?? '')
-        .where((code) => code.isNotEmpty)
-        .toSet();
-    
-    final newAvailableCodes = selectedCodes.intersection(baseCodes);
-    
-    // Vérifier si la liste a changé
-    final hasChanged = !_setsEqual(currentAvailableCodes, newAvailableCodes);
-    
-    print('🔍 Comparaison: ancien=$currentAvailableCodes, nouveau=$newAvailableCodes, changé=$hasChanged');
+    print('🔄 Pays sélectionnés: $selectedCodes');
     
     // ✅ Vérifier une dernière fois que le widget est monté et non disposé avant setState
     if (_isDisposed || !mounted) return;
     
-    // ✅ Mettre à jour _currentArticle AVANT setState pour que _buildCountryDetails puisse l'utiliser
-    _currentArticle = Map<String, dynamic>.from(newArticle);
-    
-    // ✅ Debug: Vérifier les clés disponibles dans _currentArticle
-    print('📦 _currentArticle clés: ${_currentArticle.keys.where((k) => k.length == 2 && k.toUpperCase() == k).toList()}');
-    print('📦 _currentArticle contient ES: ${_currentArticle.containsKey('ES')}, valeur: ${_currentArticle['ES']}');
-    print('📦 _currentArticle contient PT: ${_currentArticle.containsKey('PT')}, valeur: ${_currentArticle['PT']}');
+    // ✅ CORRECTION CRITIQUE: Toujours reconstruire la liste complète
+    // Car les prix peuvent avoir changé même si les pays sélectionnés sont les mêmes
+    // De plus, de nouveaux pays peuvent avoir été ajoutés dans CountryManagementModal
     
     setState(() {
       // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
@@ -5632,24 +6587,28 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
         _selectedCountry = newSelectedCountry;
       }
 
-      // Reconstruire la liste en préservant l'ordre original des pays de base
-      // Parcourir _baseCountries dans l'ordre et ne garder que les pays sélectionnés
+      // ✅ CORRECTION CRITIQUE: Reconstruire TOUJOURS la liste complète des pays sélectionnés
+      // Cela garantit que les nouveaux pays ajoutés dans CountryManagementModal sont immédiatement visibles
       final orderedAvailableCountries = <Map<String, dynamic>>[];
       final processedCodes = <String>{};
       
-      // D'abord, ajouter les pays sélectionnés qui sont dans _baseCountries
+      // ✅ Étape 1: Ajouter les pays sélectionnés qui sont dans _baseCountries (avec leurs prix)
+      // Ces pays ont déjà des prix dans _currentArticle
       for (final baseCountry in _baseCountries) {
         final code = baseCountry['code']?.toString().toUpperCase() ?? '';
         if (code.isNotEmpty && selectedCodes.contains(code)) {
           // Le pays est sélectionné, l'ajouter dans l'ordre original
-          // ✅ Utiliser _currentArticle qui vient d'être mis à jour (hors setState)
-          orderedAvailableCountries.add(_buildCountryDetails(code));
+          // ✅ _currentArticle a été mis à jour AVANT setState, donc _buildCountryDetails peut récupérer les prix
+          final countryDetails = _buildCountryDetails(code);
+          orderedAvailableCountries.add(countryDetails);
           processedCodes.add(code);
+          print('✅ Pays ajouté depuis _baseCountries: $code - prix: ${countryDetails['price']}, disponible: ${countryDetails['isAvailable']}');
         }
       }
       
-      // ✅ Ensuite, ajouter les pays sélectionnés qui ne sont PAS dans _baseCountries
-      // Ces pays ont été sélectionnés dans CountryManagementModal mais n'ont pas de prix pour cet article
+      // ✅ Étape 2: Ajouter les pays sélectionnés qui ne sont PAS dans _baseCountries
+      // Ces pays ont été ajoutés dans CountryManagementModal et ont maintenant des prix dans _currentArticle
+      // On doit les récupérer depuis widget.allAvailableCountries pour avoir leurs infos (nom, drapeau)
       final allAvailableMap = <String, Map<String, dynamic>>{};
       for (final country in widget.allAvailableCountries) {
         final code = country['code']?.toString().toUpperCase() ?? '';
@@ -5658,38 +6617,67 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
         }
       }
       
+      // ✅ CORRECTION CRITIQUE: Parcourir TOUS les pays sélectionnés, pas seulement ceux qui ne sont pas dans _baseCountries
+      // Car un pays peut être dans _baseCountries mais avoir un nouveau prix après modification
       for (final selectedCode in selectedCodes) {
         if (!processedCodes.contains(selectedCode)) {
-          // Ce pays est sélectionné mais n'est pas dans _baseCountries
+          // Ce pays est sélectionné mais n'a pas encore été ajouté
           // Récupérer ses infos depuis widget.allAvailableCountries
           final countryInfo = allAvailableMap[selectedCode];
           if (countryInfo != null) {
             // Construire les détails du pays avec les infos disponibles
-            // ✅ _buildCountryDetails récupère maintenant automatiquement le prix depuis l'article original
+            // ✅ _buildCountryDetails récupère automatiquement le prix depuis _currentArticle (mis à jour AVANT setState)
             // On passe seulement les infos de base (nom, drapeau) et laisse _buildCountryDetails gérer le prix
             final countryDetails = _buildCountryDetails(
               selectedCode,
               nameOverride: countryInfo['name']?.toString(),
               flagOverride: countryInfo['flag']?.toString(),
-              // ✅ Ne pas passer priceOverride, laisser _buildCountryDetails récupérer depuis l'article original
+              // ✅ Ne pas passer priceOverride, laisser _buildCountryDetails récupérer depuis _currentArticle
             );
             
-            print('💰 Pays $selectedCode - isAvailable: ${countryDetails['isAvailable']}, price: ${countryDetails['price']}');
+            print('💰 Pays $selectedCode ajouté - isAvailable: ${countryDetails['isAvailable']}, price: ${countryDetails['price']}');
+            print('   📦 Prix dans _currentArticle: ${_currentArticle[selectedCode]}');
             orderedAvailableCountries.add(countryDetails);
             processedCodes.add(selectedCode);
-            print('✅ Ajout du pays sélectionné (non présent dans _baseCountries): $selectedCode');
+            print('✅ Ajout du pays sélectionné: $selectedCode');
+          } else {
+            // ✅ Fallback: Si le pays n'est pas dans allAvailableCountries, créer un pays basique
+            // Cela peut arriver si un nouveau pays a été ajouté mais n'est pas encore dans allAvailableCountries
+            print('⚠️ Pays $selectedCode non trouvé dans allAvailableCountries, création d\'un pays basique');
+            final countryDetails = _buildCountryDetails(selectedCode);
+            orderedAvailableCountries.add(countryDetails);
+            processedCodes.add(selectedCode);
+            print('✅ Pays basique créé: $selectedCode - prix: ${countryDetails['price']}');
           }
         }
       }
       
-      if (orderedAvailableCountries.isNotEmpty) {
-        _availableCountries = orderedAvailableCountries;
-      } else {
-        // Fallback sur les pays de base si aucun pays sélectionné
-        _availableCountries = _baseCountries.map((c) => Map<String, dynamic>.from(c)).toList();
+      // ✅ CORRECTION CRITIQUE: Vérifier qu'on a bien tous les pays sélectionnés
+      final missingCountries = selectedCodes.difference(processedCodes);
+      if (missingCountries.isNotEmpty) {
+        print('⚠️ Pays sélectionnés manquants dans la liste finale: $missingCountries');
+        // Essayer de les ajouter quand même
+        for (final missingCode in missingCountries) {
+          final countryDetails = _buildCountryDetails(missingCode);
+          orderedAvailableCountries.add(countryDetails);
+          print('✅ Pays manquant ajouté: $missingCode - prix: ${countryDetails['price']}');
+        }
       }
       
+      // ✅ Toujours mettre à jour _availableCountries, même si la liste est vide
+      // Cela garantit que l'UI se met à jour avec les nouveaux pays
+      _availableCountries = orderedAvailableCountries.isNotEmpty 
+          ? orderedAvailableCountries 
+          : _baseCountries.map((c) => Map<String, dynamic>.from(c)).toList();
+      
       print('📊 Pays disponibles après mise à jour: ${_availableCountries.map((c) => c['code']).toList()}');
+      print('📊 Nombre de pays: ${_availableCountries.length}');
+      for (final country in _availableCountries) {
+        final code = country['code']?.toString() ?? '';
+        final price = country['price']?.toString() ?? 'N/A';
+        final isAvailable = country['isAvailable'] ?? false;
+        print('   💰 $code: $price (disponible: $isAvailable)');
+      }
     });
   }
 
@@ -5763,21 +6751,48 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
     String flag = flagOverride?.toString() ?? existing?['flag']?.toString() ?? '';
     flag = _normalizeFlagUrl(flag);
 
-    // ✅ Logique comme SNAL: récupérer directement depuis l'article (item[countryCode])
-    // Priorité: 1) prix direct depuis l'article original (widget.articleNotifier.value), 2) _currentArticle, 3) priceOverride, 4) existing
+    // ✅ CORRECTION CRITIQUE: Toujours récupérer depuis articleNotifier.value en premier (le plus récent)
+    // Priorité: 1) articleNotifier.value (le plus récent), 2) _currentArticle, 3) priceOverride, 4) existing
     String rawPrice = '';
     
-    // ✅ D'abord, essayer de récupérer depuis l'article original (comme SNAL: item[countryCode])
-    // Cela garantit qu'on récupère le prix même si _currentArticle n'est pas à jour
+    // ✅ D'abord, essayer de récupérer depuis articleNotifier.value (le plus récent)
+    // Cela garantit qu'on récupère toujours le prix le plus à jour
     Map<String, dynamic>? originalArticle;
     try {
       originalArticle = widget.articleNotifier.value;
+      print('✅ Article original récupéré depuis articleNotifier.value');
     } catch (e) {
       print('⚠️ Impossible de récupérer l\'article original: $e');
+      // Fallback sur _currentArticle
+      originalArticle = _currentArticle;
     }
     
     // ✅ Debug: Vérifier toutes les clés possibles
     print('🔍 _buildCountryDetails pour $code (normalized: $normalized) - Recherche du prix...');
+    
+    // ✅ CORRECTION: Afficher TOUTES les clés de pays disponibles AVANT de chercher
+    if (originalArticle != null) {
+      final allCountryKeys = originalArticle.keys.where((k) => 
+        k.length == 2 && 
+        k.toUpperCase() == k && 
+        RegExp(r'^[A-Z]{2}$').hasMatch(k)
+      ).toList();
+      print('   📋 TOUTES les clés de pays dans article original: $allCountryKeys');
+      for (final key in allCountryKeys) {
+        print('      💰 $key: ${originalArticle[key]} (type: ${originalArticle[key].runtimeType})');
+      }
+    }
+    
+    // ✅ Debug: Afficher aussi les clés dans _currentArticle
+    final allCurrentKeys = _currentArticle.keys.where((k) => 
+      k.length == 2 && 
+      k.toUpperCase() == k && 
+      RegExp(r'^[A-Z]{2}$').hasMatch(k)
+    ).toList();
+    print('   📋 TOUTES les clés de pays dans _currentArticle: $allCurrentKeys');
+    for (final key in allCurrentKeys) {
+      print('      💰 $key: ${_currentArticle[key]} (type: ${_currentArticle[key].runtimeType})');
+    }
     
     // ✅ Le backend stocke les prix avec des codes ISO directement (FR, DE, NL, PT, etc.)
     // Comme SNAL: item[countryCode] où countryCode est le code ISO
@@ -5810,8 +6825,24 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
           k.toUpperCase() == k && 
           RegExp(r'^[A-Z]{2}$').hasMatch(k)
         ).toList();
-        print('   ⚠️ Prix non trouvé pour $code (essayé: $normalized, $code, ${code.toLowerCase()})');
+        print('   ❌ Prix NON trouvé pour $code (essayé: $normalized, $code, ${code.toLowerCase()})');
         print('   📋 Clés de pays disponibles dans l\'article original: $countryKeys');
+        if (countryKeys.isNotEmpty) {
+          print('   ⚠️ Le prix pour $code n\'existe PAS dans l\'article original');
+          // ✅ CORRECTION: Si le prix n'est pas dans originalArticle, vérifier _currentArticle immédiatement
+          // au lieu d'attendre la section suivante
+          if (_currentArticle.containsKey(normalized)) {
+            final priceValue = _currentArticle[normalized];
+            rawPrice = priceValue?.toString() ?? '';
+            keyExistsInOriginal = true; // On marque comme trouvé même si c'est dans _currentArticle
+            print('   ✅ Prix trouvé dans _currentArticle avec normalized ($normalized): valeur="$priceValue", rawPrice="$rawPrice"');
+          } else if (_currentArticle.containsKey(code)) {
+            final priceValue = _currentArticle[code];
+            rawPrice = priceValue?.toString() ?? '';
+            keyExistsInOriginal = true;
+            print('   ✅ Prix trouvé dans _currentArticle avec code ($code): valeur="$priceValue", rawPrice="$rawPrice"');
+          }
+        }
       }
     }
     
@@ -5957,29 +6988,84 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
       // Attendre que la sauvegarde soit terminée (la sauvegarde prend du temps)
       await Future.delayed(const Duration(milliseconds: 500));
       
-      // ✅ Réinitialiser les pays disponibles selon ceux sélectionnés dans localStorage
+      // ✅ CORRECTION CRITIQUE: Forcer la reconstruction complète après CountryManagementModal
+      // Attendre un peu plus longtemps pour que le notifier soit complètement mis à jour
+      await Future.delayed(const Duration(milliseconds: 300));
+      
       if (!_isDisposed && mounted) {
         try {
-          print('🔄 Réinitialisation des pays disponibles après sélection/désélection dans CountryManagementModal');
+          print('🔄 ========== RECONSTRUCTION APRÈS CountryManagementModal ==========');
+          
+          // ✅ Étape 1: Essayer de récupérer depuis articleNotifier.value
+          Map<String, dynamic> latestArticle;
+          try {
+            latestArticle = widget.articleNotifier.value;
+            print('✅ Article récupéré depuis articleNotifier.value');
+          } catch (e) {
+            print('⚠️ Notifier disposé, utilisation de _currentArticle...');
+            // ✅ CORRECTION CRITIQUE: Si le notifier est disposé, utiliser _currentArticle
+            // qui devrait contenir les prix les plus récents depuis l'initialisation
+            latestArticle = Map<String, dynamic>.from(_currentArticle);
+            print('✅ Article récupéré depuis _currentArticle (notifier disposé)');
+            
+            // ✅ Debug: Afficher les prix disponibles dans _currentArticle
+            final allCountryKeys = latestArticle.keys.where((k) => 
+              k.length == 2 && 
+              k.toUpperCase() == k && 
+              RegExp(r'^[A-Z]{2}$').hasMatch(k)
+            ).toList();
+            print('   📦 Clés de pays dans _currentArticle: $allCountryKeys');
+            for (final key in allCountryKeys) {
+              print('      💰 $key: ${latestArticle[key]}');
+            }
+            
+            // ✅ Si _currentArticle ne contient pas tous les prix, ils seront récupérés
+            // lors de la reconstruction de la liste via _buildCountryDetails()
+            // qui cherchera dans articleNotifier.value (qui peut être disposé) puis _currentArticle
+          }
+          
+          // ✅ Mettre à jour _currentArticle avec les prix les plus récents
+          _currentArticle = Map<String, dynamic>.from(latestArticle);
+          print('✅ _currentArticle mis à jour');
+          
+          // ✅ Debug: Afficher TOUS les prix disponibles
+          final allCountryKeys = _currentArticle.keys.where((k) => 
+            k.length == 2 && 
+            k.toUpperCase() == k && 
+            RegExp(r'^[A-Z]{2}$').hasMatch(k)
+          ).toList();
+          print('📦 TOUS les prix dans _currentArticle:');
+          for (final key in allCountryKeys) {
+            print('   💰 $key: ${_currentArticle[key]}');
+          }
+          
+          // ✅ Étape 2: Réinitialiser les pays disponibles
+          print('🔄 Réinitialisation des pays disponibles...');
           await _initializeAvailableCountries(useSetState: true);
           
-          // Forcer la mise à jour en déclenchant manuellement _onArticleNotifierChanged
-          final _ = widget.articleNotifier.value;
+          // ✅ Étape 3: Forcer la reconstruction via _onArticleNotifierChanged
+          print('🔄 Déclenchement de _onArticleNotifierChanged...');
           _onArticleNotifierChanged();
           
-          // Forcer une deuxième mise à jour après un court délai pour s'assurer que localStorage est synchronisé
-          await Future.delayed(const Duration(milliseconds: 200));
+          // ✅ Étape 4: Attendre un peu et forcer une deuxième reconstruction pour être sûr
+          await Future.delayed(const Duration(milliseconds: 300));
           if (!_isDisposed && mounted) {
             try {
-              final __ = widget.articleNotifier.value;
+              // Mettre à jour _currentArticle une dernière fois
+              final finalArticle = widget.articleNotifier.value;
+              _currentArticle = Map<String, dynamic>.from(finalArticle);
+              print('✅ _currentArticle mis à jour une dernière fois');
+              
+              // Reconstruire la liste
               await _initializeAvailableCountries(useSetState: true);
               _onArticleNotifierChanged();
+              print('✅ Reconstruction finale terminée');
             } catch (e) {
-              print('⚠️ ValueNotifier disposé lors de la deuxième mise à jour: $e');
+              print('⚠️ Erreur lors de la reconstruction finale: $e');
             }
           }
         } catch (e) {
-          print('⚠️ Erreur lors de la réinitialisation des pays: $e');
+          print('⚠️ Erreur lors de la reconstruction après CountryManagementModal: $e');
         }
       }
     } catch (e) {
@@ -6147,7 +7233,7 @@ class _CountrySidebarModalState extends State<_CountrySidebarModal> with SingleT
 
   @override
   Widget build(BuildContext context) {
-    final translationService = Provider.of<TranslationService>(context, listen: false);
+    final translationService = Provider.of<TranslationService>(context, listen: true);
     final priceByCountryLabel = translationService.translate('PRICE_BY_COUNTRY');
     final manageCountriesLabel = translationService.translate('ADD_REMOVE_COUNTRY');
     final closeLabel = translationService.translate('FRONTPAGE_Msg101');
@@ -6908,7 +7994,7 @@ class _EmbeddedCountryManagementPanelState extends State<_EmbeddedCountryManagem
   
   @override
   Widget build(BuildContext context) {
-    final translationService = Provider.of<TranslationService>(context, listen: false);
+    final translationService = Provider.of<TranslationService>(context, listen: true);
     final availableCountriesLabel = translationService.translate('WISHLIST_Msg29');
     final availableCountriesHint = translationService.translate('WISHLIST_COUNTRY_MODAL_HELP');
     final cancelLabel = translationService.translate('WISHLIST_Msg30');
@@ -7155,25 +8241,9 @@ class _CountryManagementModalState extends State<_CountryManagementModal> {
     try {
       final result = await widget.onSave(_selectedCountries);
       if (mounted) {
-        // Sauvegarder une référence au router avant de fermer les modals
-        final router = GoRouter.of(context);
-        
-        // Fermer tous les modals (CountryManagementModal et CountrySidebarModal parent)
-        // Utiliser rootNavigator pour fermer tous les modals
-        Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
-        
-        // Attendre un court délai pour que les modals se ferment complètement
-        await Future.delayed(const Duration(milliseconds: 200));
-        
-        // Rediriger vers wishlist_screen en utilisant la référence sauvegardée
-        // Utiliser SchedulerBinding pour s'assurer que la redirection se fait après la stabilisation
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          try {
-            router.go('/wishlist');
-          } catch (e) {
-            print('⚠️ Erreur lors de la redirection: $e');
-          }
-        });
+        // ✅ CORRECTION: Fermer seulement le CountryManagementModal
+        // Le CountrySidebarModal parent restera ouvert
+        Navigator.of(context).pop(result);
       }
     } finally {
       if (mounted) {
@@ -7184,7 +8254,7 @@ class _CountryManagementModalState extends State<_CountryManagementModal> {
 
   @override
   Widget build(BuildContext context) {
-    final translationService = Provider.of<TranslationService>(context, listen: false);
+    final translationService = Provider.of<TranslationService>(context, listen: true);
     final titleText = translationService.translate('WISHLIST_Msg28');
     final availableCountriesLabel = translationService.translate('WISHLIST_Msg29');
     final helperText = translationService.translate('WISHLIST_COUNTRY_MODAL_HELP');
@@ -7531,6 +8601,154 @@ class _BreathingButtonState extends State<_BreathingButton>
           ),
         );
       },
+    );
+  }
+}
+
+/// Widget pour un item de basket avec swipe pour révéler le bouton delete (pour les PDF)
+class _BasketListItemWithSwipe extends StatefulWidget {
+  final Map<String, dynamic> basket;
+  final int index;
+  final bool isPdf;
+  final bool isSelected;
+  final bool isMobile;
+  final VoidCallback onTap;
+  final VoidCallback? onDelete;
+
+  const _BasketListItemWithSwipe({
+    Key? key,
+    required this.basket,
+    required this.index,
+    required this.isPdf,
+    required this.isSelected,
+    required this.isMobile,
+    required this.onTap,
+    this.onDelete,
+  }) : super(key: key);
+
+  @override
+  State<_BasketListItemWithSwipe> createState() => _BasketListItemWithSwipeState();
+}
+
+class _BasketListItemWithSwipeState extends State<_BasketListItemWithSwipe> {
+  double _dragStartX = 0;
+  double _dragOffset = 0;
+  bool _isSwiping = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = widget.basket['label']?.toString() ?? 'Wishlist';
+    
+    // Si c'est un PDF et qu'on a un onDelete, utiliser un GestureDetector personnalisé pour le swipe
+    if (widget.isPdf && widget.onDelete != null) {
+      return GestureDetector(
+        onHorizontalDragStart: (details) {
+          _dragStartX = details.globalPosition.dx;
+          _dragOffset = 0;
+          _isSwiping = false;
+        },
+        onHorizontalDragUpdate: (details) {
+          final delta = details.globalPosition.dx - _dragStartX;
+          // Seulement si on swipe vers la gauche (négatif)
+          if (delta < 0) {
+            _dragOffset = delta.abs();
+            if (_dragOffset > 10) {
+              _isSwiping = true;
+              setState(() {});
+            }
+          }
+        },
+        onHorizontalDragEnd: (details) {
+          // Si le swipe est suffisant (plus de 100px), déclencher la suppression
+          if (_dragOffset > 100 && _isSwiping) {
+            widget.onDelete?.call();
+          }
+          _dragOffset = 0;
+          _isSwiping = false;
+          setState(() {});
+        },
+        // Le PopupMenuItem gère le clic via onSelected, pas besoin de onTap ici
+        child: Stack(
+          children: [
+            // Background delete qui apparaît lors du swipe (à droite)
+            if (_isSwiping && _dragOffset > 0)
+              Positioned.fill(
+                child: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
+                      begin: Alignment.centerRight,
+                      end: Alignment.centerLeft,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        Provider.of<TranslationService>(context, listen: false).translate('DELETE_SWIPE'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(
+                        Icons.delete_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // Contenu principal avec translation lors du swipe (vers la gauche)
+            Transform.translate(
+              offset: Offset(-_dragOffset.clamp(0.0, 200.0), 0),
+              child: _buildBasketItemContent(label),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Sinon, afficher l'item normalement
+    return _buildBasketItemContent(label);
+  }
+  
+  Widget _buildBasketItemContent(String label) {
+    // Le PopupMenuItem gère le clic automatiquement via onSelected
+    // On retourne juste le contenu visuel, sans InkWell qui pourrait bloquer le clic
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.isMobile ? 16 : 20,
+        vertical: widget.isMobile ? 14 : 16,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          // Texte du label (sans icône, sans sélection visuelle)
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: widget.isMobile ? 14 : 15,
+                color: const Color(0xFF212529),
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../services/route_persistence_service.dart';
+import '../services/translation_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -208,14 +210,24 @@ class _SplashScreenState extends State<SplashScreen>
                 const SizedBox(height: 40),
                 FadeTransition(
                   opacity: _fadeAnimation,
-                  child: Text(
-                    'Chargement en cours',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 17,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0.3,
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final translationService = Provider.of<TranslationService>(context, listen: true);
+                      final translatedText = translationService.translate('LOADING_IN_PROGRESS');
+                      // Fallback en français si la clé n'est pas trouvée
+                      final displayText = translatedText == 'LOADING_IN_PROGRESS' 
+                          ? 'Chargement en cours...' 
+                          : translatedText;
+                      return Text(
+                        displayText,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 17,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0.3,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],

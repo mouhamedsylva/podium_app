@@ -260,7 +260,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 ),
               ),
             ),
-      bottomNavigationBar: CustomBottomNavigationBar(),
+      bottomNavigationBar: CustomBottomNavigationBar(
+        currentIndex: 999, // ✅ Utiliser un index qui ne correspond à aucun onglet pour que l'icône home ne soit pas sélectionnée
+      ),
     );
   }
 

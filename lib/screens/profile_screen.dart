@@ -8,6 +8,7 @@ import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
 import '../services/translation_service.dart';
 import '../services/api_service.dart';
+import '../services/country_service.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../config/api_config.dart';
 
@@ -35,10 +36,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _cityController = TextEditingController();
   
   final _formKey = GlobalKey<FormState>();
+  
+  String _currentLanguage = 'FR';
+  
+  // ✅ Traductions locales pour le modal de sélection de pays principal
+  static const Map<String, Map<String, String>> _countrySelectionTranslations = {
+    'FR': {
+      'select_main_country': 'Sélectionner le pays principal',
+      'error_loading_countries': 'Erreur lors du chargement des pays',
+    },
+    'DE': {
+      'select_main_country': 'Hauptland auswählen',
+      'error_loading_countries': 'Fehler beim Laden der Länder',
+    },
+    'NL': {
+      'select_main_country': 'Selecteer het hoofdland',
+      'error_loading_countries': 'Fout bij het laden van landen',
+    },
+    'ES': {
+      'select_main_country': 'Seleccionar el país principal',
+      'error_loading_countries': 'Error al cargar los países',
+    },
+    'IT': {
+      'select_main_country': 'Seleziona il paese principale',
+      'error_loading_countries': 'Errore nel caricamento dei paesi',
+    },
+    'PT': {
+      'select_main_country': 'Selecionar o país principal',
+      'error_loading_countries': 'Erro ao carregar os países',
+    },
+    'EN': {
+      'select_main_country': 'Select main country',
+      'error_loading_countries': 'Error loading countries',
+    },
+  };
+  
+  /// Récupérer la traduction pour une clé
+  String _t(String key) {
+    final translations = _countrySelectionTranslations[_currentLanguage] ?? _countrySelectionTranslations['FR']!;
+    return translations[key] ?? key;
+  }
+  
+  /// Charger la langue actuelle depuis localStorage
+  Future<void> _loadLanguage() async {
+    try {
+      final profile = await LocalStorageService.getProfile();
+      if (profile != null && profile['sPaysLangue'] != null) {
+        final sPaysLangue = profile['sPaysLangue'].toString();
+        // Extraire la langue (ex: "FR/FR" -> "FR")
+        final lang = sPaysLangue.split('/').first.toUpperCase();
+        if (_countrySelectionTranslations.containsKey(lang)) {
+          setState(() {
+            _currentLanguage = lang;
+          });
+        }
+      }
+    } catch (e) {
+      print('⚠️ Erreur lors du chargement de la langue: $e');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadLanguage();
     _loadProfile();
   }
 
@@ -82,23 +143,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
 
-      final settingsService = SettingsService();
-      final selected = await settingsService.getSelectedCountry();
-      if (mounted) {
-        Map<String, dynamic>? updatedProfileForStorage;
-        setState(() {
-          _selectedCountry = selected;
-          if (selected != null) {
-            final langue = selected.sPaysLangue ?? '${selected.sPays}/fr';
-            updatedProfileForStorage = {
-              ...?_profile,
-              'sPaysLangue': langue,
-            };
-            _profile = updatedProfileForStorage;
+      // ✅ CORRECTION: Mettre à jour _selectedCountry depuis le sPaysLangue du profil
+      // plutôt que depuis SettingsService pour éviter qu'il revienne à France
+      final profileSPaysLangue = profile?['sPaysLangue']?.toString() ?? '';
+      if (profileSPaysLangue.isNotEmpty && mounted) {
+        try {
+          final countryService = CountryService();
+          await countryService.initialize();
+          
+          // Trouver le pays correspondant au sPaysLangue du profil
+          final countryCode = profileSPaysLangue.contains('/') 
+              ? profileSPaysLangue.split('/')[0] 
+              : profileSPaysLangue;
+          
+          final matchingCountry = countryService.getAllCountries().firstWhere(
+            (country) => country.sPaysLangue == profileSPaysLangue,
+            orElse: () => countryService.getAllCountries().firstWhere(
+              (country) => country.sPays == countryCode,
+              orElse: () => countryService.getAllCountries().first,
+            ),
+          );
+          
+          if (matchingCountry != null) {
+            setState(() {
+              _selectedCountry = matchingCountry;
+            });
+            // ✅ Mettre à jour aussi SettingsService pour la synchronisation
+            final settingsService = SettingsService();
+            settingsService.updateSelectedCountry(matchingCountry);
+            print('✅ Pays principal chargé depuis le profil: ${matchingCountry.sDescr} (${matchingCountry.sPaysLangue})');
           }
-        });
-        if (selected != null && updatedProfileForStorage != null) {
-          await LocalStorageService.saveProfile(updatedProfileForStorage!);
+        } catch (e) {
+          print('⚠️ Erreur lors de la récupération du pays depuis le profil: $e');
+          // Fallback: utiliser SettingsService si erreur
+          final settingsService = SettingsService();
+          final selected = await settingsService.getSelectedCountry();
+          if (mounted && selected != null) {
+            setState(() {
+              _selectedCountry = selected;
+            });
+          }
+        }
+      } else {
+        // Fallback: utiliser SettingsService si pas de sPaysLangue dans le profil
+        final settingsService = SettingsService();
+        final selected = await settingsService.getSelectedCountry();
+        if (mounted && selected != null) {
+          setState(() {
+            _selectedCountry = selected;
+          });
         }
       }
       
@@ -227,16 +320,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final token = currentProfile?['token'] ?? '';
       
       // ✅ CORRECTION: Sauvegarder TOUTES les données du profil, y compris pays favoris et pays principal
-      final updateData = {
-        'Prenom': _prenomController.text,
-        'Nom': _nomController.text,
-        'email': _emailController.text,
-        'tel': _telController.text,
-        'rue': _rueController.text,
-        'zip': _zipController.text,
-        'city': _cityController.text,
-        'token': token,
-      };
+      // ✅ iPays: récupérer depuis localStorage ou utiliser 12 par défaut
+      final iPays = currentProfile?['iPays']?.toString() ?? '12';
       
       // ✅ CORRECTION: Partir de TOUTES les valeurs actuelles du localStorage
       // pour garantir qu'on ne perd aucune donnée existante (même si elle n'est pas dans _profile)
@@ -246,10 +331,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _profile?['sPaysFav']?.toString() ??
             '',
       );
+      
+      // ✅ CORRECTION: Mettre à jour sPaysLangue si un pays est sélectionné
+      String? sPaysLangueValue;
       if (_selectedCountry != null) {
-        updatedLocalProfile['sPaysLangue'] =
-            _selectedCountry!.sPaysLangue ?? '${_selectedCountry!.sPays}/fr';
+        sPaysLangueValue = _selectedCountry!.sPaysLangue ?? '${_selectedCountry!.sPays}/fr';
+        updatedLocalProfile['sPaysLangue'] = sPaysLangueValue;
+      } else {
+        // Utiliser la valeur existante depuis localStorage
+        sPaysLangueValue = currentProfile?['sPaysLangue']?.toString() ?? _profile?['sPaysLangue']?.toString() ?? '';
       }
+      
+      final updateData = {
+        'Prenom': _prenomController.text,
+        'Nom': _nomController.text,
+        'email': _emailController.text,
+        'tel': _telController.text,
+        'rue': _rueController.text,
+        'zip': _zipController.text,
+        'city': _cityController.text,
+        'token': token,
+        'iPays': iPays, // ✅ Inclure iPays dans la mise à jour
+        'sPaysLangue': sPaysLangueValue, // ✅ Inclure sPaysLangue dans la mise à jour
+      };
       
       // ✅ Mettre à jour uniquement les champs modifiés dans le formulaire
       // Les autres champs conservent leurs valeurs actuelles depuis le localStorage
@@ -320,6 +424,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
           print('   sCity: ${finalProfile['sCity']}');
           print('   sPaysFav: ${finalProfile['sPaysFav']}');
           print('   sPaysLangue: ${finalProfile['sPaysLangue']}');
+          
+          // ✅ CORRECTION: Mettre à jour _selectedCountry depuis le sPaysLangue sauvegardé
+          // pour éviter qu'il revienne à France
+          final savedSPaysLangue = finalProfile['sPaysLangue']?.toString() ?? '';
+          if (savedSPaysLangue.isNotEmpty) {
+            try {
+              final countryService = CountryService();
+              await countryService.initialize();
+              
+              // Trouver le pays correspondant au sPaysLangue sauvegardé
+              final countryCode = savedSPaysLangue.contains('/') 
+                  ? savedSPaysLangue.split('/')[0] 
+                  : savedSPaysLangue;
+              
+              final matchingCountry = countryService.getAllCountries().firstWhere(
+                (country) => country.sPaysLangue == savedSPaysLangue || 
+                            (country.sPays == countryCode && country.sPaysLangue != null),
+                orElse: () => countryService.getAllCountries().firstWhere(
+                  (country) => country.sPays == countryCode,
+                  orElse: () => countryService.getAllCountries().first,
+                ),
+              );
+              
+              if (matchingCountry != null) {
+                _selectedCountry = matchingCountry;
+                // ✅ Mettre à jour aussi SettingsService pour la synchronisation
+                final settingsService = SettingsService();
+                settingsService.updateSelectedCountry(matchingCountry);
+                print('✅ Pays principal mis à jour: ${matchingCountry.sDescr} (${matchingCountry.sPaysLangue})');
+              }
+            } catch (e) {
+              print('⚠️ Erreur lors de la mise à jour du pays sélectionné: $e');
+            }
+          }
           
           // ✅ Mettre à jour le state local avec les nouvelles données
           setState(() {
@@ -477,75 +615,142 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// Afficher le dialogue de sélection du pays principal
-  void _showCountrySelectionDialog(bool isMobile) {
-    final availableCountries = [
-      {'code': 'FR', 'name': 'France', 'langue': 'FR/fr'},
-      {'code': 'BE', 'name': 'Belgique', 'langue': 'BE/fr'},
-      {'code': 'NL', 'name': 'Pays-Bas', 'langue': 'NL/nl'},
-      {'code': 'DE', 'name': 'Allemagne', 'langue': 'DE/de'},
-      {'code': 'LU', 'name': 'Luxembourg', 'langue': 'LU/fr'},
-    ];
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Sélectionner le pays principal',
-          style: TextStyle(fontSize: isMobile ? 18 : 20),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: availableCountries.length,
-            itemBuilder: (context, index) {
-              final country = availableCountries[index];
-              final isSelected = _profile?['sPaysLangue'] == country['langue'];
-              
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.1) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: isSelected ? Border.all(color: const Color(0xFF3B82F6), width: 2) : null,
-                ),
-                child: ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image.asset(
-                      _getFlagPath(country['code']!),
-                      width: 32,
-                      height: 24,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: 32,
-                          height: 24,
-                          color: Colors.grey[200],
-                          child: Icon(Icons.flag, size: 16),
-                        );
-                      },
-                    ),
+  void _showCountrySelectionDialog(bool isMobile) async {
+    // ✅ Charger les pays depuis /get-infos-status
+    try {
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final infosStatus = await apiService.getInfosStatus();
+      
+      // ✅ Extraire les données PAYS et PaysLangue
+      final paysList = infosStatus['PAYS'] as List? ?? [];
+      final paysLangueList = infosStatus['PaysLangue'] as List? ?? [];
+      
+      print('📦 Pays depuis get-infos-status: ${paysList.length} pays');
+      print('📦 PaysLangue depuis get-infos-status: ${paysLangueList.length} entrées');
+      
+      // ✅ Créer un map des drapeaux depuis PaysLangue (sColor)
+      final flagMap = <String, String>{};
+      final paysLangueMap = <String, String>{}; // Map pour sPaysLangue (ex: "BE/NL" -> "BE/NL")
+      
+      for (final paysLangue in paysLangueList) {
+        final sPaysLangue = paysLangue['sPaysLangue']?.toString() ?? '';
+        final code = sPaysLangue.contains('/') ? sPaysLangue.split('/')[0] : sPaysLangue;
+        final flag = paysLangue['sColor']?.toString() ?? '';
+        
+        if (code.isNotEmpty && flag.isNotEmpty) {
+          flagMap[code.toUpperCase()] = flag;
+          paysLangueMap[code.toUpperCase()] = sPaysLangue;
+        }
+      }
+      
+      // ✅ Construire la liste des pays disponibles depuis PAYS
+      final availableCountries = <Map<String, dynamic>>[];
+      for (final pays in paysList) {
+        final code = pays['sExternalRef']?.toString().toUpperCase() ?? '';
+        final name = pays['sDescr']?.toString() ?? '';
+        final sPaysLangue = paysLangueMap[code] ?? '$code/$code';
+        final flag = flagMap[code] ?? '';
+        
+        if (code.isNotEmpty && name.isNotEmpty) {
+          availableCountries.add({
+            'code': code,
+            'name': name,
+            'langue': sPaysLangue,
+            'flag': flag,
+          });
+        }
+      }
+      
+      // ✅ Trier par code pour un affichage cohérent
+      availableCountries.sort((a, b) => (a['code'] as String).compareTo(b['code'] as String));
+      
+      print('✅ Liste des pays construite: ${availableCountries.length} pays');
+      
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            _t('select_main_country'),
+            style: TextStyle(fontSize: isMobile ? 18 : 20),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: availableCountries.length,
+              itemBuilder: (context, index) {
+                final country = availableCountries[index];
+                final currentSPaysLangue = _profile?['sPaysLangue']?.toString() ?? '';
+                final isSelected = currentSPaysLangue == country['langue'];
+                
+                // ✅ Construire l'URL du drapeau
+                String flagUrl = '';
+                if (country['flag'] != null && country['flag'].toString().isNotEmpty) {
+                  flagUrl = ApiConfig.getProxiedImageUrl(country['flag'].toString());
+                } else {
+                  // Fallback si pas de drapeau dans PaysLangue
+                  flagUrl = ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${country['code']}.PNG');
+                }
+                
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.1) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isSelected ? Border.all(color: const Color(0xFF3B82F6), width: 2) : null,
                   ),
-                  title: Text(
-                    country['name']!,
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
+                  child: ListTile(
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.network(
+                        flagUrl,
+                        width: 32,
+                        height: 24,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 32,
+                            height: 24,
+                            color: Colors.grey[200],
+                            child: Icon(Icons.flag, size: 16),
+                          );
+                        },
+                      ),
                     ),
+                    title: Text(
+                      country['name'] as String,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
+                      ),
+                    ),
+                    trailing: isSelected ? const Icon(Icons.check_circle, color: Color(0xFF3B82F6)) : null,
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _updateMainCountry(country['langue'] as String);
+                    },
                   ),
-                  trailing: isSelected ? const Icon(Icons.check_circle, color: Color(0xFF3B82F6)) : null,
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _updateMainCountry(country['langue']!);
-                  },
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      print('❌ Erreur lors du chargement des pays depuis get-infos-status: $e');
+      if (!mounted) return;
+      
+      // ✅ Fallback: afficher un message d'erreur
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_t('error_loading_countries')}: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   /// Afficher le dialogue de sélection des pays favoris
@@ -590,8 +795,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       borderRadius: BorderRadius.circular(8),
                       border: isSelected ? Border.all(color: const Color(0xFF3B82F6), width: 2) : null,
                     ),
-                    child: CheckboxListTile(
-                      secondary: ClipRRect(
+                    child: ListTile(
+                      leading: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: Image.network(
                           ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${country['code']!.toUpperCase()}.PNG'),
@@ -615,15 +820,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: isSelected ? const Color(0xFF3B82F6) : Colors.black87,
                         ),
                       ),
-                      value: isSelected,
-                      activeColor: const Color(0xFF3B82F6),
-                      checkColor: Colors.white,
-                      onChanged: (bool? value) {
+                      trailing: Checkbox(
+                        value: isSelected,
+                        onChanged: (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              currentFavorites.add(country['code']!.toUpperCase());
+                            } else {
+                              currentFavorites.remove(country['code']!.toUpperCase());
+                            }
+                          });
+                        },
+                        activeColor: const Color(0xFF3B82F6),
+                        checkColor: Colors.white,
+                      ),
+                      onTap: () {
                         setState(() {
-                          if (value == true) {
-                            currentFavorites.add(country['code']!.toUpperCase());
-                          } else {
+                          if (isSelected) {
                             currentFavorites.remove(country['code']!.toUpperCase());
+                          } else {
+                            currentFavorites.add(country['code']!.toUpperCase());
                           }
                         });
                       },
@@ -674,9 +890,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // ✅ Attendre un court délai pour s'assurer que localStorage est bien mis à jour
       await Future.delayed(const Duration(milliseconds: 100));
       
-      setState(() {
-        _profile = updatedProfile;
-      });
+      // ✅ CORRECTION: Mettre à jour _selectedCountry avec le nouveau pays
+      try {
+        final countryService = CountryService();
+        await countryService.initialize();
+        
+        final countryCode = newCountryLangue.contains('/') 
+            ? newCountryLangue.split('/')[0] 
+            : newCountryLangue;
+        
+        final matchingCountry = countryService.getAllCountries().firstWhere(
+          (country) => country.sPaysLangue == newCountryLangue,
+          orElse: () => countryService.getAllCountries().firstWhere(
+            (country) => country.sPays == countryCode,
+            orElse: () => countryService.getAllCountries().first,
+          ),
+        );
+        
+        if (matchingCountry != null) {
+          setState(() {
+            _selectedCountry = matchingCountry;
+            _profile = updatedProfile;
+          });
+          // ✅ Mettre à jour aussi SettingsService pour la synchronisation
+          final settingsService = SettingsService();
+          settingsService.updateSelectedCountry(matchingCountry);
+          print('✅ Pays principal mis à jour: ${matchingCountry.sDescr} (${matchingCountry.sPaysLangue})');
+        } else {
+          setState(() {
+            _profile = updatedProfile;
+          });
+        }
+      } catch (e) {
+        print('⚠️ Erreur lors de la mise à jour du pays sélectionné: $e');
+        setState(() {
+          _profile = updatedProfile;
+        });
+      }
       
       // ✅ CORRECTION: Synchroniser avec l'API si l'utilisateur est connecté
       final isLoggedIn = await LocalStorageService.isLoggedIn();
@@ -716,6 +966,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // ✅ CORRECTION: Utiliser les données du localStorage (qui contient les dernières modifications)
       // plutôt que _profile qui peut être obsolète
       // ✅ IMPORTANT: Inclure explicitement sPaysLangue dans updateData pour garantir qu'il est envoyé
+      // ✅ iPays: récupérer depuis localStorage ou utiliser 12 par défaut
+      final iPays = currentProfile['iPays']?.toString() ?? '12';
       final updateData = {
         'Prenom': currentProfile['sPrenom']?.toString() ?? '',
         'Nom': currentProfile['sNom']?.toString() ?? '',
@@ -727,6 +979,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'token': currentProfile['token']?.toString() ?? '',
         // ✅ CORRECTION: Inclure explicitement sPaysLangue pour garantir qu'il est envoyé à l'API
         'sPaysLangue': newCountryLangue, // Utiliser la nouvelle valeur directement
+        'iPays': iPays, // ✅ Inclure iPays dans la mise à jour
       };
       
       print('📤 Synchronisation pays principal avec l\'API:');
@@ -797,6 +1050,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       // ✅ CORRECTION: Utiliser les données du localStorage (qui contient les dernières modifications)
       // plutôt que _profile qui peut être obsolète
+      // ✅ iPays: récupérer depuis localStorage ou utiliser 12 par défaut
+      final iPays = currentProfile['iPays']?.toString() ?? '12';
       final updateData = {
         'Prenom': currentProfile['sPrenom']?.toString() ?? '',
         'Nom': currentProfile['sNom']?.toString() ?? '',
@@ -812,6 +1067,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .map((code) => code.trim().toUpperCase())
             .where((code) => code.isNotEmpty)
             .toList(),
+        'iPays': iPays, // ✅ Inclure iPays dans la mise à jour
       };
       
       print('📤 Synchronisation pays favoris avec l\'API:');

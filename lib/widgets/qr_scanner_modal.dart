@@ -4,6 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
+import '../services/local_storage_service.dart';
 
 class QrScannerModal extends StatefulWidget {
   final VoidCallback? onClose;
@@ -27,18 +28,220 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
   bool _detectionSuccess = false;
   bool _isDetecting = false;
   bool _isCapturing = false;
-  String _scanningMessage = 'Positionnez le QR code dans le cadre';
+  String _scanningMessage = '';
   String? _scannedCode;
   double _confidenceLevel = 0.0;
   bool _showTips = false;
-  String _currentTip = 'Centrez le QR code dans le cadre';
+  String _currentTip = '';
   bool _isFrontCamera = false; // État de la caméra (false = back, true = front)
   
-  final List<String> _qrTips = [
-    'Centrez le QR code dans le cadre',
-    'Assurez-vous que le QR code est net',
-    'Ajustez la distance (15-30cm idéal)',
-    'Évitez les reflets et ombres',
+  String _currentLanguage = 'FR';
+  
+  // ✅ Traductions locales pour le QR Scanner
+  static const Map<String, Map<String, String>> _translations = {
+    'FR': {
+      'scanner_title': 'Scanner QR Code',
+      'position_qr': 'Positionnez le QR code dans le cadre',
+      'center_qr': 'Centrez le QR code dans le cadre',
+      'ensure_clear': 'Assurez-vous que le QR code est net',
+      'adjust_distance': 'Ajustez la distance (15-30cm idéal)',
+      'avoid_reflections': 'Évitez les reflets et ombres',
+      'camera_permission_required': 'Permission caméra requise',
+      'camera_error': 'Erreur permissions caméra',
+      'restart_error': 'Erreur redémarrage scanner',
+      'invalid_qr': 'Code QR invalide',
+      'invalid_qr_retry': 'Code QR invalide - Veuillez réessayer',
+      'qr_validated': 'QR Code validé !',
+      'qr_detected': 'QR CODE détecté',
+      'redirecting': 'Redirection...',
+      'capturing': 'Capture en cours...',
+      'analyzing': 'Analyse...',
+      'quality': 'Qualité',
+      'navigation_error': 'Erreur lors de la navigation',
+      'camera_error_unknown': 'Erreur caméra: {message}',
+      'retry': 'Réessayer',
+      'camera_front': 'Caméra avant',
+      'camera_rear': 'Caméra arrière',
+    },
+    'DE': {
+      'scanner_title': 'QR-Code scannen',
+      'position_qr': 'Positionieren Sie den QR-Code im Rahmen',
+      'center_qr': 'Zentrieren Sie den QR-Code im Rahmen',
+      'ensure_clear': 'Stellen Sie sicher, dass der QR-Code scharf ist',
+      'adjust_distance': 'Passen Sie den Abstand an (15-30 cm ideal)',
+      'avoid_reflections': 'Vermeiden Sie Reflexionen und Schatten',
+      'camera_permission_required': 'Kamera-Berechtigung erforderlich',
+      'camera_error': 'Kamera-Berechtigungsfehler',
+      'restart_error': 'Scanner-Neustart-Fehler',
+      'invalid_qr': 'Ungültiger QR-Code',
+      'invalid_qr_retry': 'Ungültiger QR-Code - Bitte versuchen Sie es erneut',
+      'qr_validated': 'QR-Code validiert!',
+      'qr_detected': 'QR-CODE erkannt',
+      'redirecting': 'Weiterleitung...',
+      'capturing': 'Erfassung läuft...',
+      'analyzing': 'Analysiere...',
+      'quality': 'Qualität',
+      'navigation_error': 'Fehler bei der Navigation',
+      'camera_error_unknown': 'Kamera-Fehler: {message}',
+      'retry': 'Erneut versuchen',
+      'camera_front': 'Frontkamera',
+      'camera_rear': 'Rückkamera',
+    },
+    'NL': {
+      'scanner_title': 'QR-code scannen',
+      'position_qr': 'Plaats de QR-code in het kader',
+      'center_qr': 'Centreer de QR-code in het kader',
+      'ensure_clear': 'Zorg ervoor dat de QR-code scherp is',
+      'adjust_distance': 'Pas de afstand aan (15-30 cm ideaal)',
+      'avoid_reflections': 'Vermijd reflecties en schaduwen',
+      'camera_permission_required': 'Cameratoestemming vereist',
+      'camera_error': 'Cameratoestemmingsfout',
+      'restart_error': 'Scanner herstartfout',
+      'invalid_qr': 'Ongeldige QR-code',
+      'invalid_qr_retry': 'Ongeldige QR-code - Probeer het opnieuw',
+      'qr_validated': 'QR-code gevalideerd!',
+      'qr_detected': 'QR-CODE gedetecteerd',
+      'redirecting': 'Doorverwijzen...',
+      'capturing': 'Vastleggen...',
+      'analyzing': 'Analyseren...',
+      'quality': 'Kwaliteit',
+      'navigation_error': 'Fout bij navigatie',
+      'camera_error_unknown': 'Camerafout: {message}',
+      'retry': 'Opnieuw proberen',
+      'camera_front': 'Frontcamera',
+      'camera_rear': 'Achtercamera',
+    },
+    'ES': {
+      'scanner_title': 'Escanear código QR',
+      'position_qr': 'Posicione el código QR en el marco',
+      'center_qr': 'Centre el código QR en el marco',
+      'ensure_clear': 'Asegúrese de que el código QR esté nítido',
+      'adjust_distance': 'Ajuste la distancia (15-30 cm ideal)',
+      'avoid_reflections': 'Evite reflejos y sombras',
+      'camera_permission_required': 'Permiso de cámara requerido',
+      'camera_error': 'Error de permisos de cámara',
+      'restart_error': 'Error al reiniciar el escáner',
+      'invalid_qr': 'Código QR inválido',
+      'invalid_qr_retry': 'Código QR inválido - Por favor, inténtelo de nuevo',
+      'qr_validated': '¡Código QR validado!',
+      'qr_detected': 'CÓDIGO QR detectado',
+      'redirecting': 'Redirigiendo...',
+      'capturing': 'Capturando...',
+      'analyzing': 'Analizando...',
+      'quality': 'Calidad',
+      'navigation_error': 'Error en la navegación',
+      'camera_error_unknown': 'Error de cámara: {message}',
+      'retry': 'Reintentar',
+      'camera_front': 'Cámara frontal',
+      'camera_rear': 'Cámara trasera',
+    },
+    'IT': {
+      'scanner_title': 'Scansiona codice QR',
+      'position_qr': 'Posiziona il codice QR nel riquadro',
+      'center_qr': 'Centra il codice QR nel riquadro',
+      'ensure_clear': 'Assicurati che il codice QR sia nitido',
+      'adjust_distance': 'Regola la distanza (15-30 cm ideale)',
+      'avoid_reflections': 'Evita riflessi e ombre',
+      'camera_permission_required': 'Autorizzazione fotocamera richiesta',
+      'camera_error': 'Errore autorizzazione fotocamera',
+      'restart_error': 'Errore riavvio scanner',
+      'invalid_qr': 'Codice QR non valido',
+      'invalid_qr_retry': 'Codice QR non valido - Riprova',
+      'qr_validated': 'Codice QR convalidato!',
+      'qr_detected': 'CODICE QR rilevato',
+      'redirecting': 'Reindirizzamento...',
+      'capturing': 'Acquisizione in corso...',
+      'analyzing': 'Analisi...',
+      'quality': 'Qualità',
+      'navigation_error': 'Errore durante la navigazione',
+      'camera_error_unknown': 'Errore fotocamera: {message}',
+      'retry': 'Riprova',
+      'camera_front': 'Fotocamera frontale',
+      'camera_rear': 'Fotocamera posteriore',
+    },
+    'PT': {
+      'scanner_title': 'Escanear código QR',
+      'position_qr': 'Posicione o código QR no quadro',
+      'center_qr': 'Centralize o código QR no quadro',
+      'ensure_clear': 'Certifique-se de que o código QR está nítido',
+      'adjust_distance': 'Ajuste a distância (15-30 cm ideal)',
+      'avoid_reflections': 'Evite reflexos e sombras',
+      'camera_permission_required': 'Permissão de câmera necessária',
+      'camera_error': 'Erro de permissão de câmera',
+      'restart_error': 'Erro ao reiniciar o scanner',
+      'invalid_qr': 'Código QR inválido',
+      'invalid_qr_retry': 'Código QR inválido - Por favor, tente novamente',
+      'qr_validated': 'Código QR validado!',
+      'qr_detected': 'CÓDIGO QR detectado',
+      'redirecting': 'Redirecionando...',
+      'capturing': 'Capturando...',
+      'analyzing': 'Analisando...',
+      'quality': 'Qualidade',
+      'navigation_error': 'Erro na navegação',
+      'camera_error_unknown': 'Erro de câmera: {message}',
+      'retry': 'Tentar novamente',
+      'camera_front': 'Câmera frontal',
+      'camera_rear': 'Câmera traseira',
+    },
+    'EN': {
+      'scanner_title': 'Scan QR Code',
+      'position_qr': 'Position the QR code in the frame',
+      'center_qr': 'Center the QR code in the frame',
+      'ensure_clear': 'Make sure the QR code is sharp',
+      'adjust_distance': 'Adjust the distance (15-30cm ideal)',
+      'avoid_reflections': 'Avoid reflections and shadows',
+      'camera_permission_required': 'Camera permission required',
+      'camera_error': 'Camera permission error',
+      'restart_error': 'Scanner restart error',
+      'invalid_qr': 'Invalid QR code',
+      'invalid_qr_retry': 'Invalid QR code - Please try again',
+      'qr_validated': 'QR Code validated!',
+      'qr_detected': 'QR CODE detected',
+      'redirecting': 'Redirecting...',
+      'capturing': 'Capturing...',
+      'analyzing': 'Analyzing...',
+      'quality': 'Quality',
+      'navigation_error': 'Navigation error',
+      'camera_error_unknown': 'Camera error: {message}',
+      'retry': 'Retry',
+      'camera_front': 'Front camera',
+      'camera_rear': 'Rear camera',
+    },
+  };
+  
+  /// Récupérer la traduction pour une clé
+  String _t(String key, {String? language}) {
+    final lang = language ?? _currentLanguage;
+    final translations = _translations[lang] ?? _translations['FR']!;
+    return translations[key] ?? key;
+  }
+  
+  /// Récupérer la langue actuelle depuis localStorage
+  Future<void> _loadLanguage() async {
+    try {
+      final profile = await LocalStorageService.getProfile();
+      if (profile != null && profile['sPaysLangue'] != null) {
+        final sPaysLangue = profile['sPaysLangue'].toString();
+        // Extraire la langue (ex: "FR/FR" -> "FR")
+        final lang = sPaysLangue.split('/').first.toUpperCase();
+        if (_translations.containsKey(lang)) {
+          setState(() {
+            _currentLanguage = lang;
+            _scanningMessage = _t('position_qr');
+            _currentTip = _t('center_qr');
+          });
+        }
+      }
+    } catch (e) {
+      print('⚠️ Erreur lors du chargement de la langue: $e');
+    }
+  }
+  
+  List<String> get _qrTips => [
+    _t('center_qr'),
+    _t('ensure_clear'),
+    _t('adjust_distance'),
+    _t('avoid_reflections'),
   ];
 
   // Buffer de détection
@@ -56,6 +259,20 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
   void initState() {
     super.initState();
     print('🚀 QrScannerModal initState - _isScanning: $_isScanning');
+    
+    // Charger la langue et initialiser les messages
+    _loadLanguage().then((_) {
+      if (mounted) {
+        setState(() {
+          if (_scanningMessage.isEmpty) {
+            _scanningMessage = _t('position_qr');
+          }
+          if (_currentTip.isEmpty) {
+            _currentTip = _t('center_qr');
+          }
+        });
+      }
+    });
     
     _animationController = AnimationController(
       vsync: this,
@@ -156,7 +373,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
         _detectionSuccess = false;
         _isDetecting = false;
         _isCapturing = false;
-        _scanningMessage = 'Positionnez le QR code dans le cadre';
+        _scanningMessage = _t('position_qr');
         _confidenceLevel = 0.0;
         _showTips = false;
       });
@@ -165,7 +382,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
     } catch (e) {
       print('❌ Erreur redémarrage scanner: $e');
       setState(() {
-        _scanningMessage = 'Erreur redémarrage scanner';
+        _scanningMessage = _t('restart_error');
       });
     }
   }
@@ -188,7 +405,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
       if (!hasPermission) {
         print('❌ Permission caméra refusée');
         setState(() {
-          _scanningMessage = 'Permission caméra requise';
+          _scanningMessage = _t('camera_permission_required');
           _isScanning = false;
         });
         return;
@@ -198,7 +415,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
     } catch (e) {
       print('❌ Erreur vérification permissions: $e');
       setState(() {
-        _scanningMessage = 'Erreur permissions caméra';
+        _scanningMessage = _t('camera_error');
         _isScanning = false;
       });
     }
@@ -354,7 +571,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
     // Animation d'erreur
     setState(() {
       _isCapturing = true;
-      _scanningMessage = 'Code QR invalide';
+      _scanningMessage = _t('invalid_qr');
     });
 
     await Future.delayed(const Duration(milliseconds: 500));
@@ -390,7 +607,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
     // Afficher un message d'erreur au lieu de rediriger
     if (mounted) {
       setState(() {
-        _scanningMessage = 'Code QR invalide - Veuillez réessayer';
+        _scanningMessage = _t('invalid_qr_retry');
         _isCapturing = false;
         _isDetecting = false;
       });
@@ -434,7 +651,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
       _isDetecting = false;
       _isCapturing = false;
       _scannedCode = finalCode;
-      _scanningMessage = 'QR Code validé !';
+      _scanningMessage = _t('qr_validated');
       _showTips = false;
     });
 
@@ -482,7 +699,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
       print('❌ Erreur post-scan: $error');
       if (mounted) {
         setState(() {
-          _scanningMessage = 'Erreur lors de la navigation';
+          _scanningMessage = _t('navigation_error');
         });
       }
     }
@@ -543,7 +760,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Erreur caméra: ${error.errorDetails?.message ?? 'Inconnue'}',
+                        _t('camera_error_unknown').replaceAll('{message}', error.errorDetails?.message ?? 'Inconnue'),
                         style: const TextStyle(color: Colors.white),
                         textAlign: TextAlign.center,
                       ),
@@ -553,7 +770,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                           // ✅ CORRECTION: Redémarrer le scanner en cas d'erreur
                           _restartScanner();
                         },
-                        child: const Text('Réessayer'),
+                        child: Text(_t('retry')),
                       ),
                     ],
                   ),
@@ -596,9 +813,9 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                         widget.onClose?.call();
                       },
                     ),
-                    const Text(
-                      'Scanner QR Code',
-                      style: TextStyle(
+                    Text(
+                      _t('scanner_title'),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -610,7 +827,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                         color: Colors.white,
                         size: 28,
                       ),
-                      tooltip: _isFrontCamera ? 'Caméra arrière' : 'Caméra avant',
+                      tooltip: _isFrontCamera ? _t('camera_rear') : _t('camera_front'),
                       onPressed: _switchCamera,
                     ),
                   ],
@@ -825,17 +1042,17 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                   size: 32,
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'QR CODE détecté',
-                  style: TextStyle(
+                Text(
+                  _t('qr_detected'),
+                  style: const TextStyle(
                     color: Color(0xFF4ade80),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Redirection...',
-                  style: TextStyle(
+                Text(
+                  _t('redirecting'),
+                  style: const TextStyle(
                     color: Color(0xFF34d399),
                     fontSize: 14,
                   ),
@@ -854,9 +1071,9 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Capture en cours...',
-                  style: TextStyle(
+                Text(
+                  _t('capturing'),
+                  style: const TextStyle(
                     color: Color(0xFF60a5fa),
                     fontSize: 14,
                   ),
@@ -876,9 +1093,9 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Analyse...',
-                  style: TextStyle(
+                Text(
+                  _t('analyzing'),
+                  style: const TextStyle(
                     color: Color(0xFFfbbf24),
                     fontSize: 14,
                   ),
@@ -911,7 +1128,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Qualité: ${(_confidenceLevel * 100).round()}%',
+                    '${_t('quality')}: ${(_confidenceLevel * 100).round()}%',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.7),
                       fontSize: 12,

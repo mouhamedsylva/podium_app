@@ -7,11 +7,13 @@ import '../services/auth_notifier.dart';
 class CustomBottomNavigationBar extends StatefulWidget {
   final int currentIndex;
   final VoidCallback? onScannerPressed;
+  final bool disableHomeIcon; // ✅ Paramètre pour désactiver l'icône home
 
   const CustomBottomNavigationBar({
     super.key,
     this.currentIndex = 0,
     this.onScannerPressed,
+    this.disableHomeIcon = false, // ✅ Par défaut, l'icône home est activée
   });
 
   @override

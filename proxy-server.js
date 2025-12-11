@@ -707,6 +707,116 @@ app.post('/api/delete-article-wishlistBasket', express.json(), async (req, res) 
   }
 });
 
+// Middleware spécial pour /basket-delete-pdf - supprimer un panier PDF
+app.post('/api/basket-delete-pdf', express.json(), async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🗑️ BASKET-DELETE-PDF: Suppression d'un panier PDF`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    // Récupérer iBasket depuis les query parameters
+    const iBasket = req.query.iBasket || '';
+    const iProfile = req.headers['x-iprofile'] || getGuestProfileFromHeaders(req).iProfile || '';
+    
+    console.log(`📦 Paramètres reçus:`);
+    console.log(`   - iBasket: ${iBasket}`);
+    console.log(`   - iProfile: ${iProfile}`);
+    
+    if (!iBasket || iBasket === '-1' || iBasket === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'iBasket est requis'
+      });
+    }
+    
+    if (!iProfile) {
+      return res.status(400).json({
+        success: false,
+        error: 'iProfile est requis'
+      });
+    }
+    
+    // Créer le GuestProfile cookie
+    const guestProfile = {
+      iProfile: iProfile,
+      iBasket: iBasket,
+      sPaysLangue: getGuestProfileFromHeaders(req).sPaysLangue || '',
+      sPaysFav: getGuestProfileFromHeaders(req).sPaysFav || ''
+    };
+    
+    const guestProfileJson = JSON.stringify(guestProfile);
+    const cookieString = `GuestProfile=${encodeURIComponent(guestProfileJson)}; Path=/; HttpOnly=false; Max-Age=864000`;
+    
+    console.log(`🍪 Cookie créé avec iProfile: ${iProfile}, iBasket: ${iBasket}`);
+    
+    // Récupérer le cookie de session si présent
+    let sessionCookie = '';
+    const requestCookies = req.headers.cookie || '';
+    const authSessionMatch = requestCookies.match(/auth\.session-token=([^;]+)/);
+    if (authSessionMatch) {
+      sessionCookie = `auth.session-token=${authSessionMatch[1]}`;
+      console.log(`🍪 Cookie de session trouvé`);
+    }
+    
+    const finalCookieHeader = sessionCookie 
+      ? `${cookieString}; ${sessionCookie}`
+      : cookieString;
+    
+    // Faire la requête POST vers SNAL
+    const fetch = require('node-fetch');
+    console.log(`📱 Appel SNAL API: https://jirig.be/api/basket-delete-pdf?iBasket=${iBasket}`);
+    
+    const response = await fetch(`https://jirig.be/api/basket-delete-pdf?iBasket=${iBasket}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Cookie': finalCookieHeader,
+        'User-Agent': 'Mobile-Flutter-App/1.0'
+      }
+    });
+    
+    console.log(`📡 Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`❌ Error response from SNAL:`, errorText);
+      
+      return res.status(response.status).json({
+        success: false,
+        error: 'API SNAL Error',
+        message: `Erreur ${response.status}: ${response.statusText}`,
+        details: errorText
+      });
+    }
+    
+    const responseText = await response.text();
+    console.log(`📡 Response RAW text:`, responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log(`📡 API Response parsed:`, data);
+      console.log(`✅ Panier PDF supprimé avec succès !`);
+      
+      return res.json(data);
+    } catch (e) {
+      console.error(`❌ Erreur parsing JSON:`, e.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Erreur lors du parsing de la réponse',
+        message: e.message
+      });
+    }
+  } catch (error) {
+    console.error('❌ Basket-Delete-PDF Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la suppression du panier PDF',
+      message: error.message
+    });
+  }
+});
+
 // Middleware spécial pour /update-country-wishlistBasket - mettre à jour la liste des pays
 app.post('/api/update-country-wishlistBasket', express.json(), async (req, res) => {
   console.log(`\n${'*'.repeat(70)}`);
@@ -2888,6 +2998,20 @@ app.get('/api/get-basket-user', async (req, res) => {
       });
     }
     
+    // ✅ DEBUG: Comparer l'iProfile envoyé avec celui attendu
+    // Pour un utilisateur connecté, l'iProfile devrait être celui de la session (iProfileEncrypted)
+    // Vérifier si un cookie de session existe et comparer les iProfile
+    const debugRequestCookies = req.headers.cookie || '';
+    const debugAuthSessionMatch = debugRequestCookies.match(/auth\.session-token=([^;]+)/);
+    if (debugAuthSessionMatch) {
+      console.log(`🔍 Cookie de session détecté - L'utilisateur est probablement connecté`);
+      console.log(`🔍 iProfile dans GuestProfile: ${iProfile}`);
+      console.log(`⚠️ NOTE: Pour un utilisateur connecté, l'iProfile devrait être celui de la session (iProfileEncrypted)`);
+      console.log(`⚠️ NOTE: Vérifier que Flutter a mis à jour le GuestProfile avec l'iProfileEncrypted après connexion`);
+    } else {
+      console.log(`🔍 Aucun cookie de session - Utilisateur non connecté ou session expirée`);
+    }
+    
     // ✅ CRITIQUE: Le backend SNAL utilise getGuestProfile() qui fait JSON.parse() du cookie
     // Le cookie doit être une chaîne JSON valide, pas URL-encodée dans la valeur du cookie
     // Format attendu: GuestProfile={"iProfile":"...","iBasket":"..."}
@@ -2914,15 +3038,34 @@ app.get('/api/get-basket-user', async (req, res) => {
     // Faire la requête GET vers l'API SNAL-Project LOCAL
     // ✅ CRITIQUE: Le cookie doit être dans le header Cookie, pas dans Set-Cookie
     // getCookie() de h3 dans SNAL décode automatiquement, donc le cookie doit être URL-encodé
+    // ✅ CRITIQUE: Aussi envoyer le cookie de session auth.session-token si présent (comme le site web)
+    // Cela permet à SNAL d'utiliser getUserSession() pour récupérer l'utilisateur connecté
     const fetch = require('node-fetch');
-    console.log(`📤 Envoi de la requête GET vers SNAL avec le cookie GuestProfile`);
-    console.log(`📤 Cookie header: ${cookieString.substring(0, 150)}...`);
+    
+    // Récupérer le cookie de session depuis les cookies de la requête (si présent)
+    let sessionCookie = '';
+    const requestCookies = req.headers.cookie || '';
+    const authSessionMatch = requestCookies.match(/auth\.session-token=([^;]+)/);
+    if (authSessionMatch) {
+      sessionCookie = `auth.session-token=${authSessionMatch[1]}`;
+      console.log(`🍪 Cookie de session trouvé: auth.session-token=${authSessionMatch[1].substring(0, 20)}...`);
+    } else {
+      console.log(`⚠️ Aucun cookie de session trouvé dans la requête`);
+    }
+    
+    // Construire le header Cookie avec GuestProfile et session (si présent)
+    const finalCookieHeader = sessionCookie 
+      ? `${cookieString}; ${sessionCookie}`
+      : cookieString;
+    
+    console.log(`📤 Envoi de la requête GET vers SNAL avec le cookie GuestProfile${sessionCookie ? ' et session' : ''}`);
+    console.log(`📤 Cookie header: ${finalCookieHeader.substring(0, 150)}...`);
     
     const response = await fetch(`https://jirig.be/api/get-basket-user`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Cookie': cookieString,
+        'Cookie': finalCookieHeader,
         'User-Agent': 'Mobile-Flutter-App/1.0'
       }
     });

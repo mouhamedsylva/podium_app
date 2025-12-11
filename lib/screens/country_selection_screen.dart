@@ -1035,7 +1035,7 @@ class _CountrySelectionScreenState extends State<CountrySelectionScreen> with Ti
                     ),
                   )
                 : Text(
-                    translationService.translate('ONBOARDING_Msg07'),
+                    translationService.translate('ONBOARDING_VALIDATE'),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

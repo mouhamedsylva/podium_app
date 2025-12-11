@@ -443,6 +443,8 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    // Utiliser listen: true pour que le widget se mette à jour quand les traductions changent
+    final translationService = Provider.of<TranslationService>(context, listen: true);
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     // Si mode intégré (embedded), afficher avec taille réduite et fond flou
@@ -490,7 +492,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                         // Champ de recherche géographique avec suggestions (utilise LocationSearchWidget)
                         Expanded(
                           child: LocationSearchWidget(
-                            placeholder: _translationService.translate('SEARCH_LOCATION_PLACEHOLDER'),
+                            placeholder: translationService.translate('WISHLIST_Msg35'),
                             debounceDelay: 300,
                             minSearchLength: 3,
                             resultLimit: 5,
@@ -705,10 +707,10 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    _buildMapStyleOptionNew('standard', 'Standard'),
-                                    _buildMapStyleOptionNew('satellite', 'Satellite'),
-                                    _buildMapStyleOptionNew('carto_light', 'Carto Light'),
-                                    _buildMapStyleOptionNew('dark', 'Dark Mode'),
+                                    _buildMapStyleOptionNew('standard', translationService.translate('STANDARD')),
+                                    _buildMapStyleOptionNew('satellite', translationService.translate('SATELLITE')),
+                                    _buildMapStyleOptionNew('carto_light', translationService.translate('CARTO_LIGHT')),
+                                    _buildMapStyleOptionNew('dark', translationService.translate('DARK_MODE')),
                                   ],
                                 ),
                               ),
@@ -801,7 +803,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
                                                     Text(
-                                                      _translationService.translate('STORES_NEARBY'),
+                                                      translationService.translate('STORES_NEARBY'),
                                                       style: TextStyle(
                                                         fontWeight: FontWeight.bold,
                                                         fontSize: isMobile ? 16 : 18,
@@ -812,7 +814,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                     ),
                                                     SizedBox(height: 4),
                                                     Text(
-                                                      '${_translationService.translate('SORTED_BY_PROXIMITY')} • ${_ikeaStores.length}',
+                                                      '${translationService.translate('SORTED_BY_PROXIMITY')} • ${_ikeaStores.length}',
                                                       style: TextStyle(
                                                         fontSize: isMobile ? 12 : 14,
                                                         color: Colors.white.withOpacity(0.8),
@@ -855,7 +857,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                       SizedBox(width: isMobile ? 4 : 8),
                                                       Flexible(
                                                         child: Text(
-                                                          _translationService.translate('YOUR_POSITION'),
+                                                          translationService.translate('YOUR_POSITION'),
                                                           style: TextStyle(
                                                             color: Colors.white,
                                                             fontWeight: FontWeight.w500,
@@ -896,7 +898,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                       SizedBox(width: isMobile ? 4 : 8),
                                                       Flexible(
                                                         child: Text(
-                                                          _translationService.translate('IKEA_STORES'),
+                                                          translationService.translate('IKEA_STORES'),
                                                           style: TextStyle(
                                                             color: Colors.white,
                                                             fontWeight: FontWeight.w500,
@@ -930,7 +932,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                     controller: _storeSearchController,
                                                     textInputAction: TextInputAction.search,
                                                     decoration: InputDecoration(
-                                                      hintText: _translationService.translate('SEARCH_STORE_PLACEHOLDER'),
+                                                      hintText: translationService.translate('SEARCH_STORE_PLACEHOLDER'),
                                                       hintStyle: TextStyle(color: Colors.grey[400], fontSize: isMobile ? 12 : 13),
                                                       border: InputBorder.none,
                                                       contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: isMobile ? 10 : 12),
@@ -1199,7 +1201,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                                               ),
                                                               SizedBox(width: isMobile ? 6 : 8),
                                                               Text(
-                                                                'Itinéraire',
+                                                                translationService.translate('WISHLIST_Msg40'),
                                                                 style: TextStyle(
                                                                   color: Colors.white,
                                                                   fontWeight: FontWeight.bold,
@@ -1321,8 +1323,8 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                                     SizedBox(width: 8),
                                     Text(
                                       (_showStoresContainer ?? false) 
-                                          ? _translationService.translate('BUTTON_CLOSE')
-                                          : _translationService.translate('BUTTON_STORES'),
+                                          ? translationService.translate('FRONTPAGE_Msg101')
+                                          : translationService.translate('WISHLIST_Msg34'),
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
@@ -1390,7 +1392,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                   Icon(Icons.location_on, color: Colors.grey[700], size: 24),
                   const SizedBox(width: 12),
                   Text(
-                    _translationService.translate('IKEA_STORES_NEARBY'),
+                    translationService.translate('IKEA_STORES_NEARBY'),
                     style: TextStyle(
                       color: Colors.grey[800],
                       fontSize: 18,
@@ -1640,12 +1642,17 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
                         valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0058A3)),
                       ),
                       SizedBox(height: 16),
-                      Text(
-                        'Chargement de la carte...',
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontSize: 16,
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final translationService = Provider.of<TranslationService>(context, listen: true);
+                          return Text(
+                            translationService.translate('LOADING_CHART'),
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 16,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -2053,15 +2060,15 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
   String _getStyleDisplayName(String style) {
     switch (style) {
       case 'standard':
-        return 'Standard';
+        return _translationService.translate('STANDARD');
       case 'satellite':
-        return 'Satellite';
+        return _translationService.translate('SATELLITE');
       case 'carto_light':
-        return 'Carto Light';
+        return _translationService.translate('CARTO_LIGHT');
       case 'dark':
-        return 'Dark Mode';
+        return _translationService.translate('DARK_MODE');
       default:
-        return 'Standard';
+        return _translationService.translate('STANDARD');
     }
   }
 

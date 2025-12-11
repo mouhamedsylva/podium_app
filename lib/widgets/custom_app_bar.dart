@@ -379,7 +379,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               Icon(Icons.logout, color: Colors.red[600], size: 20),
               SizedBox(width: 12),
               Text(
-                translationService.translateFromBackend('PROFILE_LOGOUT'),
+                translationService.translate('PROFILE_LOGOUT'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -435,21 +435,21 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
-            translationService.translateFromBackend('PROFILE_LOGOUT'),
+            translationService.translate('PROFILE_LOGOUT'),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 18,
             ),
           ),
           content: Text(
-            translationService.translateFromBackend('PROFILE_LOGOUT_CONFIRM'),
+            translationService.translate('PROFILE_LOGOUT_CONFIRM'),
             style: TextStyle(fontSize: 14),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(
-                translationService.translateFromBackend('WISHLIST_Msg30'),
+                translationService.translate('WISHLIST_Msg30'),
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ),
@@ -462,7 +462,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: Text(translationService.translateFromBackend('PROFILE_LOGOUT')),
+              child: Text(translationService.translate('PROFILE_LOGOUT')),
             ),
           ],
         );
@@ -470,18 +470,59 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
 
     if (confirmed == true) {
-      // Vérifier la route actuelle pour rediriger si nécessaire
-      final currentRoute = GoRouterState.of(context).uri.path;
-      final isOnProfileScreen = currentRoute == '/profile' || currentRoute == '/profil' || currentRoute.startsWith('/profile/');
-      
       // Effacer les informations de l'utilisateur via AuthNotifier
       await authNotifier.onLogout();
       
-      // ✅ Rediriger vers wishlist si on est dans profile_screen ou profile_detail_screen
-      if (isOnProfileScreen && context.mounted) {
-        context.go('/wishlist');
+      // ✅ Afficher un message avec loading avant la redirection
+      if (context.mounted) {
+        // Afficher le dialog de redirection
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return WillPopScope(
+              onWillPop: () async => false, // Empêcher la fermeture
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0051BA)),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      translationService.translate('LOGOUT_REDIRECT_MESSAGE') ?? 
+                      'Vous allez être redirigé vers l\'onboarding...',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+        
+        // Attendre 2 secondes avant de rediriger
+        await Future.delayed(const Duration(seconds: 2));
+        
+        // Fermer le dialog si toujours monté
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+        
+        // Rediriger vers l'onboarding
+        if (context.mounted) {
+          context.go('/country-selection');
+        }
       }
-      // Sinon, rester sur la page actuelle
     }
   }
 

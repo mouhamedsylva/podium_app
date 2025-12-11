@@ -843,7 +843,7 @@ class _SearchModalState extends State<SearchModal>
                     child: Consumer<TranslationService>(
                       builder: (context, translationService, child) {
                         return Text(
-                          translationService.translate('FRONTPAGE_Msg05'),
+                          translationService.translate('FRONTPAGE_FIND_PRODUCT'),
                           textAlign: TextAlign.center, // ✅ Centré
                           style: TextStyle(
                             fontSize: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22),

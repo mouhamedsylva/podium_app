@@ -928,7 +928,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
                 child: Column(
                   children: [
                     Text(
-                      translationService.translate('FRONTPAGE_Msg05'),
+                      translationService.translate('FRONTPAGE_FIND_PRODUCT'),
                       style: TextStyle(
                         fontSize: isMobile ? 28 : 40,
                         fontWeight: FontWeight.bold,

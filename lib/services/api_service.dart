@@ -251,8 +251,18 @@ class ApiService {
         }
 
         final cookieHeader = cookieParts.join('; ');
-        options.headers['Cookie'] = cookieHeader;
-        options.headers['cookie'] = cookieHeader;
+        // ⚠️ IMPORTANT: Ne pas définir le header "Cookie" manuellement sur le web
+        // Le navigateur refuse de définir ce header pour des raisons de sécurité
+        // Utiliser le CookieManager de Dio à la place (déjà configuré)
+        if (!kIsWeb) {
+          // Sur mobile, on peut définir le header Cookie manuellement
+          options.headers['Cookie'] = cookieHeader;
+          options.headers['cookie'] = cookieHeader;
+        } else {
+          // Sur le web, le CookieManager de Dio gère les cookies automatiquement
+          // On peut aussi utiliser document.cookie si nécessaire
+          // Mais ne pas définir le header "Cookie" manuellement
+        }
 
         print('🍪 GuestProfile envoyé: ' + guestProfile.toString());
         print('🍪 Cookie: ' + cookieHeader);
@@ -903,6 +913,58 @@ class ApiService {
       }
     } catch (e) {
       print('❌ Erreur deleteArticleBasketWishlist: $e');
+      print('❌ Type d\'erreur: ${e.runtimeType}');
+      if (e is DioException) {
+        print('❌ DioException - Type: ${e.type}');
+        print('❌ DioException - Message: ${e.message}');
+        print('❌ DioException - Response: ${e.response?.data}');
+        print('❌ DioException - Status Code: ${e.response?.statusCode}');
+      }
+      return null;
+    }
+  }
+
+  /// Supprimer un panier PDF (comme SNAL-Project)
+  Future<Map<String, dynamic>?> deleteBasketPdf({
+    required String iBasket,
+  }) async {
+    try {
+      print('🗑️ Suppression panier PDF: $iBasket');
+      print('🌐 URL complète: ${_dio!.options.baseUrl}/basket-delete-pdf?iBasket=$iBasket');
+      
+      // Récupérer iProfile depuis le localStorage
+      final profileData = await LocalStorageService.getProfile();
+      final iProfile = profileData?['iProfile']?.toString() ?? '';
+      
+      print('👤 iProfile récupéré: $iProfile');
+      print('🛒 iBasket: $iBasket');
+      
+      final response = await _dio!.post(
+        '/basket-delete-pdf?iBasket=$iBasket',
+        options: Options(
+          headers: {
+            'X-IProfile': iProfile,
+          },
+        ),
+      );
+      
+      print('📡 Status Code: ${response.statusCode}');
+      print('📦 Response Data: ${response.data}');
+      
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        if (data['success'] == true) {
+          print('✅ Panier PDF supprimé avec succès');
+          return data;
+        } else {
+          print('❌ Erreur lors de la suppression: ${data['error'] ?? data['message']}');
+          return data;
+        }
+      } else {
+        throw Exception('Erreur ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Erreur deleteBasketPdf: $e');
       print('❌ Type d\'erreur: ${e.runtimeType}');
       if (e is DioException) {
         print('❌ DioException - Type: ${e.type}');
@@ -2198,6 +2260,29 @@ class ApiService {
         print('👤 Nom dans la réponse: ${data['sNom']}');
         print('👤 Prénom dans la réponse: ${data['sPrenom']}');
         print('🆔 iProfile dans la réponse: ${data['iProfile']}');
+        print('🌍 iPays dans la réponse: ${data['iPays']}');
+        print('🌍 sPaysLangue dans la réponse: ${data['sPaysLangue']}');
+        
+        // ✅ CORRECTION: Sauvegarder les données récupérées dans localStorage, y compris iPays
+        final currentProfile = await LocalStorageService.getProfile();
+        await LocalStorageService.saveProfile({
+          ...?currentProfile,
+          'iProfile': data['iProfile']?.toString() ?? currentProfile?['iProfile']?.toString() ?? '',
+          'iBasket': data['iBasket']?.toString() ?? currentProfile?['iBasket']?.toString() ?? '',
+          'iPays': data['iPays']?.toString() ?? data['sPays']?.toString() ?? currentProfile?['iPays']?.toString() ?? '12',
+          'sPaysLangue': data['sPaysLangue']?.toString() ?? currentProfile?['sPaysLangue']?.toString() ?? '',
+          'sPaysFav': data['sPaysFav']?.toString() ?? currentProfile?['sPaysFav']?.toString() ?? '',
+          'sEmail': data['sEmail']?.toString() ?? currentProfile?['sEmail']?.toString() ?? '',
+          'sNom': data['sNom']?.toString() ?? currentProfile?['sNom']?.toString() ?? '',
+          'sPrenom': data['sPrenom']?.toString() ?? currentProfile?['sPrenom']?.toString() ?? '',
+          'sPhoto': data['sPhoto']?.toString() ?? currentProfile?['sPhoto']?.toString() ?? '',
+          'sTel': data['sTel']?.toString() ?? currentProfile?['sTel']?.toString() ?? '',
+          'sRue': data['sRue']?.toString() ?? currentProfile?['sRue']?.toString() ?? '',
+          'sZip': data['sZip']?.toString() ?? currentProfile?['sZip']?.toString() ?? '',
+          'sCity': data['sCity']?.toString() ?? currentProfile?['sCity']?.toString() ?? '',
+        });
+        print('✅ Profil sauvegardé dans localStorage avec iPays: ${data['iPays'] ?? data['sPays'] ?? 'N/A'}');
+        
         return data;
       }
 
@@ -2285,14 +2370,18 @@ class ApiService {
       // ✅ CORRECTION: iPays doit être un code numérique (comme "15" pour FR, "16" pour BE)
       // et non un code ISO. Il doit venir du localStorage (iPays) ou être extrait depuis le profil
       // Dans SNAL-Project, iPays vient de response.iPays?.toString() qui est un code numérique
-      String? iPays = gp?['iPays']?.toString() ?? '';
+      // ✅ PRIORITÉ: Utiliser iPays depuis profileData s'il est fourni, sinon depuis localStorage, sinon 12 par défaut
+      String? iPays = profileData['iPays']?.toString();
       
-      // Si iPays n'est pas dans localStorage, essayer de le récupérer depuis profileData
-      if (iPays.isEmpty) {
-        iPays = profileData['iPays']?.toString() ?? '';
+      // Si iPays n'est pas dans profileData, essayer de le récupérer depuis localStorage
+      if (iPays == null || iPays.isEmpty) {
+        iPays = gp?['iPays']?.toString() ?? '';
       }
       
-      // Si toujours vide, laisser vide (le backend gérera avec "")
+      // Si toujours vide, utiliser 12 comme valeur par défaut
+      if (iPays.isEmpty) {
+        iPays = '12';
+      }
       
       // Extraire sLangue depuis sPaysLangue (format: "FR/fr" -> sLangue = "fr")
       String sLangue = '';
@@ -2304,17 +2393,19 @@ class ApiService {
       
       final sTypeAccount = gp?['sTypeAccount']?.toString() ?? 'EMAIL';
 
+      // ✅ CORRECTION: sPhoto doit être "-1" si vide (comme dans l'exemple)
+      final sPhotoValue = sPhoto.isNotEmpty ? sPhoto : '-1';
+
       // Mapper les champs Flutter vers le format SNAL (comme le backend l'attend)
-      // ✅ CORRECTION: S'assurer que tous les champs sont des strings (pas null)
-      // Le backend attend des strings, et utilise ?? "" pour les valeurs manquantes
-      final snalProfileData = {
+      // ✅ Le backend attend exactement ces champs (sans la clé "value")
+      final snalProfileData = <String, dynamic>{
         'sNom': sNom.isNotEmpty ? sNom : '',
         'sPrenom': sPrenom.isNotEmpty ? sPrenom : '',
-        'sPhoto': sPhoto.isNotEmpty ? sPhoto : '',
+        'sPhoto': sPhotoValue,
         'sRue': sRue.isNotEmpty ? sRue : '',
         'sZip': sZip.isNotEmpty ? sZip : '',
         'sCity': sCity.isNotEmpty ? sCity : '',
-        'iPays': iPays?.isNotEmpty == true ? iPays! : '',
+        'iPays': iPays?.isNotEmpty == true ? iPays! : '12',
         'sTel': sTel.isNotEmpty ? sTel : '',
         'sPaysFav': effectivePaysFavString.isNotEmpty ? effectivePaysFavString : '',
         'sPaysLangue': sPaysLangue.isNotEmpty ? sPaysLangue : '',
@@ -2347,29 +2438,61 @@ class ApiService {
 
       print('\n📥 Réponse API:');
       print('   Status: ' + (response.statusCode?.toString() ?? ''));
+      print('   Response data: ${response.data}');
 
-      // Mettre à jour localement les infos connues
+      // ✅ CORRECTION: Aligné avec le backend
+      // Le backend retourne { success: true, message: "...", data: [] }
+      // data est généralement un tableau vide, donc on doit récupérer les données via /get-info-profil
       if (response.data is Map<String, dynamic>) {
         final respMap = response.data as Map<String, dynamic>;
-        final responsePaysFav = respMap['sPaysFav'];
-        final normalizedPaysFav = responsePaysFav is List
-            ? responsePaysFav.map((e) => e.toString().toUpperCase()).join(',')
-            : responsePaysFav?.toString() ?? effectivePaysFavString;
-        final normalizedPaysLangue = respMap['sPaysLangue']?.toString() ?? sPaysLangue;
-
-        await LocalStorageService.saveProfile({
-          'iProfile': iProfile,
-          'iBasket': gp?['iBasket']?.toString() ?? '',
-          'sPaysFav': normalizedPaysFav,
-          'sPaysLangue': normalizedPaysLangue,
-          'sEmail': respMap['sEmail']?.toString() ?? (profileData['email']?.toString() ?? ''),
-          'sNom': respMap['sNom']?.toString() ?? (profileData['Nom']?.toString() ?? ''),
-          'sPrenom': respMap['sPrenom']?.toString() ?? (profileData['Prenom']?.toString() ?? ''),
-          'sPhoto': respMap['sPhoto']?.toString() ?? '',
-        });
-        print('✅ Profil mis à jour localement');
+        final isSuccess = respMap['success'] == true;
+        
+        if (isSuccess) {
+          print('✅ Mise à jour réussie, récupération des données mises à jour via /get-info-profil...');
+          
+          // ✅ Attendre un court délai pour s'assurer que la base de données est à jour
+          await Future.delayed(const Duration(milliseconds: 300));
+          
+          // ✅ Récupérer les données mises à jour depuis /get-info-profil
+          try {
+            final updatedProfile = await getProfile();
+            
+            if (updatedProfile.isNotEmpty && !updatedProfile.containsKey('error')) {
+              print('✅ Données mises à jour récupérées depuis /get-info-profil');
+              
+              // ✅ Sauvegarder toutes les données récupérées dans localStorage
+              final currentProfile = await LocalStorageService.getProfile();
+              await LocalStorageService.saveProfile({
+                ...?currentProfile,
+                'iProfile': updatedProfile['iProfile']?.toString() ?? iProfile,
+                'iBasket': updatedProfile['iBasket']?.toString() ?? gp?['iBasket']?.toString() ?? '',
+                'iPays': updatedProfile['iPays']?.toString() ?? updatedProfile['sPays']?.toString() ?? iPays,
+                'sPaysLangue': updatedProfile['sPaysLangue']?.toString() ?? sPaysLangue,
+                'sPaysFav': updatedProfile['sPaysFav']?.toString() ?? effectivePaysFavString,
+                'sEmail': updatedProfile['sEmail']?.toString() ?? (profileData['email']?.toString() ?? ''),
+                'sNom': updatedProfile['sNom']?.toString() ?? (profileData['Nom']?.toString() ?? ''),
+                'sPrenom': updatedProfile['sPrenom']?.toString() ?? (profileData['Prenom']?.toString() ?? ''),
+                'sPhoto': updatedProfile['sPhoto']?.toString() ?? '',
+                'sTel': updatedProfile['sTel']?.toString() ?? (profileData['tel']?.toString() ?? ''),
+                'sRue': updatedProfile['sRue']?.toString() ?? (profileData['rue']?.toString() ?? ''),
+                'sZip': updatedProfile['sZip']?.toString() ?? (profileData['zip']?.toString() ?? ''),
+                'sCity': updatedProfile['sCity']?.toString() ?? (profileData['city']?.toString() ?? ''),
+              });
+              print('✅ Profil mis à jour localement avec les données de /get-info-profil');
+              
+              // ✅ Retourner les données mises à jour
+              return updatedProfile;
+            } else {
+              print('⚠️ Impossible de récupérer les données mises à jour, utilisation des données locales');
+            }
+          } catch (e) {
+            print('⚠️ Erreur lors de la récupération des données mises à jour: $e');
+            // Continuer avec les données locales
+          }
+        }
       }
 
+      // ✅ Fallback: retourner la réponse telle quelle
       return (response.data as Map).cast<String, dynamic>();
     } catch (e) {
       print('❌ Erreur lors de la mise à jour du profil: ' + e.toString());

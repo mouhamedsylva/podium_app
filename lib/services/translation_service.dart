@@ -30,8 +30,16 @@ class TranslationService extends ChangeNotifier {
       }
       
       print('🌍 TRANSLATION SERVICE: Initialisation avec langue $languageCode depuis le backend SNAL');
-      await loadTranslations(languageCode);
+      await loadTranslations(languageCode, forceReload: true);
       _isInitialized = true;
+      
+      // ✅ Vérifier que les traductions ont bien été chargées
+      if (_translations.isEmpty) {
+        print('⚠️ TRANSLATION SERVICE: Aucune traduction chargée après initialisation, nouvelle tentative...');
+        // Nouvelle tentative après un court délai
+        await Future.delayed(Duration(milliseconds: 1000));
+        await loadTranslations(languageCode, forceReload: true);
+      }
     } catch (e) {
       print('❌ TRANSLATION SERVICE: Erreur initialisation: $e');
       // En cas d'erreur, initialiser avec un dictionnaire vide
@@ -46,8 +54,10 @@ class TranslationService extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   /// Charger les traductions pour une langue depuis le backend SNAL
-  Future<void> loadTranslations(String language) async {
-    if (_currentLanguage == language && _translations.isNotEmpty) {
+  /// Avec retry automatique en cas d'échec
+  Future<void> loadTranslations(String language, {bool forceReload = false}) async {
+    // ✅ Forcer le rechargement si les traductions sont vides, même si la langue correspond
+    if (!forceReload && _currentLanguage == language && _translations.isNotEmpty) {
       return;
     }
 
@@ -56,255 +66,75 @@ class TranslationService extends ChangeNotifier {
 
     await _saveLanguageToProfileIfDifferent(language);
 
-    try {
-      // ✅ Charger les traductions directement depuis le backend SNAL
-      final apiTranslations = await _apiService.getTranslations(language);
+    // ✅ Tentative de chargement avec retry (max 2 tentatives)
+    int maxRetries = 2;
+    int attempt = 0;
+    bool success = false;
 
-      if (apiTranslations.isNotEmpty) {
-        // ✅ Utiliser uniquement les traductions du backend
-        // Convertir les valeurs en String pour garantir le bon type
-        _translations = Map<String, String>.from(
-          apiTranslations.map((key, value) => MapEntry(
-            key.toString(),
-            value?.toString() ?? '',
-          )),
-        );
+    while (attempt < maxRetries && !success) {
+      try {
+        attempt++;
+        if (attempt > 1) {
+          print('🔄 TRANSLATION SERVICE: Tentative $attempt/$maxRetries...');
+          // Attendre un peu avant de réessayer
+          await Future.delayed(Duration(milliseconds: 500 * attempt));
+        }
 
-        print('✅ TRANSLATION SERVICE: Traductions chargées depuis le backend SNAL (${_translations.length} clés)');
-      } else {
-        // Si le backend retourne un objet vide, initialiser avec un dictionnaire vide
-        print('⚠️ TRANSLATION SERVICE: Backend retourne un objet vide');
-        _translations = {};
-        print('✅ TRANSLATION SERVICE: Traductions initialisées à vide');
+        // ✅ Charger les traductions directement depuis le backend SNAL
+        final apiTranslations = await _apiService.getTranslations(language);
+
+        if (apiTranslations.isNotEmpty) {
+          // ✅ Utiliser uniquement les traductions du backend
+          // Convertir les valeurs en String pour garantir le bon type
+          _translations = Map<String, String>.from(
+            apiTranslations.map((key, value) {
+              final strValue = value?.toString() ?? '';
+              // Filtrer les valeurs vides ou identiques à la clé
+              if (strValue.trim().isEmpty || 
+                  strValue.trim().toLowerCase() == key.toString().toLowerCase()) {
+                return MapEntry(key.toString(), '');
+              }
+              return MapEntry(key.toString(), strValue);
+            }),
+          );
+
+          print('✅ TRANSLATION SERVICE: Traductions chargées depuis le backend SNAL (${_translations.length} clés)');
+          success = true;
+        } else {
+          print('⚠️ TRANSLATION SERVICE: Backend retourne un objet vide (tentative $attempt/$maxRetries)');
+          if (attempt >= maxRetries) {
+            _translations = {};
+            print('⚠️ TRANSLATION SERVICE: Traductions initialisées à vide après $maxRetries tentatives');
+          }
+        }
+      } catch (e) {
+        print('❌ TRANSLATION SERVICE: Erreur API (tentative $attempt/$maxRetries): $e');
+        if (attempt >= maxRetries) {
+          // En cas d'erreur finale, conserver les traductions existantes si disponibles
+          // ou initialiser avec un dictionnaire vide
+          if (_translations.isEmpty) {
+            _translations = {};
+            print('⚠️ TRANSLATION SERVICE: Traductions initialisées à vide après échec');
+          } else {
+            print('⚠️ TRANSLATION SERVICE: Conservation des traductions existantes après échec');
+          }
+        }
       }
-    } catch (e) {
-      print('❌ TRANSLATION SERVICE: Erreur API: $e');
-      // En cas d'erreur, initialiser avec un dictionnaire vide
-      _translations = {};
-      print('✅ TRANSLATION SERVICE: Traductions initialisées à vide en cas d\'erreur');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
-  /// Traductions locales de fallback (pour certaines clés spécifiques)
-  /// Format: { 'clé': { 'langue': 'traduction' } }
-  static const Map<String, Map<String, String>> _localFallbacks = {
-    'SELECT_COUNTRY_SEARCH_PLACEHOLDER': {
-      'fr': 'Rechercher votre pays...',
-      'en': 'Search your country...',
-      'de': 'Ihr Land suchen...',
-      'es': 'Buscar tu país...',
-      'it': 'Cerca il tuo paese...',
-      'pt': 'Pesquisar seu país...',
-      'nl': 'Zoek uw land...',
-    },
-    'ONBOARDING_Msg07': {
-      'fr': 'Valider',
-      'en': 'Validate',
-      'de': 'Bestätigen',
-      'es': 'Validar',
-      'it': 'Convalidare',
-      'pt': 'Validar',
-      'nl': 'Valideren',
-    },
-    'FRONTPAGE_Msg05': {
-      'fr': 'Trouvez Votre Produit',
-      'en': 'Find Your Product',
-      'de': 'Finden Sie Ihr Produkt',
-      'es': 'Encuentra Tu Producto',
-      'it': 'Trova Il Tuo Prodotto',
-      'pt': 'Encontre Seu Produto',
-      'nl': 'Vind Uw Product',
-    },
-    'CONFIRM_TITLE': {
-      'fr': 'Confirmation',
-      'en': 'Confirmation',
-      'de': 'Bestätigung',
-      'es': 'Confirmación',
-      'it': 'Conferma',
-      'pt': 'Confirmação',
-      'nl': 'Bevestiging',
-    },
-    'BUTTON_YES': {
-      'fr': 'Oui',
-      'en': 'Yes',
-      'de': 'Ja',
-      'es': 'Sí',
-      'it': 'Sì',
-      'pt': 'Sim',
-      'nl': 'Ja',
-    },
-    'BUTTON_NO': {
-      'fr': 'Non',
-      'en': 'No',
-      'de': 'Nein',
-      'es': 'No',
-      'it': 'No',
-      'pt': 'Não',
-      'nl': 'Nee',
-    },
-    'LOGIN_EMAIL_PLACEHOLDER': {
-      'fr': 'votre@email.com',
-      'en': 'your@email.com',
-      'de': 'ihre@email.com',
-      'es': 'tu@email.com',
-      'it': 'tua@email.com',
-      'pt': 'seu@email.com',
-      'nl': 'uw@email.com',
-    },
-    // ===== Fallbacks locaux pour l'écran de connexion =====
-    'LOGIN_SEND_LINK': {
-      'fr': 'Envoyer le code',
-      'en': 'Send code',
-      'de': 'Code senden',
-      'es': 'Enviar código',
-      'it': 'Invia codice',
-      'pt': 'Enviar código',
-      'nl': 'Code verzenden',
-    },
-    'LOGIN_LOADING_SENDING_CODE': {
-      'fr': 'Envoi du lien...',
-      'en': 'Sending link...',
-      'de': 'Link wird gesendet...',
-      'es': 'Enviando enlace...',
-      'it': 'Invio del link...',
-      'pt': 'Enviando link...',
-      'nl': 'Link verzenden...',
-    },
-    'LOGIN_LOADING_CONNECTING': {
-      'fr': 'Connexion...',
-      'en': 'Connecting...',
-      'de': 'Verbindung...',
-      'es': 'Conectando...',
-      'it': 'Connessione...',
-      'pt': 'Conectando...',
-      'nl': 'Verbinden...',
-    },
-    'LOGIN_CODE_LABEL': {
-      'fr': 'Code de connexion',
-      'en': 'Login code',
-      'de': 'Anmeldecode',
-      'es': 'Código de acceso',
-      'it': 'Codice di accesso',
-      'pt': 'Código de acesso',
-      'nl': 'Inlogcode',
-    },
-    'LOGIN_ACTION_VALIDATE_CODE': {
-      'fr': 'Valider le code',
-      'en': 'Validate code',
-      'de': 'Code bestätigen',
-      'es': 'Validar código',
-      'it': 'Convalidare il codice',
-      'pt': 'Validar código',
-      'nl': 'Code valideren',
-    },
-    'LOGIN_CODE_SENT_PLACEHOLDER': {
-      'fr': 'Votre code de connexion',
-      'en': 'Your login code',
-      'de': 'Ihr Anmeldecode',
-      'es': 'Tu código de acceso',
-      'it': 'Il tuo codice di accesso',
-      'pt': 'Seu código de acesso',
-      'nl': 'Uw inlogcode',
-    },
-    'LOGIN_CODE_SENT_FOOTER': {
-      'fr': 'Si vous ne voyez pas l’e‑mail, vérifiez vos spams.',
-      'en': 'If you don’t see the email, check your spam folder.',
-      'de': 'Wenn Sie die E‑Mail nicht sehen, prüfen Sie den Spam‑Ordner.',
-      'es': 'Si no ves el correo, revisa tu carpeta de spam.',
-      'it': 'Se non vedi l’email, controlla la posta indesiderata.',
-      'pt': 'Se não vir o e‑mail, verifique a pasta de spam.',
-      'nl': 'Als u de e‑mail niet ziet, kijk in uw spammap.',
-    },
-    'LOGIN_OPEN_MAIL': {
-      'fr': 'Ouvrir ma messagerie',
-      'en': 'Open my mailbox',
-      'de': 'Postfach öffnen',
-      'es': 'Abrir mi correo',
-      'it': 'Apri la mia posta',
-      'pt': 'Abrir minha caixa de e‑mail',
-      'nl': 'Mijn mailbox openen',
-    },
-    'LOGIN_CODE_COPIED_BUTTON': {
-      'fr': 'J’ai copié le code',
-      'en': 'I’ve copied the code',
-      'de': 'Ich habe den Code kopiert',
-      'es': 'He copiado el código',
-      'it': 'Ho copiato il codice',
-      'pt': 'Copiei o código',
-      'nl': 'Ik heb de code gekopieerd',
-    },
-    'LOGIN_SUCCESS_TITLE': {
-      'fr': 'Connexion réussie',
-      'en': 'Login successful',
-      'de': 'Erfolgreich angemeldet',
-      'es': 'Inicio de sesión correcto',
-      'it': 'Accesso riuscito',
-      'pt': 'Sessão iniciada com sucesso',
-      'nl': 'Succesvol ingelogd',
-    },
-    'LOGIN_SUCCESS_MESSAGE': {
-      'fr': 'Vous êtes connecté. Redirection en cours...',
-      'en': 'You are logged in. Redirecting...',
-      'de': 'Sie sind angemeldet. Weiterleitung...',
-      'es': 'Has iniciado sesión. Redirigiendo...',
-      'it': 'Sei connesso. Reindirizzamento...',
-      'pt': 'Você está conectado. Redirecionando...',
-      'nl': 'U bent ingelogd. Doorsturen...',
-    },
-    'PODIUM_ENLARGE': {
-      'fr': 'Agrandir',
-      'en': 'Enlarge',
-      'de': 'Vergrößern',
-      'es': 'Ampliar',
-      'it': 'Ingrandisci',
-      'pt': 'Ampliar',
-      'nl': 'Vergroten',
-    },
-
-    // ===== Fallbacks locaux pour les écrans de profil =====
-    'PROFILE_LOGOUT': {
-      'fr': 'Déconnexion',
-      'en': 'Logout',
-      'de': 'Abmelden',
-      'es': 'Cerrar sesión',
-      'it': 'Disconnetti',
-      'pt': 'Sair',
-      'nl': 'Uitloggen',
-    },
-    'PROFILE_LOGOUT_CONFIRM': {
-      'fr': 'Êtes-vous sûr de vouloir vous déconnecter ?',
-      'en': 'Are you sure you want to logout?',
-      'de': 'Sind Sie sicher, dass Sie sich abmelden möchten?',
-      'es': '¿Estás seguro de que quieres cerrar sesión?',
-      'it': 'Sei sicuro di voler disconnetter?',
-      'pt': 'Tem certeza de que deseja sair?',
-      'nl': 'Weet u zeker dat u wilt uitloggen?',
-    },
-  };
-
-  /// Obtenir une traduction depuis le backend
-  /// Pour les clés dans _localFallbacks, le fallback local a la priorité absolue
-  /// Sinon, utilise le backend, puis retourne la clé elle-même
+  /// Obtenir une traduction depuis le backend uniquement
+  /// Retourne la traduction du backend ou la clé elle-même si non trouvée
   String translate(String key) {
-    // ✅ Priorité 1: Fallback local pour certaines clés spécifiques (priorité absolue)
-    // Ces clés sont toujours gérées localement, même si le backend les fournit
-    if (_localFallbacks.containsKey(key)) {
-      final languageFallbacks = _localFallbacks[key]!;
-      // Utiliser la langue courante, ou 'fr' par défaut
-      final fallback = languageFallbacks[_currentLanguage] ?? languageFallbacks['fr'];
-      if (fallback != null) {
-        return fallback;
-      }
-    }
-
-    // ✅ Priorité 2: Traductions du backend (pour les autres clés)
+    // ✅ Utiliser uniquement les traductions du backend
     if (_translations.containsKey(key)) {
       final value = _translations[key];
-      if (value != null) {
+      if (value != null && value.isNotEmpty) {
         final normalizedValue = value.trim();
+        // ✅ Vérifier que la valeur n'est pas vide et n'est pas identique à la clé
         if (normalizedValue.isNotEmpty &&
             normalizedValue.toLowerCase() != key.toLowerCase()) {
           return normalizedValue;
@@ -312,19 +142,26 @@ class TranslationService extends ChangeNotifier {
       }
     }
 
-    // ✅ Priorité 3: Si la clé n'existe pas, retourner la clé elle-même
+    // ✅ Si les traductions sont vides, essayer de recharger
+    if (_translations.isEmpty && !_isLoading && _isInitialized) {
+      print('⚠️ TRANSLATION SERVICE: Traductions vides pour "$key", tentative de rechargement...');
+      // Recharger en arrière-plan sans bloquer
+      loadTranslations(_currentLanguage, forceReload: true);
+    }
+
+    // ✅ Si la clé n'existe pas, retourner la clé elle-même
     return key;
   }
 
-  /// Obtenir une traduction en privilégiant toujours le backend
-  /// Cette méthode ignore les fallbacks locaux et utilise uniquement le backend
-  /// Utile pour les écrans qui doivent toujours utiliser les traductions du backend
+  /// Obtenir une traduction depuis le backend uniquement
+  /// Identique à translate() - conservé pour compatibilité
   String translateFromBackend(String key) {
-    // ✅ Priorité 1: Traductions du backend (priorité absolue)
+    // ✅ Utiliser uniquement les traductions du backend
     if (_translations.containsKey(key)) {
       final value = _translations[key];
-      if (value != null) {
+      if (value != null && value.isNotEmpty) {
         final normalizedValue = value.trim();
+        // ✅ Vérifier que la valeur n'est pas vide et n'est pas identique à la clé
         if (normalizedValue.isNotEmpty &&
             normalizedValue.toLowerCase() != key.toLowerCase()) {
           return normalizedValue;
@@ -332,16 +169,14 @@ class TranslationService extends ChangeNotifier {
       }
     }
 
-    // ✅ Priorité 2: Fallback local uniquement si le backend ne fournit pas la clé
-    if (_localFallbacks.containsKey(key)) {
-      final languageFallbacks = _localFallbacks[key]!;
-      final fallback = languageFallbacks[_currentLanguage] ?? languageFallbacks['fr'];
-      if (fallback != null) {
-        return fallback;
-      }
+    // ✅ Si les traductions sont vides, essayer de recharger
+    if (_translations.isEmpty && !_isLoading && _isInitialized) {
+      print('⚠️ TRANSLATION SERVICE: Traductions vides pour "$key", tentative de rechargement...');
+      // Recharger en arrière-plan sans bloquer
+      loadTranslations(_currentLanguage, forceReload: true);
     }
 
-    // ✅ Priorité 3: Si la clé n'existe pas, retourner la clé elle-même
+    // ✅ Retourner la clé elle-même si non trouvée
     return key;
   }
 
@@ -361,7 +196,8 @@ class TranslationService extends ChangeNotifier {
   /// Changer la langue et recharger les traductions
   Future<void> changeLanguage(String sPaysLangue) async {
     final languageCode = extractLanguageCode(sPaysLangue);
-    await loadTranslations(languageCode);
+    // ✅ Forcer le rechargement lors du changement de langue
+    await loadTranslations(languageCode, forceReload: true);
     
     // ✅ Sauvegarder la langue dans le profil
     await _saveLanguageToProfile(sPaysLangue);

@@ -299,23 +299,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         final Map<String, dynamic> response = await apiService.login(_emailController.text.trim());
         print('📧 Code envoyé à ${_emailController.text}');
 
-        final generatedCode = response['code']?.toString() ??
-            response['token']?.toString() ??
-            response['password']?.toString() ??
-            response['generatedPassword']?.toString();
-
         setState(() {
           _awaitingCode = true;
-          if (generatedCode != null && generatedCode.isNotEmpty) {
-            _codeController.text = generatedCode;
-          } else {
-            _codeController.clear();
-          }
+          _codeController.clear(); // ✅ Ne pas pré-remplir le champ - l'utilisateur doit entrer le code manuellement
         });
 
-        if (mounted) {
-          _openCodeModal(code: (generatedCode ?? _codeController.text.trim()));
-        }
+        // ✅ Modal du code supprimé - l'utilisateur doit entrer le code manuellement
       } else {
         // Étape 2 : validation du code
         if (_codeController.text.trim().isEmpty) {
@@ -635,8 +624,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       final callBackUrl = widget.callBackUrl ?? '/wishlist';
       await LocalStorageService.saveCallBackUrl(callBackUrl);
 
-      // URL de connexion Facebook basée sur SNAL (directement)
-      String authUrl = 'https://jirig.be/api/auth/facebook';
+      // URL de connexion Facebook - Endpoint mobile
+      String authUrl = 'https://jirig.com/api/auth/facebook-mobile';
 
       print('🌐 Redirection vers Facebook OAuth: $authUrl');
       print('📝 Note: Après la connexion sur SNAL, revenez à cette application');
@@ -661,210 +650,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  void _openCodeModal({String? code}) {
-    final translationService =
-        Provider.of<TranslationService>(context, listen: false);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      backgroundColor: Colors.white,
-      builder: (context) {
-        final media = MediaQuery.of(context);
-        final hasCode = code != null && code.isNotEmpty;
-        final displayedCode = hasCode ? code!.trim() : '';
-        final primaryColor = const Color(0xFF0051BA);
-
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: media.viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.mark_email_unread_outlined,
-                    size: 32,
-                    color: primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  translationService.translate('AUTH_Msg06'),
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey[900],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  translationService.translate('AUTH_Msg07'),
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withOpacity(0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.lock_outline,
-                          color: primaryColor,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              hasCode
-                                  ? displayedCode
-                                  : translationService
-                                      .translate('LOGIN_CODE_SENT_PLACEHOLDER'),
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.2,
-                                color: Colors.grey[900],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              translationService
-                                  .translate('LOGIN_CODE_SENT_PLACEHOLDER'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Tooltip(
-                        message: translationService
-                            .translate('LOGIN_CODE_SENT_TOOLTIP'),
-                        child: IconButton(
-                          icon: const Icon(Icons.copy, color: Color(0xFF0051BA)),
-                          onPressed: hasCode
-                              ? () {
-                                  _copyCode(displayedCode);
-                                }
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  translationService.translate('LOGIN_CODE_SENT_FOOTER'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[600],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _openMailApp,
-                    icon: const Icon(Icons.open_in_new),
-                    label: Text(
-                      translationService.translate('LOGIN_OPEN_MAIL'),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: Text(
-                      translationService.translate('LOGIN_CODE_COPIED_BUTTON'),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _copyCode(String code) async {
-    await Clipboard.setData(ClipboardData(text: code));
-    if (!mounted) return;
-    Navigator.of(context).pop();
-    if (!mounted) return;
-    final translationService =
-        Provider.of<TranslationService>(context, listen: false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          translationService.translate('LOGIN_SNACKBAR_COPIED'),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  Future<void> _openMailApp() async {
-    final uri = Uri.parse('mailto:');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  // ✅ Fonction _openCodeModal supprimée - le modal d'affichage du code n'est plus utilisé
 
   void _handleBackNavigation(BuildContext context) {
     if (widget.fromAuthError == true) {
@@ -911,11 +697,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final sendCodeLabel =
         translationService.translate('LOGIN_SEND_LINK');
     final validateCodeLabel =
-        translationService.translate('LOGIN_ACTION_VALIDATE_CODE');
+        translationService.translate('ONBOARDING_VALIDATE');
     final sendingCodeLabel =
         translationService.translate('LOGIN_LOADING_SENDING_CODE');
     final connectingLabel =
-        translationService.translate('LOGIN_LOADING_CONNECTING');
+        translationService.translate('APPHEADER_LOGIN...');
     final separatorText =
         translationService.translate('AUTH_Msg01');
     final continueWithGoogleText =
@@ -1446,6 +1232,33 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  // ✅ Message informatif pour indiquer de vérifier l'email
+                                  if (_awaitingCode)
+                                    Container(
+                                      padding: EdgeInsets.all(12),
+                                      margin: EdgeInsets.only(top: 12, bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8F5E9),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFF81C784)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.email_outlined, color: Color(0xFF4CAF50), size: 20),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              translationService.translate('LOGIN_CODE_SENT_MESSAGE') ?? 
+                                              'Vérifiez votre boîte mail et entrez le code reçu',
+                                              style: const TextStyle(
+                                                color: Color(0xFF2E7D32),
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   SizedBox(height: isMobile ? 16 : 24),
                                   // Message d'erreur

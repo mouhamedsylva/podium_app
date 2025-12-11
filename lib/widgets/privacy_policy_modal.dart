@@ -66,8 +66,8 @@ class _PrivacyPolicyModalState extends State<PrivacyPolicyModal> {
     }
     
     // Bouton fermer traduit
-    String closeButton = widget.translationService.translate('ONBOARDING_Msg07');
-    if (closeButton == 'ONBOARDING_Msg07') {
+    String closeButton = widget.translationService.translate('ONBOARDING_VALIDATE');
+    if (closeButton == 'ONBOARDING_VALIDATE') {
       closeButton = widget.translationService.translate('CLOSE');
       if (closeButton == 'CLOSE') {
         closeButton = 'Fermer';

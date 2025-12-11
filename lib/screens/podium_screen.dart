@@ -42,6 +42,7 @@ class _PodiumScreenState extends State<PodiumScreen>
   int _countdownSeconds = 3; // Compteur pour la redirection
   Timer? _countdownTimer; // Timer pour le compteur
   String? _loadingInLoader; // Valeur LOADING_IN_LOADER depuis le backend
+  String? _currentIBasket; // iBasket de la wishlist sélectionnée (depuis l'URL ou le profil)
   
   // Controllers d'animation (style "Explosion & Reveal" - différent des autres pages)
   late AnimationController _productController;
@@ -229,10 +230,25 @@ class _PodiumScreenState extends State<PodiumScreen>
         }
       }
       
-      // ✅ Récupérer la quantité depuis l'URL (si venant de la wishlist)
+      // ✅ Récupérer la quantité et l'iBasket depuis l'URL (si venant de la wishlist)
       final uri = GoRouterState.of(context).uri;
       final iQuantiteFromUrl = uri.queryParameters['iQuantite'];
+      final iBasketFromUrlRaw = uri.queryParameters['iBasket'];
       final initialQuantity = int.tryParse(iQuantiteFromUrl ?? '1') ?? 1;
+      
+      // ✅ Décoder l'iBasket s'il est encodé (car on utilise Uri.encodeComponent dans wishlist_screen)
+      String? iBasketFromUrl;
+      if (iBasketFromUrlRaw != null && iBasketFromUrlRaw.isNotEmpty) {
+        try {
+          iBasketFromUrl = Uri.decodeComponent(iBasketFromUrlRaw);
+          print('🛒 iBasket récupéré depuis URL (brut): $iBasketFromUrlRaw');
+          print('🛒 iBasket récupéré depuis URL (décodé): $iBasketFromUrl (longueur: ${iBasketFromUrl.length})');
+        } catch (e) {
+          // Si le décodage échoue, utiliser la valeur brute
+          iBasketFromUrl = iBasketFromUrlRaw;
+          print('⚠️ Erreur lors du décodage de l\'iBasket, utilisation de la valeur brute: $iBasketFromUrl');
+        }
+      }
       
       print('📦 Quantité récupérée depuis URL: $iQuantiteFromUrl → $initialQuantity');
       
@@ -257,8 +273,20 @@ class _PodiumScreenState extends State<PodiumScreen>
         // ✅ Récupérer le profil depuis LocalStorage (déjà initialisé dans app.dart)
         final profileData = await LocalStorageService.getProfile();
         sTokenUrl = profileData?['iProfile']?.toString();
-        iBasket = profileData?['iBasket']?.toString();
         sPaysLangue = profileData?['sPaysLangue']?.toString();
+        
+        // ✅ PRIORITÉ: Utiliser l'iBasket de l'URL s'il est présent (wishlist sélectionnée)
+        // Sinon, utiliser celui du profil
+        if (iBasketFromUrl != null && iBasketFromUrl.isNotEmpty) {
+          iBasket = iBasketFromUrl;
+          print('✅ Utilisation de l\'iBasket depuis l\'URL (wishlist sélectionnée): $iBasket');
+        } else {
+          iBasket = profileData?['iBasket']?.toString();
+          print('✅ Utilisation de l\'iBasket depuis le profil: $iBasket');
+        }
+        
+        // ✅ Stocker l'iBasket dans la variable d'état pour l'utiliser dans _addToWishlist
+        _currentIBasket = iBasket;
         
         print('🔑 Profil récupéré - iProfile: ${sTokenUrl != null ? "✅" : "❌"}');
         
@@ -2321,12 +2349,16 @@ class _PodiumScreenState extends State<PodiumScreen>
       }
 
       final iProfile = profileData['iProfile'];
-      final iBasket = profileData['iBasket'];
+      // ✅ PRIORITÉ: Utiliser l'iBasket stocké (depuis l'URL ou le profil)
+      // Sinon, utiliser celui du profil
+      final iBasket = _currentIBasket ?? profileData['iBasket'];
       final sPaysFav = profileData['sPaysFav'] ?? '';
       
       print('🔍 DEBUG profileData (_addToCart):');
       print('   iProfile: $iProfile');
-      print('   iBasket: $iBasket');
+      print('   iBasket (utilisé): $iBasket');
+      print('   iBasket (depuis état): $_currentIBasket');
+      print('   iBasket (depuis profil): ${profileData['iBasket']}');
       print('   sPaysLangue: ${profileData['sPaysLangue']}');
       print('   sPaysFav: "$sPaysFav" (length: ${sPaysFav.length})');
       print('   Toutes les clés: ${profileData.keys.toList()}');
@@ -2427,16 +2459,30 @@ class _PodiumScreenState extends State<PodiumScreen>
         
         print('✅ Article ajouté/mis à jour dans le panier (pas d\'erreur SQL)');
         
-        // Sauvegarder le nouveau iBasket
+        // ✅ PRIORITÉ: Récupérer le nouvel iBasket et le nom du basket retournés par l'API
+        // L'API peut retourner un nouvel iBasket différent de celui envoyé
+        String? newIBasketFromApi;
+        String? newBasketNameFromApi;
         if (result['data'] != null && result['data'] is List && result['data'].isNotEmpty) {
-          final newIBasket = result['data'][0]['iBasket']?.toString();
-          if (newIBasket != null && newIBasket.isNotEmpty) {
+          newIBasketFromApi = result['data'][0]['iBasket']?.toString();
+          newBasketNameFromApi = result['data'][0]['sBasketName']?.toString();
+          if (newIBasketFromApi != null && newIBasketFromApi.isNotEmpty) {
+            print('🔄 Nouvel iBasket retourné par l\'API: $newIBasketFromApi');
+            if (newBasketNameFromApi != null && newBasketNameFromApi.isNotEmpty) {
+              print('🔄 Nom du basket retourné par l\'API: $newBasketNameFromApi');
+            }
+            
+            // Sauvegarder le nouveau iBasket
             await LocalStorageService.saveProfile({
               'iProfile': iProfile.toString(),
-              'iBasket': newIBasket,
+              'iBasket': newIBasketFromApi,
               'sPaysLangue': profileData['sPaysLangue'] ?? '',
             });
-            print('💾 Nouveau iBasket sauvegardé: $newIBasket');
+            print('💾 Nouveau iBasket sauvegardé: $newIBasketFromApi');
+            
+            // ✅ Mettre à jour _currentIBasket avec le nouvel iBasket
+            _currentIBasket = newIBasketFromApi;
+            print('✅ _currentIBasket mis à jour avec le nouvel iBasket de l\'API');
           }
         }
         
@@ -2450,12 +2496,31 @@ class _PodiumScreenState extends State<PodiumScreen>
         print('⏱️ Attente de 300ms pour s\'assurer que le serveur a bien traité l\'ajout...');
         await Future.delayed(const Duration(milliseconds: 300));
         
-        // ✅ Redirection vers wishlist avec timestamp pour forcer le rechargement
+        // ✅ Redirection vers wishlist avec timestamp, iBasket et nom du basket pour sélectionner le bon basket
         print('🔄 Redirection vers /wishlist depuis _addToCart');
         if (mounted) {
           print('✅ Widget monté, redirection en cours...');
           final timestamp = DateTime.now().millisecondsSinceEpoch;
-          context.go('/wishlist?refresh=$timestamp');
+          // ✅ PRIORITÉ: Utiliser le nouvel iBasket retourné par l'API
+          // Sinon, utiliser _currentIBasket ou iBasket (fallback)
+          final iBasketToUse = newIBasketFromApi ?? _currentIBasket ?? iBasket;
+          final basketNameToUse = newBasketNameFromApi;
+          
+          // Construire l'URL avec iBasket et nom du basket (pour fallback si iBasket ne correspond pas)
+          final queryParams = <String, String>{'refresh': timestamp.toString()};
+          if (iBasketToUse != null && iBasketToUse.isNotEmpty) {
+            queryParams['iBasket'] = Uri.encodeComponent(iBasketToUse);
+          }
+          if (basketNameToUse != null && basketNameToUse.isNotEmpty) {
+            queryParams['basketName'] = Uri.encodeComponent(basketNameToUse);
+          }
+          
+          final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
+          print('🛒 Redirection avec iBasket (priorité: API > état > profil): $iBasketToUse');
+          if (basketNameToUse != null) {
+            print('🛒 Redirection avec nom du basket (fallback): $basketNameToUse');
+          }
+          context.go('/wishlist?$queryString');
         } else {
           print('❌ Widget non monté, redirection annulée');
         }
@@ -2512,12 +2577,16 @@ class _PodiumScreenState extends State<PodiumScreen>
       print('✅ profileData récupéré');
 
       final iProfile = profileData['iProfile'];
-      final iBasket = profileData['iBasket'];
+      // ✅ PRIORITÉ: Utiliser l'iBasket stocké (depuis l'URL ou le profil)
+      // Sinon, utiliser celui du profil
+      final iBasket = _currentIBasket ?? profileData['iBasket'];
       final sPaysFav = profileData['sPaysFav'] ?? '';
       
       print('🔍 DEBUG profileData (_addToWishlist):');
       print('   iProfile: $iProfile');
-      print('   iBasket: $iBasket');
+      print('   iBasket (utilisé): $iBasket');
+      print('   iBasket (depuis état): $_currentIBasket');
+      print('   iBasket (depuis profil): ${profileData['iBasket']}');
       print('   sPaysLangue: ${profileData['sPaysLangue']}');
       print('   sPaysFav: "$sPaysFav" (length: ${sPaysFav.length})');
       print('   Toutes les clés: ${profileData.keys.toList()}');
@@ -2626,16 +2695,30 @@ class _PodiumScreenState extends State<PodiumScreen>
         
         print('✅ Article ajouté/mis à jour dans la wishlist (pas d\'erreur SQL)');
         
-        // Sauvegarder le nouveau iBasket
+        // ✅ PRIORITÉ: Récupérer le nouvel iBasket et le nom du basket retournés par l'API
+        // L'API peut retourner un nouvel iBasket différent de celui envoyé
+        String? newIBasketFromApi;
+        String? newBasketNameFromApi;
         if (result['data'] != null && result['data'] is List && result['data'].isNotEmpty) {
-          final newIBasket = result['data'][0]['iBasket']?.toString();
-          if (newIBasket != null && newIBasket.isNotEmpty) {
+          newIBasketFromApi = result['data'][0]['iBasket']?.toString();
+          newBasketNameFromApi = result['data'][0]['sBasketName']?.toString();
+          if (newIBasketFromApi != null && newIBasketFromApi.isNotEmpty) {
+            print('🔄 Nouvel iBasket retourné par l\'API: $newIBasketFromApi');
+            if (newBasketNameFromApi != null && newBasketNameFromApi.isNotEmpty) {
+              print('🔄 Nom du basket retourné par l\'API: $newBasketNameFromApi');
+            }
+            
+            // Sauvegarder le nouveau iBasket
             await LocalStorageService.saveProfile({
               'iProfile': iProfile.toString(),
-              'iBasket': newIBasket,
+              'iBasket': newIBasketFromApi,
               'sPaysLangue': profileData['sPaysLangue'] ?? '',
             });
-            print('💾 Nouveau iBasket sauvegardé: $newIBasket');
+            print('💾 Nouveau iBasket sauvegardé: $newIBasketFromApi');
+            
+            // ✅ Mettre à jour _currentIBasket avec le nouvel iBasket
+            _currentIBasket = newIBasketFromApi;
+            print('✅ _currentIBasket mis à jour avec le nouvel iBasket de l\'API');
           }
         }
         
@@ -2649,12 +2732,31 @@ class _PodiumScreenState extends State<PodiumScreen>
         print('⏱️ Attente de 300ms pour s\'assurer que le serveur a bien traité l\'ajout...');
         await Future.delayed(const Duration(milliseconds: 300));
         
-        // ✅ Redirection vers wishlist avec timestamp pour forcer le rechargement
+        // ✅ Redirection vers wishlist avec timestamp, iBasket et nom du basket pour sélectionner le bon basket
         print('🔄 Redirection vers /wishlist depuis _addToWishlist');
         if (mounted) {
           print('✅ Widget monté, redirection en cours...');
           final timestamp = DateTime.now().millisecondsSinceEpoch;
-          context.go('/wishlist?refresh=$timestamp');
+          // ✅ PRIORITÉ: Utiliser le nouvel iBasket retourné par l'API
+          // Sinon, utiliser _currentIBasket ou iBasket (fallback)
+          final iBasketToUse = newIBasketFromApi ?? _currentIBasket ?? iBasket;
+          final basketNameToUse = newBasketNameFromApi;
+          
+          // Construire l'URL avec iBasket et nom du basket (pour fallback si iBasket ne correspond pas)
+          final queryParams = <String, String>{'refresh': timestamp.toString()};
+          if (iBasketToUse != null && iBasketToUse.isNotEmpty) {
+            queryParams['iBasket'] = Uri.encodeComponent(iBasketToUse);
+          }
+          if (basketNameToUse != null && basketNameToUse.isNotEmpty) {
+            queryParams['basketName'] = Uri.encodeComponent(basketNameToUse);
+          }
+          
+          final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
+          print('🛒 Redirection avec iBasket (priorité: API > état > profil): $iBasketToUse');
+          if (basketNameToUse != null) {
+            print('🛒 Redirection avec nom du basket (fallback): $basketNameToUse');
+          }
+          context.go('/wishlist?$queryString');
         } else {
           print('❌ Widget non monté, redirection annulée');
         }

@@ -59,5 +59,12 @@
 	<!-- Permission pour la photothèque (si nécessaire) -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Nous avons besoin d'accéder à vos photos pour sélectionner des images de produits.</string>
+	
+	<!-- URLs schemes pour url_launcher (OAuth Facebook/Google) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+	</array>
 </dict>
 </plist>
