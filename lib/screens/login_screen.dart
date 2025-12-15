@@ -624,15 +624,30 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       final callBackUrl = widget.callBackUrl ?? '/wishlist';
       await LocalStorageService.saveCallBackUrl(callBackUrl);
 
-      // URL de connexion Facebook - Endpoint mobile
-      String authUrl = 'https://jirig.be/api/auth/facebook-mobile';
+      // ✅ Récupérer le profil local
+      final profile = await LocalStorageService.getProfile();
+      final sPaysLangue = profile?['sPaysLangue']?.toString() ?? '';
+      final sPaysFav = profile?['sPaysFav']?.toString() ?? '';
 
-      print('🌐 Redirection vers Facebook OAuth: $authUrl');
+      print('📤 Données profil à transmettre:');
+      print('   sPaysLangue: $sPaysLangue');
+      print('   sPaysFav: $sPaysFav');
+
+      // ✅ Construire l'URL avec query parameters
+      final baseUrl = 'https://jirig.be/api/auth/facebook-mobile';
+      final uri = Uri.parse(baseUrl).replace(
+        queryParameters: {
+          if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
+          if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
+        },
+      );
+
+      print('🌐 Redirection vers Facebook OAuth: $uri');
       print('📝 Note: Après la connexion sur SNAL, revenez à cette application');
 
-      // Ouvrir directement l'URL SNAL
+      // Ouvrir directement l'URL SNAL avec les query parameters
       await launchUrl(
-        Uri.parse(authUrl),
+        uri,
         mode: LaunchMode.externalApplication,
       );
 
