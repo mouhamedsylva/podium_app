@@ -159,6 +159,61 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           });
         }
       });
+    } catch (e) {
+      print('❌ Erreur initialisation animations login: $e');
+      _animationsInitialized = false;
+    }
+  }
+  
+  /// Timer pour vérifier si l'utilisateur s'est connecté via OAuth dans une autre fenêtre
+  /// Ne démarre que si l'utilisateur a cliqué sur un bouton OAuth
+  void _startOAuthCheckTimer() {
+    if (!_oauthCheckActive) {
+      _oauthCheckActive = true;
+      print('🔄 Démarrage du timer OAuth');
+    }
+    
+    // Vérifier toutes les 2 secondes si l'utilisateur est connecté
+    Future.delayed(Duration(seconds: 2), () async {
+      if (!mounted || !_oauthCheckActive) return;
+      
+      try {
+        final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+        await authNotifier.refresh();
+        
+        if (authNotifier.isLoggedIn) {
+          print('✅ OAuth détecté - Utilisateur connecté');
+          
+          // Arrêter le timer
+          _oauthCheckActive = false;
+          
+          // Récupérer le callBackUrl
+          final callBackUrl = await LocalStorageService.getCallBackUrl() ?? widget.callBackUrl ?? '/wishlist';
+          await LocalStorageService.clearCallBackUrl();
+          
+          // Afficher popup et rediriger
+          if (mounted) {
+            await _showSuccessPopup();
+            context.go(callBackUrl);
+          }
+        } else {
+          // Continuer à vérifier seulement si le timer est toujours actif
+          if (mounted && _oauthCheckActive) {
+            _startOAuthCheckTimer();
+          }
+        }
+      } catch (e) {
+        print('⚠️ Erreur vérification OAuth: $e');
+        if (mounted && _oauthCheckActive) {
+          _startOAuthCheckTimer();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Arrêter le timer OAuth si actif
     _oauthCheckActive = false;
     
     _emailController.dispose();
@@ -570,7 +625,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       await LocalStorageService.saveCallBackUrl(callBackUrl);
 
       // URL de connexion Facebook - Endpoint mobile
-      String authUrl = 'https://jirig.com/api/auth/facebook-mobile';
+      String authUrl = 'https://jirig.be/api/auth/facebook-mobile';
 
       print('🌐 Redirection vers Facebook OAuth: $authUrl');
       print('📝 Note: Après la connexion sur SNAL, revenez à cette application');
