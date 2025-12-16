@@ -37,6 +37,16 @@ class ApiService {
   ApiService._internal();
 
   Dio? _dio;
+  
+  /// Getter pour accéder à l'instance de Dio configurée.
+  /// Lance une exception si Dio n'a pas été initialisé.
+  Dio get dio {
+    if (_dio == null) {
+      throw Exception('ApiService not initialized. Call initialize() first.');
+    }
+    return _dio!;
+  }
+  
   CookieJar? _cookieJar;
   final ProfileService _profileService = ProfileService();
   bool _isInitializing = false;

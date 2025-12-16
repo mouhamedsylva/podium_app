@@ -3,9 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
-import 'dart:convert'; // Ajout pour JSON
-import 'package:http/http.dart' as http; // Ajout pour les requêtes HTTP
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // Ajout pour Facebook Auth
+import 'dart:convert'; // Gardé pour jsonEncode au cas où, mais l'appel se fait via Dio
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
@@ -14,15 +13,12 @@ import '../services/translation_service.dart';
 import '../config/api_config.dart';
 import '../widgets/terms_of_use_modal.dart';
 import '../widgets/privacy_policy_modal.dart';
-// OAuthHandler supprimé - utilisation directe des URLs SNAL
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
-// Import conditionnel pour dart:html (Web uniquement)
 import '../utils/web_utils.dart';
 import 'package:animations/animations.dart';
 import 'dart:math' as math;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-// Google Sign-In pour Android
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io' show Platform;
 
@@ -631,26 +627,28 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       // 2. Vérifier si la connexion a réussi
       if (result.status == LoginStatus.success) {
         final AccessToken accessToken = result.accessToken!;
-        // ✅ CORRECTION 1: Utiliser tokenString au lieu de token
         print("✅ Token Facebook obtenu: ${accessToken.tokenString.substring(0, 20)}...");
 
-        // 3. Envoyer le token au backend
-        final response = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/auth/facebook-mobile-token'),
-          headers: {'Content-Type': 'application/json'},
-          // Le backend attend 'access_token', pas 'token'
-          body: jsonEncode({'access_token': accessToken.tokenString}),
+        // 3. Utiliser ApiService pour faire l'appel et gérer les cookies
+        final apiService = Provider.of<ApiService>(context, listen: false);
+        await apiService.initialize(); // S'assurer que Dio et le CookieManager sont prêts
+        
+        final response = await apiService.dio.post(
+          '/auth/facebook-mobile-token',
+          data: {
+            'access_token': accessToken.tokenString,
+          },
         );
         
-        final responseBody = jsonDecode(response.body);
+        final responseBody = response.data;
 
         if (response.statusCode == 200 && responseBody['status'] == 'success') {
           print("✅ Réponse du backend : $responseBody");
 
-          // ✅ CORRECTION 2: Sauvegarder les informations de session manuellement
+          // Sauvegarder les informations de session reçues du backend
           final currentProfile = await LocalStorageService.getProfile();
           final updatedProfile = {
-            ...?currentProfile, // Correction: Utiliser l'opérateur de spread null-aware
+            ...?currentProfile,
             'iProfile': responseBody['token'], // Le token est iProfileEncrypted
             'iBasket': responseBody['iBasket']?.toString(),
             'sEmail': responseBody['email']?.toString(),
@@ -659,7 +657,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           };
           await LocalStorageService.saveProfile(updatedProfile);
           print('💾 Profil mis à jour avec les informations Facebook.');
-
 
           // Notifier l'AuthNotifier
           final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
@@ -675,22 +672,28 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           }
         } else {
           // Gérer les erreurs du backend
-          throw Exception('Erreur du serveur: ${responseBody['message'] ?? response.body}');
+          throw Exception('Erreur du serveur: ${responseBody['message'] ?? response.data}');
         }
 
       } else {
         // Gérer les cas où l'utilisateur annule ou échoue la connexion
         print('⚠️ Statut de la connexion Facebook: ${result.status}');
         print('ℹ️ Message: ${result.message}');
-        // Pas besoin d'afficher une erreur si l'utilisateur annule
         if(result.status != LoginStatus.cancelled) {
           throw Exception('La connexion Facebook a échoué.');
         }
       }
     } catch (e) {
       print("❌ Erreur lors de la connexion Facebook: $e");
+      String errorMessage = translationService.translate('LOGIN_ERROR_FACEBOOK') ?? 'Erreur de connexion Facebook';
+      if (e is DioException && e.response?.data is Map) {
+          final errorData = e.response!.data as Map<String, dynamic>;
+          errorMessage += ': ${errorData['message'] ?? e.message}';
+      } else {
+        errorMessage += ': ${e.toString()}';
+      }
       setState(() {
-        _errorMessage = translationService.translate('LOGIN_ERROR_FACEBOOK') + ': ${e.toString()}';
+        _errorMessage = errorMessage;
       });
     } finally {
       if (mounted) {
