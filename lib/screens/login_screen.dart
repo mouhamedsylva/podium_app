@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
+import 'dart:convert'; // Ajout pour JSON
+import 'package:http/http.dart' as http; // Ajout pour les requêtes HTTP
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // Ajout pour Facebook Auth
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
@@ -611,57 +614,90 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  /// Connexion avec Facebook - Basée sur SNAL facebook.get.ts
+  /// Connexion avec Facebook - Implémentation mobile native
   Future<void> _loginWithFacebook() async {
-    print('🔐 Connexion avec Facebook');
-    final translationService =
-        Provider.of<TranslationService>(context, listen: false);
+    final translationService = Provider.of<TranslationService>(context, listen: false);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
     try {
-      // ✅ Démarrer le timer OAuth pour vérifier la connexion
-      _startOAuthCheckTimer();
-      
-      // Sauvegarder le callBackUrl pour le récupérer après OAuth
-      final callBackUrl = widget.callBackUrl ?? '/wishlist';
-      await LocalStorageService.saveCallBackUrl(callBackUrl);
-
-      // ✅ Récupérer le profil local
-      final profile = await LocalStorageService.getProfile();
-      final sPaysLangue = profile?['sPaysLangue']?.toString() ?? '';
-      final sPaysFav = profile?['sPaysFav']?.toString() ?? '';
-
-      print('📤 Données profil à transmettre:');
-      print('   sPaysLangue: $sPaysLangue');
-      print('   sPaysFav: $sPaysFav');
-
-      // ✅ Construire l'URL avec query parameters
-      final baseUrl = 'https://jirig.be/api/auth/facebook-mobile';
-      final uri = Uri.parse(baseUrl).replace(
-        queryParameters: {
-          if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
-          if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
-        },
+      // 1. Lancer la connexion avec le SDK natif de Facebook
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['public_profile', 'email'],
       );
 
-      print('🌐 Redirection vers Facebook OAuth: $uri');
-      print('📝 Note: Après la connexion sur SNAL, revenez à cette application');
+      // 2. Vérifier si la connexion a réussi
+      if (result.status == LoginStatus.success) {
+        final AccessToken accessToken = result.accessToken!;
+        // ✅ CORRECTION 1: Utiliser tokenString au lieu de token
+        print("✅ Token Facebook obtenu: ${accessToken.tokenString.substring(0, 20)}...");
 
-      // Ouvrir directement l'URL SNAL avec les query parameters
-      await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
+        // 3. Envoyer le token au backend
+        final response = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/auth/facebook-mobile-token'),
+          headers: {'Content-Type': 'application/json'},
+          // Le backend attend 'access_token', pas 'token'
+          body: jsonEncode({'access_token': accessToken.tokenString}),
+        );
+        
+        final responseBody = jsonDecode(response.body);
 
-      // Afficher un message à l'utilisateur
-      setState(() {
-        _errorMessage =
-            translationService.translate('LOGIN_MESSAGE_RETURN_APP');
-      });
+        if (response.statusCode == 200 && responseBody['status'] == 'success') {
+          print("✅ Réponse du backend : $responseBody");
+
+          // ✅ CORRECTION 2: Sauvegarder les informations de session manuellement
+          final currentProfile = await LocalStorageService.getProfile();
+          final updatedProfile = {
+            ...?currentProfile, // Correction: Utiliser l'opérateur de spread null-aware
+            'iProfile': responseBody['token'], // Le token est iProfileEncrypted
+            'iBasket': responseBody['iBasket']?.toString(),
+            'sEmail': responseBody['email']?.toString(),
+            'sNom': responseBody['nom']?.toString(),
+            'sPrenom': responseBody['prenom']?.toString(),
+          };
+          await LocalStorageService.saveProfile(updatedProfile);
+          print('💾 Profil mis à jour avec les informations Facebook.');
+
+
+          // Notifier l'AuthNotifier
+          final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+          await authNotifier.onLogin();
+          
+          // Gérer la redirection
+          String callBackUrl = await LocalStorageService.getCallBackUrl() ?? widget.callBackUrl ?? '/wishlist';
+          await LocalStorageService.clearCallBackUrl();
+
+          if (mounted) {
+            await _showSuccessPopup();
+            context.go(callBackUrl);
+          }
+        } else {
+          // Gérer les erreurs du backend
+          throw Exception('Erreur du serveur: ${responseBody['message'] ?? response.body}');
+        }
+
+      } else {
+        // Gérer les cas où l'utilisateur annule ou échoue la connexion
+        print('⚠️ Statut de la connexion Facebook: ${result.status}');
+        print('ℹ️ Message: ${result.message}');
+        // Pas besoin d'afficher une erreur si l'utilisateur annule
+        if(result.status != LoginStatus.cancelled) {
+          throw Exception('La connexion Facebook a échoué.');
+        }
+      }
     } catch (e) {
-      print('❌ Erreur connexion Facebook: $e');
+      print("❌ Erreur lors de la connexion Facebook: $e");
       setState(() {
-        _errorMessage =
-            translationService.translate('LOGIN_ERROR_FACEBOOK');
+        _errorMessage = translationService.translate('LOGIN_ERROR_FACEBOOK') + ': ${e.toString()}';
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
