@@ -53,6 +53,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   List<Map<String, dynamic>> _baskets = []; // Liste des baskets disponibles
   int? _selectedBasketIndex; // Index du basket sélectionné (localId)
   OverlayEntry? _currentSwipeHintOverlay; // Pour gérer l'overlay du message de swipe
+  bool _isBasketDropdownOpen = false; // Pour l'animation de la flèche du dropdown
   
   // ✨ ANIMATIONS - Style "Cascade Fluide" (différent des 3 autres pages)
   late AnimationController _buttonsController;
@@ -3768,20 +3769,34 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       return label.toLowerCase().contains('.pdf');
     });
     
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return PopupMenuButton<int>(
-          // Centrer le menu en dessous du bouton
-          // Sur mobile, le menu a la même largeur que le bouton (180), donc offset 0
-          offset: Offset(isMobile ? 0 : -65, isMobile ? 48 : 52),
-          constraints: BoxConstraints(
-            maxWidth: isMobile ? 180 : 380, // Limiter la largeur du menu
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 8,
-          color: Colors.white,
+    return PopupMenuButton<int>(
+      offset: Offset(isMobile ? 0 : -65, isMobile ? 48 : 52),
+      constraints: BoxConstraints(
+        maxWidth: isMobile ? 180 : 380, // Limiter la largeur du menu
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      elevation: 8,
+      color: Colors.white,
+      onOpened: () {
+        setState(() {
+          _isBasketDropdownOpen = true;
+        });
+      },
+      onCanceled: () {
+        setState(() {
+          _isBasketDropdownOpen = false;
+        });
+      },
+      onSelected: (int? index) {
+        setState(() {
+          _isBasketDropdownOpen = false;
+        });
+        if (index != null && mounted) {
+          _handleBasketChange(index);
+        }
+      },
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 12 : 16,
@@ -3817,21 +3832,24 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: const Color(0xFF6C757D),
-              size: isMobile ? 20 : 24,
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: _isBasketDropdownOpen ? math.pi : 0),
+              duration: const Duration(milliseconds: 300),
+              builder: (context, value, child) {
+                return Transform.rotate(
+                  angle: value,
+                  child: child,
+                );
+              },
+              child: Icon(
+                Icons.keyboard_arrow_down,
+                color: const Color(0xFF6C757D),
+                size: isMobile ? 20 : 24,
+              ),
             ),
           ],
         ),
       ),
-      onSelected: (int? index) {
-        if (index != null && mounted) {
-          _handleBasketChange(index);
-        }
-      },
-      // S'assurer que le menu se ferme après sélection
-      onCanceled: () {},
       itemBuilder: (BuildContext context) {
         return List.generate(baskets.length, (index) {
           final basket = baskets[index];
@@ -3842,10 +3860,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           return PopupMenuItem<int>(
             value: index,
             padding: EdgeInsets.zero,
-            // Permettre les gestes du Dismissible en ne bloquant pas les interactions
             enabled: true,
             child: SizedBox(
-              width: double.infinity, // Prendre toute la largeur disponible
+              width: double.infinity, 
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -3856,17 +3873,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                     isSelected: _selectedBasketIndex == index,
                     isMobile: isMobile,
                     onTap: () {
-                      // Le clic est géré par InkWell dans PopupMenuItem
                     },
-                    onDelete: isPdf ? () async {
-                      // Fermer le menu de manière sûre
-                      if (context.mounted) {
-                        Navigator.of(context, rootNavigator: false).pop();
-                      }
-                      // Attendre un peu pour que le menu se ferme
-                      await Future.delayed(const Duration(milliseconds: 100));
+                    onDelete: isPdf ? () {
                       if (mounted) {
-                        await _deleteBasketPdf(basket);
+                        _deleteBasketPdf(basket, context);
                       }
                     } : null,
                   ),
@@ -3883,20 +3893,6 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             ),
           );
         });
-      },
-          // Détecter quand le menu s'ouvre pour afficher le message
-          onOpened: () {
-            // Afficher le message d'alerte à chaque fois sur mobile, s'il y a des PDF
-            if (isMobile && hasPdfBaskets && mounted) {
-              // Attendre un peu pour que le menu soit complètement ouvert
-              Future.delayed(const Duration(milliseconds: 300), () {
-                if (mounted) {
-                  _showSwipeHintMessage();
-                }
-              });
-            }
-          },
-        );
       },
     );
   }
@@ -3976,7 +3972,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Supprimer un panier PDF
-  Future<void> _deleteBasketPdf(Map<String, dynamic> basket) async {
+  Future<void> _deleteBasketPdf(Map<String, dynamic> basket, BuildContext menuContext) async {
     final iBasket = basket['iBasket']?.toString() ?? '';
     if (iBasket.isEmpty) {
       _showErrorDialog(
@@ -4036,6 +4032,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       final result = await _apiService.deleteBasketPdf(iBasket: iBasket);
       
       if (result != null && result['success'] == true) {
+        // Fermer le menu déroulant en cas de succès
+        if (menuContext.mounted) {
+          Navigator.of(menuContext).pop();
+        }
+
         // Recharger la liste des baskets
         await _loadBaskets();
         
@@ -8606,7 +8607,7 @@ class _BreathingButtonState extends State<_BreathingButton>
 }
 
 /// Widget pour un item de basket avec swipe pour révéler le bouton delete (pour les PDF)
-class _BasketListItemWithSwipe extends StatefulWidget {
+class _BasketListItemWithSwipe extends StatelessWidget {
   final Map<String, dynamic> basket;
   final int index;
   final bool isPdf;
@@ -8627,105 +8628,15 @@ class _BasketListItemWithSwipe extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<_BasketListItemWithSwipe> createState() => _BasketListItemWithSwipeState();
-}
-
-class _BasketListItemWithSwipeState extends State<_BasketListItemWithSwipe> {
-  double _dragStartX = 0;
-  double _dragOffset = 0;
-  bool _isSwiping = false;
-
-  @override
   Widget build(BuildContext context) {
-    final label = widget.basket['label']?.toString() ?? 'Wishlist';
+    final label = basket['label']?.toString() ?? 'Wishlist';
     
-    // Si c'est un PDF et qu'on a un onDelete, utiliser un GestureDetector personnalisé pour le swipe
-    if (widget.isPdf && widget.onDelete != null) {
-      return GestureDetector(
-        onHorizontalDragStart: (details) {
-          _dragStartX = details.globalPosition.dx;
-          _dragOffset = 0;
-          _isSwiping = false;
-        },
-        onHorizontalDragUpdate: (details) {
-          final delta = details.globalPosition.dx - _dragStartX;
-          // Seulement si on swipe vers la gauche (négatif)
-          if (delta < 0) {
-            _dragOffset = delta.abs();
-            if (_dragOffset > 10) {
-              _isSwiping = true;
-              setState(() {});
-            }
-          }
-        },
-        onHorizontalDragEnd: (details) {
-          // Si le swipe est suffisant (plus de 100px), déclencher la suppression
-          if (_dragOffset > 100 && _isSwiping) {
-            widget.onDelete?.call();
-          }
-          _dragOffset = 0;
-          _isSwiping = false;
-          setState(() {});
-        },
-        // Le PopupMenuItem gère le clic via onSelected, pas besoin de onTap ici
-        child: Stack(
-          children: [
-            // Background delete qui apparaît lors du swipe (à droite)
-            if (_isSwiping && _dragOffset > 0)
-              Positioned.fill(
-                child: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 24),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
-                      begin: Alignment.centerRight,
-                      end: Alignment.centerLeft,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        Provider.of<TranslationService>(context, listen: false).translate('DELETE_SWIPE'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Icon(
-                        Icons.delete_rounded,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            // Contenu principal avec translation lors du swipe (vers la gauche)
-            Transform.translate(
-              offset: Offset(-_dragOffset.clamp(0.0, 200.0), 0),
-              child: _buildBasketItemContent(label),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // Sinon, afficher l'item normalement
-    return _buildBasketItemContent(label);
-  }
-  
-  Widget _buildBasketItemContent(String label) {
-    // Le PopupMenuItem gère le clic automatiquement via onSelected
-    // On retourne juste le contenu visuel, sans InkWell qui pourrait bloquer le clic
+    // Le PopupMenuItem gère le clic automatiquement via onSelected.
+    // On retourne juste le contenu visuel.
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: widget.isMobile ? 16 : 20,
-        vertical: widget.isMobile ? 14 : 16,
+        horizontal: isMobile ? 16 : 20,
+        vertical: isMobile ? 14 : 16,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -8733,12 +8644,12 @@ class _BasketListItemWithSwipeState extends State<_BasketListItemWithSwipe> {
       ),
       child: Row(
         children: [
-          // Texte du label (sans icône, sans sélection visuelle)
+          // Texte du label
           Expanded(
             child: Text(
               label,
               style: TextStyle(
-                fontSize: widget.isMobile ? 14 : 15,
+                fontSize: isMobile ? 14 : 15,
                 color: const Color(0xFF212529),
                 fontWeight: FontWeight.w500,
                 height: 1.3,
@@ -8747,6 +8658,23 @@ class _BasketListItemWithSwipeState extends State<_BasketListItemWithSwipe> {
               maxLines: 2,
             ),
           ),
+
+          // Icône de suppression si c'est un PDF et qu'une action de suppression est fournie
+          if (isPdf && onDelete != null) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
+              onPressed: () {
+                // La fonction onDelete fournie par le parent se charge déjà
+                // de fermer le menu et de lancer la suppression.
+                onDelete?.call();
+              },
+              // Style pour que le bouton ne prenne pas trop de place
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+              tooltip: 'Supprimer le projet',
+            ),
+          ]
         ],
       ),
     );
