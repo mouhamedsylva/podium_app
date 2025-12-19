@@ -1325,7 +1325,7 @@ class _PodiumScreenState extends State<PodiumScreen>
                       const Spacer(),
                       Flexible(
                         child: Text(
-                          'Comparaison des prix en Europe',
+                          podiumMsg03,
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.black,

@@ -56,16 +56,10 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _fadeController.forward();
-    _progressController
-      ..forward()
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed && mounted) {
-          _blueRingController.stop();
-          _yellowRingController.stop();
-          _progressController.stop();
-          _navigateToLastRoute();
-        }
-      });
+    _progressController.forward();
+
+    // Démarrer le processus de chargement et de navigation
+    _initializeAndNavigate();
   }
 
   @override
@@ -77,10 +71,19 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  Future<void> _navigateToLastRoute() async {
+  Future<void> _initializeAndNavigate() async {
     if (_hasNavigated || !mounted) {
       return;
     }
+
+    // Attendre que les traductions soient chargées
+    print('🔄 SPLASH_SCREEN: Attente du chargement des traductions...');
+    final translationService = Provider.of<TranslationService>(context, listen: false);
+    await translationService.initializationComplete;
+    print('✅ SPLASH_SCREEN: Traductions chargées.');
+
+    if (!mounted) return;
+
     _hasNavigated = true;
 
     try {
@@ -92,10 +95,18 @@ class _SplashScreenState extends State<SplashScreen>
           : savedRoute;
 
       if (mounted) {
+        // Arrêter les animations juste avant de naviguer
+        _blueRingController.stop();
+        _yellowRingController.stop();
+        _progressController.stop();
         context.go(targetRoute);
       }
     } catch (e) {
       if (mounted) {
+        // Arrêter les animations juste avant de naviguer
+        _blueRingController.stop();
+        _yellowRingController.stop();
+        _progressController.stop();
         context.go('/country-selection');
       }
     }

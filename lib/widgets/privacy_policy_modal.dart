@@ -54,16 +54,17 @@ class _PrivacyPolicyModalState extends State<PrivacyPolicyModal> {
     final isMobile = screenWidth < 768;
     
     // Titre traduit
-    String privacyTitle = widget.translationService.translate('HTML_TERMS_HEADER-POLICY');
-    if (privacyTitle == 'HTML_TERMS_HEADER-POLICY') {
-      privacyTitle = widget.translationService.translate('HTML_PRIVACY_HEADER_TITLE');
-      if (privacyTitle == 'HTML_PRIVACY_HEADER_TITLE') {
-        privacyTitle = widget.translationService.translate('PRIVACY_POLICY_TITLE');
-        if (privacyTitle == 'PRIVACY_POLICY_TITLE') {
-          privacyTitle = 'Politique de confidentialité';
-        }
+    String privacyTitle = widget.translationService.translate('APPFOOTER_PRIVACY_POLICY');
+    if (privacyTitle == 'APPFOOTER_PRIVACY_POLICY') {
+      // Fallback sur d'autres clés ou texte par défaut si la traduction manque
+      privacyTitle = widget.translationService.translate('PRIVACY_POLICY_TITLE');
+      if (privacyTitle == 'PRIVACY_POLICY_TITLE') {
+        privacyTitle = 'Politique de confidentialité';
       }
     }
+    
+    // ✅ Nettoyer le titre pour enlever les balises HTML éventuelles (ex: <h1>)
+    privacyTitle = _extractTextFromHtml(privacyTitle);
     
     // Bouton fermer traduit
     String closeButton = widget.translationService.translate('ONBOARDING_VALIDATE');

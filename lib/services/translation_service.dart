@@ -1,14 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 import 'local_storage_service.dart';
 
 class TranslationService extends ChangeNotifier {
   final ApiService _apiService;
+
+  // ✅ Completer pour signaler la fin de l'initialisation
+  final Completer<void> _initializationCompleter = Completer<void>();
   
   String _currentLanguage = 'fr';
   Map<String, String> _translations = {};
   bool _isLoading = false;
   bool _isInitialized = false;
+
+  // ✅ Future pour que l'UI puisse attendre la fin de l'initialisation
+  Future<void> get initializationComplete => _initializationCompleter.future;
 
   TranslationService(this._apiService) {
     // ✅ Initialiser automatiquement les traductions au démarrage
@@ -17,7 +25,12 @@ class TranslationService extends ChangeNotifier {
   
   /// Initialiser les traductions au démarrage de l'application depuis le backend
   Future<void> _initializeTranslations() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      if (!_initializationCompleter.isCompleted) {
+        _initializationCompleter.complete();
+      }
+      return;
+    }
     
     try {
       // Récupérer la langue depuis le localStorage ou utiliser 'fr' par défaut
@@ -46,6 +59,11 @@ class TranslationService extends ChangeNotifier {
       _translations = {};
       _isInitialized = true;
       notifyListeners();
+    } finally {
+      // ✅ Signaler que l'initialisation est terminée, quoi qu'il arrive
+      if (!_initializationCompleter.isCompleted) {
+        _initializationCompleter.complete();
+      }
     }
   }
 

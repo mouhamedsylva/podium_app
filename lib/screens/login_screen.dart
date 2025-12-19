@@ -21,6 +21,7 @@ import 'dart:math' as math;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io' show Platform;
+// import 'package:loading_animation_widget/loading_animation_widget.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? callBackUrl;
@@ -36,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _codeController = TextEditingController();
   bool _isLoading = false;
+  bool _isSocialLoading = false; // ✅ Nouvel état pour le chargement social
   bool _awaitingCode = false;
   String _errorMessage = '';
   // Validation e-mail en temps réel
@@ -466,7 +468,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         print('📱 Mode Android détecté - Utilisation de Google Sign-In Mobile');
         print('✅ Vous êtes dans une vraie app Android, le flux Google Sign-In devrait s\'exécuter');
         setState(() {
-          _isLoading = true;
+          _isSocialLoading = true;
           _errorMessage = '';
         });
 
@@ -502,7 +504,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             print('⚠️ Connexion Google annulée par l\'utilisateur');
             print('ℹ️ Pas de redirection - retour normal à l\'app');
             setState(() {
-              _isLoading = false;
+              _isSocialLoading = false;
               _errorMessage = '';
             });
             print('${List.filled(70, '=').join()}\n');
@@ -582,14 +584,17 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('   StackTrace:');
           print(stackTrace);
           print('ℹ️ ATTENTION: Cette erreur ne devrait PAS causer de redirection vers jirig.be');
+          String errorString = e.toString();
+          if (errorString.startsWith('Exception: ')) {
+            errorString = errorString.substring('Exception: '.length);
+          }
           setState(() {
-            _errorMessage =
-                translationService.translate('LOGIN_ERROR_GOOGLE') + ': ${e.toString()}';
+            _errorMessage = errorString;
           });
           print('${List.filled(70, '=').join()}\n');
         } finally {
           setState(() {
-            _isLoading = false;
+            _isSocialLoading = false;
           });
         }
       } else {
@@ -602,10 +607,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       print('❌ Erreur connexion Google: $e');
+      String errorString = e.toString();
+      if (errorString.startsWith('Exception: ')) {
+        errorString = errorString.substring('Exception: '.length);
+      }
       setState(() {
-        _isLoading = false;
-        _errorMessage =
-            translationService.translate('LOGIN_ERROR_GOOGLE');
+        _isSocialLoading = false;
+        _errorMessage = errorString;
       });
     }
   }
@@ -614,7 +622,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   Future<void> _loginWithFacebook() async {
     final translationService = Provider.of<TranslationService>(context, listen: false);
     setState(() {
-      _isLoading = true;
+      _isSocialLoading = true;
       _errorMessage = '';
     });
 
@@ -685,12 +693,15 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       print("❌ Erreur lors de la connexion Facebook: $e");
-      String errorMessage = translationService.translate('LOGIN_ERROR_FACEBOOK') ?? 'Erreur de connexion Facebook';
+      String errorMessage;
       if (e is DioException && e.response?.data is Map) {
-          final errorData = e.response!.data as Map<String, dynamic>;
-          errorMessage += ': ${errorData['message'] ?? e.message}';
+        final errorData = e.response!.data as Map<String, dynamic>;
+        errorMessage = errorData['message'] ?? 'Erreur de communication avec le serveur.';
       } else {
-        errorMessage += ': ${e.toString()}';
+        errorMessage = e.toString();
+        if (errorMessage.startsWith('Exception: ')) {
+          errorMessage = errorMessage.substring('Exception: '.length);
+        }
       }
       setState(() {
         _errorMessage = errorMessage;
@@ -698,7 +709,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _isSocialLoading = false;
         });
       }
     }
@@ -752,6 +763,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         translationService.translate('LOGIN_SEND_LINK');
     final validateCodeLabel =
         translationService.translate('ONBOARDING_VALIDATE');
+    // ✅ Nouveau label pour "Se connecter"
+    final connectLabel =
+        translationService.translate('LOGIN_CONNECT') ?? 'Se connecter';
     final sendingCodeLabel =
         translationService.translate('LOGIN_LOADING_SENDING_CODE');
     final connectingLabel =
@@ -771,7 +785,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         Text(
           termsPrefix,
           style: TextStyle(
-            fontSize: isMobile ? 10 : 12,
+            fontSize: isMobile ? 14 : 16,
             color: Colors.grey[600],
           ),
           textAlign: TextAlign.center,
@@ -793,16 +807,16 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               child: Text(
                 termsLink,
                 style: TextStyle(
-                  fontSize: isMobile ? 10 : 12,
+                  fontSize: isMobile ? 14 : 16,
                   color: const Color(0xFF0051BA),
-                  decoration: TextDecoration.underline,
+                  // decoration: TextDecoration.underline, // ✅ Removed underline
                 ),
               ),
             ),
             Text(
               ' et ',
               style: TextStyle(
-                fontSize: isMobile ? 10 : 12,
+                fontSize: isMobile ? 14 : 16,
                 color: Colors.grey[600],
               ),
             ),
@@ -816,9 +830,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               child: Text(
                 privacyLink,
                 style: TextStyle(
-                  fontSize: isMobile ? 10 : 12,
+                  fontSize: isMobile ? 14 : 16,
                   color: const Color(0xFF0051BA),
-                  decoration: TextDecoration.underline,
+                  // decoration: TextDecoration.underline, // ✅ Removed underline
                 ),
               ),
             ),
@@ -1392,8 +1406,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                                 SizedBox(width: 8),
                                                 Text(
                                                   _awaitingCode
-                                                      ? validateCodeLabel
-                                                      : sendCodeLabel,
+                                                      ? connectLabel
+                                                      : validateCodeLabel,
                                                   style: TextStyle(
                                                     fontSize: isMobile ? 14 : 16,
                                                     fontWeight: FontWeight.w600,
