@@ -4943,6 +4943,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               ),
             ),
             
+            // Espace fixe ajouté entre le bouton Supprimer et le sélecteur de quantité
+            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
+            
             const Spacer(),
             
             // Contrôle quantité - Flexible pour s'adapter
@@ -4971,8 +4974,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                     GestureDetector(
                       onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
                       child: Container(
-                        width: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40), // ✅ Taille augmentée
-                        height: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40), // ✅ Taille augmentée
+                        width: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
+                        height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
                         decoration: BoxDecoration(
                           color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
                           borderRadius: const BorderRadius.only(
@@ -4982,15 +4985,15 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                         ),
                         child: Icon(
                           Icons.remove,
-                          size: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20), // ✅ Taille augmentée
+                          size: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22), // Taille augmentée
                           color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
                         ),
                       ),
                     ),
                     // Zone du nombre
                     Container(
-                      width: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36), // ✅ Taille augmentée
-                      height: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40), // ✅ Taille augmentée
+                      width: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                      height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Hauteur augmentée pour correspondre aux boutons
                       alignment: Alignment.center,
                       decoration: const BoxDecoration(
                         color: Colors.white,
@@ -5004,7 +5007,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                       child: Text(
                         '$quantity',
                         style: TextStyle(
-                          fontSize: isVerySmallMobile ? 13 : (isSmallMobile ? 15 : 18), // ✅ Taille augmentée
+                          fontSize: isVerySmallMobile ? 13 : (isSmallMobile ? 15 : 18),
                           fontWeight: FontWeight.w600,
                           color: const Color(0xFF111827),
                         ),
@@ -5014,8 +5017,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                     GestureDetector(
                       onTap: () => _updateQuantity(codeCrypt, quantity + 1),
                       child: Container(
-                        width: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40), // ✅ Taille augmentée
-                        height: isVerySmallMobile ? 32 : (isSmallMobile ? 36 : 40), // ✅ Taille augmentée
+                        width: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
+                        height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
                         decoration: const BoxDecoration(
                           color: Color(0xFFF3F4F6),
                           borderRadius: BorderRadius.only(
@@ -5025,7 +5028,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                         ),
                         child: Icon(
                           Icons.add,
-                          size: isVerySmallMobile ? 16 : (isSmallMobile ? 18 : 20), // ✅ Taille augmentée
+                          size: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22), // Taille augmentée
                           color: const Color(0xFF374151),
                         ),
                       ),
