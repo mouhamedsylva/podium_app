@@ -25,6 +25,7 @@ import '../utils/web_utils.dart';
 import 'package:animations/animations.dart';
 import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:numberpicker/numberpicker.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({Key? key}) : super(key: key);
@@ -34,6 +35,77 @@ class WishlistScreen extends StatefulWidget {
 }
 
 class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, WidgetsBindingObserver, TickerProviderStateMixin {
+
+  /// Afficher un dialogue pour la saisie manuelle de la quantité avec un sélecteur à défilement
+  Future<void> _showQuantityPickerDialog(String codeCrypt, int currentQuantity) async {
+    int newQuantity = currentQuantity;
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Container(
+              height: 250, // Increased height
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  // Removed Text widget for title
+                  Expanded( // NumberPicker will take available space
+                    child: NumberPicker(
+                      value: newQuantity,
+                      minValue: 1,
+                      maxValue: 100, // Vous pouvez ajuster la valeur max
+                      step: 1,
+                      haptics: true,
+                      onChanged: (value) {
+                        setState(() => newQuantity = value);
+                      },
+                      textStyle: TextStyle(color: Colors.grey, fontSize: 20),
+                      selectedTextStyle: TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.bold),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade300),
+                          bottom: BorderSide(color: Colors.grey.shade300),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        _translationService.translate('OK') ?? 'Valider',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).pop(newQuantity);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && result != currentQuantity) {
+      _updateQuantity(codeCrypt, result);
+    }
+  }
   bool _isLoading = true;
   String _errorMessage = '';
   Map<String, dynamic>? _wishlistData;
@@ -1574,8 +1646,20 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         );
         
         if (articleIndex != -1) {
-          pivotArray[articleIndex]['iqte'] = newQuantity;
-          print('✅ Quantité locale mise à jour pour l\'article: ${pivotArray[articleIndex]['sName']}');
+          // Mettre à jour la quantité dans la copie locale de l'article
+          final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
+          articleToUpdate['iqte'] = newQuantity;
+          pivotArray[articleIndex] = articleToUpdate;
+
+          print('✅ Quantité locale mise à jour pour l\'article: ${articleToUpdate['sName']}');
+
+          // Mettre à jour directement le ValueNotifier pour cet article
+          final articleKey = _articleKey(articleToUpdate);
+          final notifier = _articleNotifiers[articleKey];
+          if (notifier != null) {
+            notifier.value = articleToUpdate;
+            print('✅ ValueNotifier mis à jour pour l\'article: $articleKey');
+          }
         }
         
         // Mettre à jour les totaux depuis parsedData (comme SNAL)
@@ -1613,9 +1697,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
         }
         
+        // Mettre à jour _wishlistData et appeler setState
         _wishlistData!['pivotArray'] = pivotArray;
         setState(() {});
-        _refreshArticleNotifiers();
         
         print('✅ Données mises à jour après changement de quantité');
       }
@@ -4990,26 +5074,29 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                         ),
                       ),
                     ),
-                    // Zone du nombre
-                    Container(
-                      width: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
-                      height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Hauteur augmentée pour correspondre aux boutons
-                      alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        border: Border.symmetric(
-                          vertical: BorderSide(
-                            color: Color(0xFFE5E7EB),
-                            width: 1,
+                    // Zone du nombre - cliquable pour ouvrir le sélecteur
+                    GestureDetector(
+                      onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
+                      child: Container(
+                        width: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                        height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Hauteur augmentée pour correspondre aux boutons
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          border: Border.symmetric(
+                            vertical: BorderSide(
+                              color: Color(0xFFE5E7EB),
+                              width: 1,
+                            ),
                           ),
                         ),
-                      ),
-                      child: Text(
-                        '$quantity',
-                        style: TextStyle(
-                          fontSize: isVerySmallMobile ? 13 : (isSmallMobile ? 15 : 18),
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF111827),
+                        child: Text(
+                          '$quantity',
+                          style: TextStyle(
+                            fontSize: isVerySmallMobile ? 13 : (isSmallMobile ? 15 : 18),
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF111827),
+                          ),
                         ),
                       ),
                     ),
@@ -8683,3 +8770,11 @@ class _BasketListItemWithSwipe extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
+
+
