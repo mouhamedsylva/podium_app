@@ -38,72 +38,111 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
   /// Afficher un dialogue pour la saisie manuelle de la quantité avec un sélecteur à défilement
   Future<void> _showQuantityPickerDialog(String codeCrypt, int currentQuantity) async {
-    int newQuantity = currentQuantity;
     final result = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-            return Container(
-              height: 250, // Increased height
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  // Removed Text widget for title
-                  Expanded( // NumberPicker will take available space
-                    child: NumberPicker(
-                      value: newQuantity,
-                      minValue: 1,
-                      maxValue: 100, // Vous pouvez ajuster la valeur max
-                      step: 1,
-                      haptics: true,
-                      onChanged: (value) {
-                        setState(() => newQuantity = value);
-                      },
-                      textStyle: TextStyle(color: Colors.grey, fontSize: 20),
-                      selectedTextStyle: TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.bold),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.grey.shade300),
-                          bottom: BorderSide(color: Colors.grey.shade300),
+        int newQuantity = currentQuantity;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SafeArea(
+            child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Handle bar
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      
+                      // Title
+                      Text(
+                        _translationService.translate('select_quantity') ?? 'Sélectionner la quantité',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      child: Text(
-                        _translationService.translate('OK') ?? 'Valider',
-                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Number Picker
+                      SizedBox(
+                        height: 200,
+                        child: NumberPicker(
+                          value: newQuantity,
+                          minValue: 1,
+                          maxValue: 100,
+                          step: 1,
+                          haptics: true,
+                          onChanged: (value) {
+                            setState(() => newQuantity = value);
+                          },
+                          textStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          selectedTextStyle: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.symmetric(
+                              horizontal: BorderSide(
+                                color: Theme.of(context).colorScheme.outlineVariant,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      onPressed: () {
-                        Navigator.of(context).pop(newQuantity);
-                      },
-                    ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Action Button
+                      FilledButton(
+                        onPressed: () => Navigator.of(context).pop(newQuantity),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          _translationService.translate('confirm') ?? 'Confirmer',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         );
       },
     );
 
     if (result != null && result != currentQuantity) {
-      _updateQuantity(codeCrypt, result);
+      await _updateQuantity(codeCrypt, result);
     }
   }
   bool _isLoading = true;
