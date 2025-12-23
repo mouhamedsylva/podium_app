@@ -42,9 +42,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      useRootNavigator: false,
       builder: (BuildContext context) {
         int newQuantity = currentQuantity;
-        
+
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
@@ -56,82 +57,109 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           child: SafeArea(
             child: StatefulBuilder(
               builder: (BuildContext context, StateSetter setState) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Handle bar
-                      Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      
-                      // Title
-                      Text(
-                        _translationService.translate('select_quantity') ?? 'Sélectionner la quantité',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Number Picker
-                      SizedBox(
-                        height: 200,
-                        child: NumberPicker(
-                          value: newQuantity,
-                          minValue: 1,
-                          maxValue: 100,
-                          step: 1,
-                          haptics: true,
-                          onChanged: (value) {
-                            setState(() => newQuantity = value);
-                          },
-                          textStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          selectedTextStyle: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                return SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Handle bar
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 32),
                           decoration: BoxDecoration(
-                            border: Border.symmetric(
-                              horizontal: BorderSide(
-                                color: Theme.of(context).colorScheme.outlineVariant,
-                                width: 1.5,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+
+                        // iOS-style Picker Container
+                        Container(
+                          height: 200,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Stack(
+                            children: [
+                              // Selection highlight rectangle (iOS style)
+                              Center(
+                                child: Container(
+                                  height: 40,
+                                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.06),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
+
+                              // Number Picker
+                              Center(
+                                child: NumberPicker(
+                                  value: newQuantity,
+                                  minValue: 1,
+                                  maxValue: 100,
+                                  step: 1,
+                                  haptics: true,
+                                  itemHeight: 40,
+                                  itemWidth: 100,
+                                  axis: Axis.vertical,
+                                  onChanged: (value) {
+                                    setState(() => newQuantity = value);
+                                  },
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide.none,
+                                      bottom: BorderSide.none,
+                                    ),
+                                  ),
+                                  textStyle: TextStyle(
+                                    fontSize: 20,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.35),
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                  selectedTextStyle: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Action Button
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(newQuantity),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF0066FF),
+                            minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Text(
+                            _translationService.translate('ONBOARDING_VALIDATE') ?? 'Valider',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Action Button
-                      FilledButton(
-                        onPressed: () => Navigator.of(context).pop(newQuantity),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Text(
-                          _translationService.translate('confirm') ?? 'Confirmer',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },
@@ -5017,149 +5045,152 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         SizedBox(height: isVerySmallMobile ? 6 : (isSmallMobile ? 8 : 14)),
         
         // Contrôles (trophée, poubelle, quantité)
+        // Dans _buildLeftColumn, remplacez le Container du sélecteur de quantité par ceci :
+
+        // Contrôles (trophée, poubelle, quantité)
         Row(
           children: [
-            // Bouton Podium - Flexible pour s'adapter
-            Flexible(
-              flex: 0,
-              child: GestureDetector(
-                onTap: () => _goToPodium(code, codeCrypt, quantity),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 10), 
-                    vertical: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE7F1FF),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF0D6EFD)),
-                  ),
-                  child: Icon(
-                    Icons.emoji_events, 
-                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20), 
-                    color: const Color(0xFF0D6EFD)
-                  ),
-                ),
-              ),
-            ),
-            
-            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
-            
-            // Bouton Supprimer - Flexible pour s'adapter
-            Flexible(
-              flex: 0,
-              child: GestureDetector(
-                onTap: () => _deleteArticle(codeCrypt, name),
-                child: Container(
-                  padding: EdgeInsets.all(isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF5F5),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFDC3545)),
-                  ),
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
-                    color: const Color(0xFFDC3545),
-                  ),
-                ),
-              ),
-            ),
-            
-            // Espace fixe ajouté entre le bouton Supprimer et le sélecteur de quantité
-            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
-            
-            const Spacer(),
-            
-            // Contrôle quantité - Flexible pour s'adapter
-            Flexible(
-              flex: 0,
+            GestureDetector(
+              onTap: () => _goToPodium(code, codeCrypt, quantity),
               child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: const Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 2,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
+                padding: EdgeInsets.symmetric(
+                    horizontal: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 10),
+                    vertical: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Bouton moins
-                    GestureDetector(
-                      onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
-                      child: Container(
-                        width: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
-                        height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
-                        decoration: BoxDecoration(
-                          color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(8),
-                            bottomLeft: Radius.circular(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7F1FF),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF0D6EFD)),
+                ),
+                child: Icon(
+                    Icons.emoji_events,
+                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
+                    color: const Color(0xFF0D6EFD)
+                ),
+              ),
+            ),
+
+            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
+
+            GestureDetector(
+              onTap: () => _deleteArticle(codeCrypt, name),
+              child: Container(
+                padding: EdgeInsets.all(isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF5F5),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFDC3545)),
+                ),
+                child: Icon(
+                  Icons.delete_outline,
+                  size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
+                  color: const Color(0xFFDC3545),
+                ),
+              ),
+            ),
+
+            // ✅ SOLUTION: Wrapper le sélecteur de quantité dans un Flexible
+            Flexible(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  // ✅ Ajouter une contrainte de largeur maximale
+                  constraints: BoxConstraints(
+                    maxWidth: isVerySmallMobile ? 90 : (isSmallMobile ? 100 : 110),
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFFE5E7EB),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Bouton moins
+                      GestureDetector(
+                        onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
+                        child: Container(
+                          width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                          height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                          decoration: BoxDecoration(
+                            color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(8),
+                              bottomLeft: Radius.circular(8),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.remove,
+                            size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                            color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
                           ),
                         ),
-                        child: Icon(
-                          Icons.remove,
-                          size: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22), // Taille augmentée
-                          color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
-                        ),
                       ),
-                    ),
-                    // Zone du nombre - cliquable pour ouvrir le sélecteur
-                    GestureDetector(
-                      onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
-                      child: Container(
-                        width: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
-                        height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Hauteur augmentée pour correspondre aux boutons
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          border: Border.symmetric(
-                            vertical: BorderSide(
-                              color: Color(0xFFE5E7EB),
-                              width: 1,
+                      // Zone du nombre - cliquable
+                      GestureDetector(
+                        onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
+                        child: Container(
+                          // ✅ Rendre la zone du nombre flexible
+                          constraints: BoxConstraints(
+                            minWidth: isVerySmallMobile ? 20 : (isSmallMobile ? 24 : 28),
+                            maxWidth: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                          ),
+                          height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border.symmetric(
+                              vertical: BorderSide(
+                                color: Color(0xFFE5E7EB),
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '$quantity',
+                              style: TextStyle(
+                                fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF111827),
+                              ),
                             ),
                           ),
                         ),
-                        child: Text(
-                          '$quantity',
-                          style: TextStyle(
-                            fontSize: isVerySmallMobile ? 13 : (isSmallMobile ? 15 : 18),
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF111827),
+                      ),
+                      // Bouton plus
+                      GestureDetector(
+                        onTap: () => _updateQuantity(codeCrypt, quantity + 1),
+                        child: Container(
+                          width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                          height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.only(
+                              topRight: Radius.circular(8),
+                              bottomRight: Radius.circular(8),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.add,
+                            size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                            color: const Color(0xFF374151),
                           ),
                         ),
                       ),
-                    ),
-                    // Bouton plus
-                    GestureDetector(
-                      onTap: () => _updateQuantity(codeCrypt, quantity + 1),
-                      child: Container(
-                        width: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
-                        height: isVerySmallMobile ? 36 : (isSmallMobile ? 40 : 44), // Taille augmentée
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(8),
-                            bottomRight: Radius.circular(8),
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.add,
-                          size: isVerySmallMobile ? 18 : (isSmallMobile ? 20 : 22), // Taille augmentée
-                          color: const Color(0xFF374151),
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
