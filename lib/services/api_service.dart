@@ -2097,6 +2097,67 @@ class ApiService {
     }
   }
 
+  /// Connexion avec Facebook Mobile (basé sur SNAL facebook-mobile-token.post.ts)
+  /// Retourne un JSON avec status, token (iProfile), iBasket, nom, prenom, email
+  Future<Map<String, dynamic>> loginWithFacebookMobile(String accessToken) async {
+    try {
+      print('🔐 Connexion avec Facebook Mobile - Token: ${accessToken.substring(0, 10)}...');
+      
+      final response = await _dio!.post(
+        '/auth/facebook-mobile-token',
+        data: {
+          'access_token': accessToken,
+        },
+      );
+      
+      print('✅ Réponse facebook-mobile: ${response.data}');
+      
+      final data = response.data ?? {};
+      
+      if (data['status'] == 'success') {
+        print('✅ Connexion Facebook réussie');
+        
+        // Note: Le backend renvoie 'token' pour iProfileEncrypted
+        final iProfile = data['token']?.toString() ?? data['iProfile']?.toString();
+        final iBasket = data['iBasket']?.toString();
+        final email = data['email']?.toString();
+        final nom = data['nom']?.toString();
+        final prenom = data['prenom']?.toString();
+        
+        if (iProfile != null && iBasket != null && email != null) {
+          // Récupérer le profil actuel pour ne pas perdre sPaysLangue/sPaysFav
+          final currentProfile = await LocalStorageService.getProfile();
+          
+          // Mettre à jour le profil local
+          final updatedProfile = {
+            ...?currentProfile,
+            'iProfile': iProfile,
+            'iBasket': iBasket,
+            'sEmail': email,
+            if (nom != null && nom.isNotEmpty) 'sNom': nom,
+            if (prenom != null && prenom.isNotEmpty) 'sPrenom': prenom,
+          };
+          
+          await LocalStorageService.saveProfile(updatedProfile);
+          print('💾 Profil sauvegardé avec succès');
+          
+          // ✅ SYNCHRONISATION DES COOKIES (Crucial pour la persistance)
+          await _updateCookiesWithNewIdentifiers(iProfile, iBasket);
+          
+          // Attendre un peu que les cookies soient bien pris en compte
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      } else {
+        throw Exception(data['message']?.toString() ?? 'Erreur lors de la connexion Facebook');
+      }
+      
+      return data;
+    } catch (e) {
+      print('❌ Erreur lors de la connexion Facebook Mobile: $e');
+      rethrow;
+    }
+  }
+
   /// Déconnexion (appelle /api/auth/disconnect comme SNAL-Project)
   /// ✅ CRITIQUE: Conserve les iProfile et iBasket de l'utilisateur connecté
   Future<Map<String, dynamic>?> disconnect() async {

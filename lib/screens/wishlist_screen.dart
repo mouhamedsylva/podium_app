@@ -1713,19 +1713,22 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         );
         
         if (articleIndex != -1) {
-          // Mettre à jour la quantité dans la copie locale de l'article
+          // ✅ CORRECTION: Créer une copie complète de l'article et mettre à jour la quantité
           final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
           articleToUpdate['iqte'] = newQuantity;
           pivotArray[articleIndex] = articleToUpdate;
 
           print('✅ Quantité locale mise à jour pour l\'article: ${articleToUpdate['sName']}');
 
-          // Mettre à jour directement le ValueNotifier pour cet article
+          // ✅ CRITIQUE: Mettre à jour le ValueNotifier IMMÉDIATEMENT pour forcer le rebuild
           final articleKey = _articleKey(articleToUpdate);
           final notifier = _articleNotifiers[articleKey];
           if (notifier != null) {
-            notifier.value = articleToUpdate;
-            print('✅ ValueNotifier mis à jour pour l\'article: $articleKey');
+            // ✅ Créer une NOUVELLE map avec un timestamp pour forcer la mise à jour
+            final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+            updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+            notifier.value = updatedArticle;
+            print('✅ ValueNotifier mis à jour IMMÉDIATEMENT pour l\'article: $articleKey');
           }
         }
         
@@ -1764,9 +1767,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
         }
         
-        // Mettre à jour _wishlistData et appeler setState
+        // Mettre à jour _wishlistData
         _wishlistData!['pivotArray'] = pivotArray;
-        setState(() {});
+        
+        // ✅ CRITIQUE: Appeler setState() APRÈS avoir mis à jour le notifier
+        // pour garantir que l'UI se rebuild avec les nouvelles données
+        if (mounted) {
+          setState(() {});
+        }
         
         print('✅ Données mises à jour après changement de quantité');
       }

@@ -1,0 +1,200 @@
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources UP-TO-DATE
+> Task :gradle:classes UP-TO-DATE
+> Task :gradle:jar UP-TO-DATE
+
+> Task :app:signingReport
+Variant: debug
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+Variant: release
+Config: release
+Store: C:\Users\simplon\Documents\Developement Web\thico\podium_app\android\app\monapp-release.jks
+Alias: monapp
+MD5: 64:81:9B:88:1D:40:AA:65:8D:A0:D8:8B:1C:1F:E0:AA
+SHA1: 65:D3:66:02:89:66:19:1C:18:2B:F8:DA:23:C7:4D:0D:31:9E:9A:73
+SHA-256: D0:2E:A3:58:CF:5B:41:37:32:5A:AE:AB:CA:35:EF:5F:1D:DF:2F:BE:3C:74:E5:FC:45:A9:65:01:85:4C:93:7F
+Valid until: lundi 5 mai 2053
+----------
+Variant: profile
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :app_links:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :flutter_facebook_auth:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :flutter_secure_storage:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :geolocator_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :google_sign_in_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :mobile_scanner:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :path_provider_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :permission_handler_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :share_plus:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :shared_preferences_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :sqflite_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :url_launcher_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+> Task :webview_flutter_android:signingReport
+Variant: debugAndroidTest
+Config: debug
+Store: C:\Users\simplon\.android\debug.keystore
+Alias: AndroidDebugKey
+MD5: 04:9B:2B:86:60:F2:39:FC:47:5E:40:98:E6:5F:9B:03
+SHA1: 2A:F2:7F:26:C8:C7:44:B3:E7:A4:5F:30:CD:2B:C7:BB:1D:27:AA:4D
+SHA-256: 8D:A1:DA:6E:40:24:62:D8:94:AE:D7:CC:2E:DC:EF:9C:BB:51:2B:B9:DF:EC:09:10:0E:BD:11:88:E3:EC:E5:09
+Valid until: lundi 13 septembre 2055
+----------
+
+[Incubating] Problems report is available at: file:///C:/Users/simplon/Documents/Developement%20Web/thico/podium_app/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.12/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 4s
+18 actionable tasks: 14 executed, 4 up-to-date

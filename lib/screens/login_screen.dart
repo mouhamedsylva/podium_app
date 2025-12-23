@@ -637,35 +637,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         final AccessToken accessToken = result.accessToken!;
         print("✅ Token Facebook obtenu: ${accessToken.tokenString.substring(0, 20)}...");
 
-        // 3. Utiliser ApiService pour faire l'appel et gérer les cookies
+        // 3. Utiliser ApiService pour faire l'appel et gérer les cookies (Centralisé)
         final apiService = Provider.of<ApiService>(context, listen: false);
-        await apiService.initialize(); // S'assurer que Dio et le CookieManager sont prêts
+        await apiService.initialize();
         
-        final response = await apiService.dio.post(
-          '/auth/facebook-mobile-token',
-          data: {
-            'access_token': accessToken.tokenString,
-          },
-        );
-        
-        final responseBody = response.data;
+        final responseBody = await apiService.loginWithFacebookMobile(accessToken.tokenString);
 
-        if (response.statusCode == 200 && responseBody['status'] == 'success') {
-          print("✅ Réponse du backend : $responseBody");
-
-          // Sauvegarder les informations de session reçues du backend
-          final currentProfile = await LocalStorageService.getProfile();
-          final updatedProfile = {
-            ...?currentProfile,
-            'iProfile': responseBody['token'], // Le token est iProfileEncrypted
-            'iBasket': responseBody['iBasket']?.toString(),
-            'sEmail': responseBody['email']?.toString(),
-            'sNom': responseBody['nom']?.toString(),
-            'sPrenom': responseBody['prenom']?.toString(),
-          };
-          await LocalStorageService.saveProfile(updatedProfile);
-          print('💾 Profil mis à jour avec les informations Facebook.');
-
+        if (responseBody['status'] == 'success') {
           // Notifier l'AuthNotifier
           final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
           await authNotifier.onLogin();
@@ -679,8 +657,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             context.go(callBackUrl);
           }
         } else {
-          // Gérer les erreurs du backend
-          throw Exception('Erreur du serveur: ${responseBody['message'] ?? response.data}');
+          throw Exception('Erreur du serveur: ${responseBody['message'] ?? 'Erreur inconnue'}');
         }
 
       } else {
@@ -881,6 +858,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       body: SafeArea(
         child: Column(
           children: [
+            if (_isLoading || _isSocialLoading)
+              const LinearProgressIndicator(
+                backgroundColor: Colors.transparent,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0051BA)),
+                minHeight: 3,
+              ),
             // Contenu principal
             Expanded(
               child: LayoutBuilder(
@@ -1444,32 +1427,32 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       _buildSocialButton(
                                         index: 0,
                                         isMobile: isMobile,
-                                          onPressed: _loginWithGoogle,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                            // Logo Google
-                                            Image.asset(
-                                              'assets/images/google.png',
-                                                width: 20,
-                                                height: 20,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Icon(Icons.account_circle, size: 20, color: Colors.grey);
-                                              },
-                                              ),
-                                              SizedBox(width: isMobile ? 8 : 12),
-                                              Flexible(
-                                                child: Text(
-                                                  continueWithGoogleText,
-                                                  style: TextStyle(
-                                                    fontSize: isMobile ? 14 : 16,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Colors.grey[700],
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
+                                        onPressed: _isLoading || _isSocialLoading ? () => null : _loginWithGoogle,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                          // Logo Google
+                                          Image.asset(
+                                            'assets/images/google.png',
+                                              width: 20,
+                                              height: 20,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Icon(Icons.account_circle, size: 20, color: Colors.grey);
+                                            },
+                                            ),
+                                            SizedBox(width: isMobile ? 8 : 12),
+                                            Flexible(
+                                              child: Text(
+                                                continueWithGoogleText,
+                                                style: TextStyle(
+                                                  fontSize: isMobile ? 14 : 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[700],
                                                 ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                            ],
+                                            ),
+                                          ],
                                         ),
                                       ),
                                       SizedBox(height: 12),
@@ -1477,32 +1460,32 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                       _buildSocialButton(
                                         index: 1,
                                         isMobile: isMobile,
-                                          onPressed: _loginWithFacebook,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                            // Logo Facebook
-                                              Image.asset(
-                                              'assets/images/facebook.png',
-                                                width: 20,
-                                                height: 20,
-                                                errorBuilder: (context, error, stackTrace) {
-                                                return Icon(Icons.facebook, color: Colors.blue, size: 20);
-                                                },
-                                              ),
-                                              SizedBox(width: isMobile ? 8 : 12),
-                                              Flexible(
-                                                child: Text(
-                                                  continueWithFacebookText,
-                                                  style: TextStyle(
-                                                    fontSize: isMobile ? 14 : 16,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Colors.grey[700],
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
+                                        onPressed: _isLoading || _isSocialLoading ? () => null : _loginWithFacebook,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                          // Logo Facebook
+                                            Image.asset(
+                                            'assets/images/facebook.png',
+                                              width: 20,
+                                              height: 20,
+                                              errorBuilder: (context, error, stackTrace) {
+                                              return Icon(Icons.facebook, color: Colors.blue, size: 20);
+                                              },
+                                            ),
+                                            SizedBox(width: isMobile ? 8 : 12),
+                                            Flexible(
+                                              child: Text(
+                                                continueWithFacebookText,
+                                                style: TextStyle(
+                                                  fontSize: isMobile ? 14 : 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[700],
                                                 ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                            ],
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -1535,13 +1518,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
   
-  /// ✨ Construire un bouton social avec animation
   Widget _buildSocialButton({
     required int index,
     required bool isMobile,
     required VoidCallback onPressed,
     required Widget child,
   }) {
+    final Widget buttonContent = child;
+
     if (!_animationsInitialized) {
       return SizedBox(
         width: double.infinity,
@@ -1554,7 +1538,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: child,
+          child: buttonContent,
         ),
       );
     }
@@ -1585,7 +1569,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: child,
+          child: buttonContent,
         ),
       ),
     );
