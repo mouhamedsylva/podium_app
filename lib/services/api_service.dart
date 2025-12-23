@@ -266,8 +266,21 @@ class ApiService {
         // Utiliser le CookieManager de Dio à la place (déjà configuré)
         if (!kIsWeb) {
           // Sur mobile, on peut définir le header Cookie manuellement
-          options.headers['Cookie'] = cookieHeader;
-          options.headers['cookie'] = cookieHeader;
+          // ✅ FIX: Fusionner avec les cookies existants (ex: ajoutés par CookieManager) au lieu d'écraser
+          String existingCookie = options.headers['cookie'] as String? ?? '';
+          if (existingCookie.isEmpty) {
+             existingCookie = options.headers['Cookie'] as String? ?? '';
+          }
+          
+          if (existingCookie.isNotEmpty) {
+            options.headers['Cookie'] = '$existingCookie; $cookieHeader';
+            options.headers['cookie'] = '$existingCookie; $cookieHeader';
+            print('🍪 Cookies fusionnés: ${options.headers['Cookie']}');
+          } else {
+            options.headers['Cookie'] = cookieHeader;
+            options.headers['cookie'] = cookieHeader;
+            print('🍪 Cookies définis (nouveaux): $cookieHeader');
+          }
         } else {
           // Sur le web, le CookieManager de Dio gère les cookies automatiquement
           // On peut aussi utiliser document.cookie si nécessaire
