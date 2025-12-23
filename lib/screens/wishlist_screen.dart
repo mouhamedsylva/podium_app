@@ -5050,46 +5050,59 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         // Contrôles (trophée, poubelle, quantité)
         Row(
           children: [
-            GestureDetector(
-              onTap: () => _goToPodium(code, codeCrypt, quantity),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                    horizontal: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 10),
+            // Bouton Podium - Flexible pour s'adapter
+            Flexible(
+              flex: 0,
+              child: GestureDetector(
+                onTap: () => _goToPodium(code, codeCrypt, quantity),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 10), 
                     vertical: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE7F1FF),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF0D6EFD)),
-                ),
-                child: Icon(
-                    Icons.emoji_events,
-                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE7F1FF),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF0D6EFD)),
+                  ),
+                  child: Icon(
+                    Icons.emoji_events, 
+                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20), 
                     color: const Color(0xFF0D6EFD)
+                  ),
                 ),
               ),
             ),
 
             SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
-
-            GestureDetector(
-              onTap: () => _deleteArticle(codeCrypt, name),
-              child: Container(
-                padding: EdgeInsets.all(isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF5F5),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFDC3545)),
-                ),
-                child: Icon(
-                  Icons.delete_outline,
-                  size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
-                  color: const Color(0xFFDC3545),
+            
+            // Bouton Supprimer - Flexible pour s'adapter
+            Flexible(
+              flex: 0,
+              child: GestureDetector(
+                onTap: () => _deleteArticle(codeCrypt, name),
+                child: Container(
+                  padding: EdgeInsets.all(isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF5F5),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFDC3545)),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline,
+                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
+                    color: const Color(0xFFDC3545),
+                  ),
                 ),
               ),
             ),
-
-            // ✅ SOLUTION: Wrapper le sélecteur de quantité dans un Flexible
+            
+            // Espace fixe ajouté entre le bouton Supprimer et le sélecteur de quantité
+            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
+            
+            const Spacer(),
+            
+            // Contrôle quantité - Flexible pour s'adapter
             Flexible(
               child: Align(
                 alignment: Alignment.centerRight,
