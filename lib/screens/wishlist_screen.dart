@@ -4913,7 +4913,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         children: [
           // Colonne gauche - Détails de l'article
           Expanded(
-            flex: isVerySmallMobile ? 1 : (isSmallMobile ? 1 : (isMobile ? 2 : 3)),
+            flex: isVerySmallMobile ? 6 : (isSmallMobile ? 4 : (isMobile ? 3 : 3)),
             child: _buildLeftColumn(baseArticle, translationService, imageUrl, name, code, quantity, codeCrypt, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
           ),
           
@@ -4921,7 +4921,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           
           // Colonne droite - Prix et pays
           Expanded(
-            flex: isVerySmallMobile ? 1 : (isSmallMobile ? 1 : (isMobile ? 2 : 2)),
+            flex: isVerySmallMobile ? 4 : (isSmallMobile ? 3 : (isMobile ? 2 : 2)),
             child: _buildRightColumn(
               article,
               paysListe,
@@ -5049,160 +5049,163 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
         // Contrôles (trophée, poubelle, quantité)
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween, // ✅ Utiliser spaceBetween au lieu de Spacer
           children: [
-            // Bouton Podium - Flexible pour s'adapter
-            Flexible(
-              flex: 0,
-              child: GestureDetector(
-                onTap: () => _goToPodium(code, codeCrypt, quantity),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 10), 
-                    vertical: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE7F1FF),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF0D6EFD)),
-                  ),
-                  child: Icon(
-                    Icons.emoji_events, 
-                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20), 
-                    color: const Color(0xFF0D6EFD)
+            // Groupe Gauche: Trophée + Poubelle
+            Row(
+              mainAxisSize: MainAxisSize.min, // Important pour ne pas prendre toute la place
+              children: [
+                // Bouton Podium
+                GestureDetector(
+                  onTap: () => _goToPodium(code, codeCrypt, quantity),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 10), 
+                      vertical: isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE7F1FF),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF0D6EFD)),
+                    ),
+                    child: Icon(
+                      Icons.emoji_events, 
+                      size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20), 
+                      color: const Color(0xFF0D6EFD)
+                    ),
                   ),
                 ),
-              ),
-            ),
 
-            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
-            
-            // Bouton Supprimer - Flexible pour s'adapter
-            Flexible(
-              flex: 0,
-              child: GestureDetector(
-                onTap: () => _deleteArticle(codeCrypt, name),
-                child: Container(
-                  padding: EdgeInsets.all(isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF5F5),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFDC3545)),
-                  ),
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
-                    color: const Color(0xFFDC3545),
+                SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
+                
+                // Bouton Supprimer
+                GestureDetector(
+                  onTap: () => _deleteArticle(codeCrypt, name),
+                  child: Container(
+                    padding: EdgeInsets.all(isVerySmallMobile ? 4 : (isSmallMobile ? 5 : 8)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF5F5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFDC3545)),
+                    ),
+                    child: Icon(
+                      Icons.delete_outline,
+                      size: isVerySmallMobile ? 14 : (isSmallMobile ? 16 : 20),
+                      color: const Color(0xFFDC3545),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
             
-            // Espace fixe ajouté entre le bouton Supprimer et le sélecteur de quantité
-            SizedBox(width: isVerySmallMobile ? 8 : (isSmallMobile ? 12 : 16)),
+            // Espace flexible minimal si nécessaire (optionnel car spaceBetween gère l'espace)
+            // SizedBox(width: isVerySmallMobile ? 4 : 8),
             
-            const Spacer(),
-            
-            // Contrôle quantité - Flexible pour s'adapter
+            // Contrôle quantité
             Flexible(
+              fit: FlexFit.loose, // Important: loose pour ne pas forcer l'expansion
               child: Align(
                 alignment: Alignment.centerRight,
-                child: Container(
-                  // ✅ Ajouter une contrainte de largeur maximale
-                  constraints: BoxConstraints(
-                    maxWidth: isVerySmallMobile ? 90 : (isSmallMobile ? 100 : 110),
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFFE5E7EB),
-                      width: 1,
+                child: FittedBox( // ✅ Ajout de FittedBox pour réduire la taille si nécessaire
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    // ✅ Largeur maximale contrainte
+                    constraints: BoxConstraints(
+                      maxWidth: isVerySmallMobile ? 90 : (isSmallMobile ? 100 : 110),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFE5E7EB),
+                        width: 1,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Bouton moins
-                      GestureDetector(
-                        onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
-                        child: Container(
-                          width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                          height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                          decoration: BoxDecoration(
-                            color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(8),
-                              bottomLeft: Radius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Bouton moins
+                        GestureDetector(
+                          onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
+                          child: Container(
+                            width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                            height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                            decoration: BoxDecoration(
+                              color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(8),
+                                bottomLeft: Radius.circular(8),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.remove,
+                              size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                              color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
                             ),
                           ),
-                          child: Icon(
-                            Icons.remove,
-                            size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
-                            color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
-                          ),
                         ),
-                      ),
-                      // Zone du nombre - cliquable
-                      GestureDetector(
-                        onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
-                        child: Container(
-                          // ✅ Rendre la zone du nombre flexible
-                          constraints: BoxConstraints(
-                            minWidth: isVerySmallMobile ? 20 : (isSmallMobile ? 24 : 28),
-                            maxWidth: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
-                          ),
-                          height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                          alignment: Alignment.center,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            border: Border.symmetric(
-                              vertical: BorderSide(
-                                color: Color(0xFFE5E7EB),
-                                width: 1,
+                        // Zone du nombre
+                        GestureDetector(
+                          onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
+                          child: Container(
+                            constraints: BoxConstraints(
+                              minWidth: isVerySmallMobile ? 20 : (isSmallMobile ? 24 : 28),
+                              maxWidth: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                            ),
+                            height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                            alignment: Alignment.center,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border.symmetric(
+                                vertical: BorderSide(
+                                  color: Color(0xFFE5E7EB),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '$quantity',
+                                style: TextStyle(
+                                  fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF111827),
+                                ),
                               ),
                             ),
                           ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              '$quantity',
-                              style: TextStyle(
-                                fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF111827),
+                        ),
+                        // Bouton plus
+                        GestureDetector(
+                          onTap: () => _updateQuantity(codeCrypt, quantity + 1),
+                          child: Container(
+                            width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                            height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.only(
+                                topRight: Radius.circular(8),
+                                bottomRight: Radius.circular(8),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                      // Bouton plus
-                      GestureDetector(
-                        onTap: () => _updateQuantity(codeCrypt, quantity + 1),
-                        child: Container(
-                          width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                          height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF3F4F6),
-                            borderRadius: BorderRadius.only(
-                              topRight: Radius.circular(8),
-                              bottomRight: Radius.circular(8),
+                            child: Icon(
+                              Icons.add,
+                              size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                              color: const Color(0xFF374151),
                             ),
                           ),
-                          child: Icon(
-                            Icons.add,
-                            size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
-                            color: const Color(0xFF374151),
-                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
