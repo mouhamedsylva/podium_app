@@ -1720,6 +1720,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
           print('✅ Quantité locale mise à jour pour l\'article: ${articleToUpdate['sName']}');
 
+          // ✅ CRITIQUE: Mettre à jour _wishlistData AVANT le ValueNotifier
+          _wishlistData!['pivotArray'] = pivotArray;
+
           // ✅ CRITIQUE: Mettre à jour le ValueNotifier IMMÉDIATEMENT pour forcer le rebuild
           final articleKey = _articleKey(articleToUpdate);
           final notifier = _articleNotifiers[articleKey];
@@ -1767,13 +1770,15 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
         }
         
-        // Mettre à jour _wishlistData
-        _wishlistData!['pivotArray'] = pivotArray;
-        
         // ✅ CRITIQUE: Appeler setState() APRÈS avoir mis à jour le notifier
         // pour garantir que l'UI se rebuild avec les nouvelles données
         if (mounted) {
           setState(() {});
+          // ✅ AJOUT: Forcer un second rebuild après un court délai pour garantir la mise à jour
+          await Future.delayed(const Duration(milliseconds: 50));
+          if (mounted) {
+            setState(() {});
+          }
         }
         
         print('✅ Données mises à jour après changement de quantité');
