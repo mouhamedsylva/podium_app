@@ -19,15 +19,15 @@
     <uses-permission android:name="android.permission.CAMERA" />
     
     <!-- ========================================== -->
-    <!-- PERMISSIONS STOCKAGE (path_provider, share_plus, cached_network_image) -->
+    <!-- PERMISSIONS STOCKAGE (path_provider, share_plus) -->
     <!-- ========================================== -->
+    <!-- Note: READ_MEDIA_* retirées - l'app n'accède pas aux médias de l'utilisateur -->
+    <!-- L'app utilise uniquement le cache temporaire privé pour créer des fichiers PDF à partager -->
     <!-- Android 12 et inférieur -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <!-- Android 13+ (API 33+) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Android 13+ (API 33+) : Aucune permission READ_MEDIA_* nécessaire -->
+    <!-- L'app n'accède pas aux photos/vidéos/audio de l'utilisateur -->
     
     <!-- ========================================== -->
     <!-- PERMISSIONS WEBVIEW (webview_flutter - OAuth) -->
