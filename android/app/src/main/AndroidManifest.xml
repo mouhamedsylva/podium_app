@@ -9,9 +9,9 @@
     <!-- ========================================== -->
     <!-- PERMISSIONS GÉOLOCALISATION (geolocator, flutter_map) -->
     <!-- ========================================== -->
+    <!-- Note: ACCESS_BACKGROUND_LOCATION retirée - l'app n'utilise que la localisation "while in use" -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     
     <!-- ========================================== -->
     <!-- PERMISSIONS CAMÉRA (mobile_scanner - QR Code) -->
