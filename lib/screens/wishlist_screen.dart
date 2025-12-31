@@ -9,7 +9,9 @@ import '../widgets/custom_app_bar.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/search_modal.dart';
 import '../widgets/simple_map_modal.dart';
+import '../widgets/location_info_dialog.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -2042,10 +2044,201 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
 
   /// Ouvrir/fermer la vue carte dans la même page
-  void _toggleMapView() {
-    setState(() {
-      _showMap = !_showMap;
-    });
+  /// Affiche le popup de localisation avant d'ouvrir la carte si nécessaire
+  Future<void> _toggleMapView() async {
+    // Si on ferme la carte, simplement la fermer
+    if (_showMap) {
+      setState(() {
+        _showMap = false;
+      });
+      return;
+    }
+
+    // Si on ouvre la carte, vérifier si le popup doit être affiché
+    final shouldShowPopup = await _shouldShowLocationInfo();
+    
+    if (shouldShowPopup && mounted) {
+      // Afficher le popup avant d'ouvrir la carte
+      final bool? accepted = await LocationInfoDialog.show(context);
+      
+      // Sauvegarder le choix
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('location_info_shown', true);
+      await prefs.setBool('location_permission_refused', accepted == false);
+      
+      if (accepted == true && mounted) {
+        // Si l'utilisateur accepte, demander la permission
+        await _requestLocationPermission();
+      } else if (accepted == false && mounted) {
+        // Si l'utilisateur refuse, afficher un message informatif
+        _showLocationRefusedMessage();
+      }
+    }
+    
+    // Ouvrir la carte après le popup (ou directement si pas de popup)
+    if (mounted) {
+      setState(() {
+        _showMap = true;
+      });
+    }
+  }
+
+  /// Vérifier si le popup de localisation doit être affiché
+  Future<bool> _shouldShowLocationInfo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const String locationInfoShownKey = 'location_info_shown';
+      
+      // Vérifier si le popup a déjà été affiché
+      final bool hasShown = prefs.getBool(locationInfoShownKey) ?? false;
+      
+      return !hasShown;
+    } catch (e) {
+      print('⚠️ Erreur lors de la vérification du popup: $e');
+      return false;
+    }
+  }
+
+  /// Demander la permission de localisation
+  Future<void> _requestLocationPermission() async {
+    try {
+      // Vérifier si le service de localisation est activé
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      
+      if (!serviceEnabled) {
+        print('⚠️ Service de localisation désactivé');
+        if (mounted) {
+          _showLocationServiceDisabledMessage();
+        }
+        return;
+      }
+
+      // Vérifier la permission actuelle
+      LocationPermission permission = await Geolocator.checkPermission();
+      
+      if (permission == LocationPermission.denied) {
+        // Demander la permission
+        permission = await Geolocator.requestPermission();
+        
+        if (permission == LocationPermission.denied) {
+          print('❌ Permission de localisation refusée');
+          if (mounted) {
+            _showLocationRefusedMessage();
+          }
+        } else {
+          print('✅ Permission de localisation accordée');
+          // Sauvegarder que la permission a été accordée
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('location_permission_refused', false);
+        }
+      } else if (permission == LocationPermission.deniedForever) {
+        print('❌ Permission de localisation refusée définitivement');
+        if (mounted) {
+          _showLocationDeniedForeverMessage();
+        }
+      } else {
+        print('✅ Permission de localisation déjà accordée');
+        // Sauvegarder que la permission a été accordée
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('location_permission_refused', false);
+      }
+    } catch (e) {
+      print('❌ Erreur lors de la demande de permission: $e');
+    }
+  }
+
+  /// Afficher un message informatif lorsque l'utilisateur refuse la localisation
+  void _showLocationRefusedMessage() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'L\'application fonctionnera normalement. La carte utilisera une position par défaut.',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.blue[700],
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  /// Afficher un message lorsque le service de localisation est désactivé
+  void _showLocationServiceDisabledMessage() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.location_off, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Le service de localisation est désactivé. Activez-le dans les paramètres pour utiliser la carte.',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange[700],
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  /// Afficher un message lorsque la permission est refusée définitivement
+  void _showLocationDeniedForeverMessage() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.settings, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Pour activer la localisation, allez dans les paramètres de l\'application.',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange[700],
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: const EdgeInsets.all(16),
+        action: SnackBarAction(
+          label: 'Paramètres',
+          textColor: Colors.white,
+          onPressed: () async {
+            await Geolocator.openLocationSettings();
+          },
+        ),
+      ),
+    );
   }
 
   Future<_CountryManagementData?> _prepareCountryManagementData() async {
@@ -3122,9 +3315,26 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           pivotArray[articleIndex]['spaysSelected'] = newSelected;
           pivotArray[articleIndex]['sPaysSelected'] = newSelected;
           pivotArray[articleIndex]['sPays'] = newSelected;
+          
+          // ✅ Mettre à jour le notifier du modal
           if (articleNotifier != null) {
             articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
           }
+          
+          // ✅ CORRECTION CRITIQUE: Mettre à jour AUSSI le notifier du wishlist_screen
+          // pour que le ValueListenableBuilder dans le build method se mette à jour automatiquement
+          final wishlistNotifier = _articleNotifiers[sCodeArticleCrypt];
+          if (wishlistNotifier != null) {
+            wishlistNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+            print('⚡ ValueNotifier du wishlist_screen mis à jour (optimistic)');
+          } else {
+            // Si le notifier n'existe pas encore, le créer
+            _articleNotifiers[sCodeArticleCrypt] = ValueNotifier<Map<String, dynamic>>(
+              Map<String, dynamic>.from(pivotArray[articleIndex])
+            );
+            print('⚡ ValueNotifier du wishlist_screen créé (optimistic)');
+          }
+          
           if (mounted) setState(() {});
           print('⚡ UI mise à jour immédiatement (optimistic) avec pays: ${isDeselecting ? "(aucun)" : countryCode}');
           unawaited(_loadWishlistData(force: true));
@@ -3194,10 +3404,24 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 print('✅ Totaux mis à jour dans meta');
               }
               
-              // ✅ Mettre à jour le ValueNotifier AVANT le setState pour que le modal se mette à jour
+              // ✅ Mettre à jour le ValueNotifier du modal AVANT le setState pour que le modal se mette à jour
               if (articleNotifier != null) {
                 articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
-                print('✅ ValueNotifier mis à jour avec le nouvel article');
+                print('✅ ValueNotifier du modal mis à jour avec le nouvel article');
+              }
+              
+              // ✅ CORRECTION CRITIQUE: Mettre à jour AUSSI le notifier du wishlist_screen
+              // pour que le ValueListenableBuilder dans le build method se mette à jour automatiquement
+              final wishlistNotifier = _articleNotifiers[sCodeArticleCrypt];
+              if (wishlistNotifier != null) {
+                wishlistNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+                print('✅ ValueNotifier du wishlist_screen mis à jour');
+              } else {
+                // Si le notifier n'existe pas encore, le créer
+                _articleNotifiers[sCodeArticleCrypt] = ValueNotifier<Map<String, dynamic>>(
+                  Map<String, dynamic>.from(pivotArray[articleIndex])
+                );
+                print('✅ ValueNotifier du wishlist_screen créé');
               }
               
               // ✅ Forcer la mise à jour de l'interface principale
