@@ -16,7 +16,9 @@ import '../models/user_settings.dart';
 // import 'dart:html' as html show window;
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const CustomAppBar({super.key});
+  final Color? backgroundColor;
+  
+  const CustomAppBar({super.key, this.backgroundColor});
 
   @override
   Size get preferredSize => const Size.fromHeight(64);
@@ -40,7 +42,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         vertical: 12,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: backgroundColor ?? Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),

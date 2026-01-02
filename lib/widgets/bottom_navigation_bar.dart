@@ -72,7 +72,13 @@ class _CustomBottomNavigationBarState extends State<CustomBottomNavigationBar> {
             isSelected: widget.currentIndex == 3,
             onTap: () => _navigateTo('/wishlist', 3),
           ),
-          // Icône utilisateur supprimée : on conserve uniquement 4 icônes (home, search, scanner, wishlist)
+          _buildNavItem(
+            context: context,
+            icon: Icons.help_outline,
+            isSelected: widget.currentIndex == 4,
+            onTap: () => _navigateTo('/support', 4),
+          ),
+          // 5 icônes : home, search, scanner, wishlist, support
           ],
         ),
       ),

@@ -300,6 +300,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         final Map<String, dynamic> response = await apiService.login(_emailController.text.trim());
         print('📧 Code envoyé à ${_emailController.text}');
 
+        // ⚠️ AVERTISSEMENT : Le code de vérification a été envoyé par email
+        // L'utilisateur doit maintenant vérifier sa boîte Gmail (ou sa boîte mail) pour obtenir le code
+        // Le code doit être entré manuellement dans le champ de code qui apparaîtra à l'écran
+        // Ce processus est nécessaire pour sécuriser la connexion avec email + code
+
         setState(() {
           _awaitingCode = true;
           _codeController.clear(); // ✅ Ne pas pré-remplir le champ - l'utilisateur doit entrer le code manuellement
@@ -1247,6 +1252,75 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        // ✅ Message proéminent : Sortir de l'app pour vérifier l'email
+                                        Container(
+                                          padding: EdgeInsets.all(isMobile ? 16 : 18),
+                                          margin: EdgeInsets.only(bottom: 16),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                const Color(0xFFE3F2FD),
+                                                const Color(0xFFBBDEFB),
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: const Color(0xFF2196F3),
+                                              width: 1.5,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFF2196F3).withOpacity(0.2),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF2196F3),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.info_outline_rounded,
+                                                  color: Colors.white,
+                                                  size: 24,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      translationService.translate('LOGIN_EXIT_APP_TITLE'),
+                                                      style: TextStyle(
+                                                        fontSize: isMobile ? 15 : 16,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: const Color(0xFF1565C0),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      translationService.translate('LOGIN_EXIT_APP_MESSAGE'),
+                                                      style: TextStyle(
+                                                        fontSize: isMobile ? 13 : 14,
+                                                        color: const Color(0xFF1976D2),
+                                                        height: 1.4,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                         Text(
                                           codeLabel,
                                           style: TextStyle(
@@ -1284,7 +1358,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         ),
                                       ],
                                     ),
-                                  // ✅ Message informatif pour indiquer de vérifier l'email
+                                  // ✅ Message informatif : Code envoyé (optionnel, car le message principal est au-dessus)
                                   if (_awaitingCode)
                                     Container(
                                       padding: EdgeInsets.all(12),
@@ -1300,8 +1374,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              translationService.translate('LOGIN_CODE_SENT_MESSAGE') ?? 
-                                              'Vérifiez votre boîte mail et entrez le code reçu',
+                                              translationService.translate('LOGIN_CODE_SENT_MESSAGE'),
                                               style: const TextStyle(
                                                 color: Color(0xFF2E7D32),
                                                 fontSize: 13,
@@ -1385,7 +1458,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           : Row(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
-                    Icon(Icons.fingerprint, size: isMobile ? 20 : 22),
+                    Icon(Icons.check_circle, size: isMobile ? 20 : 22),
                                                 SizedBox(width: 8),
                                                 Text(
                                                   _awaitingCode

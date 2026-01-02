@@ -1184,7 +1184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-      bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 4),
+      bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 999), // Index hors plage pour qu'aucun onglet ne soit sélectionné
     );
   }
 

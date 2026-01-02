@@ -13,6 +13,7 @@ import 'screens/wishlist_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/profile_detail_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/support_screen.dart';
 // Imports OAuth et magic login supprimés - plus utilisés
 import 'services/settings_service.dart';
 import 'services/api_service.dart';
@@ -215,6 +216,14 @@ class _JirigAppState extends State<JirigApp> {
               context,
               state,
               const ProfileScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/support',
+            pageBuilder: (context, state) => _buildPageWithTransition(
+              context,
+              state,
+              const SupportScreen(),
             ),
           ),
           // Routes MagicLogin et OAuth supprimées - système basé sur les codes uniquement
