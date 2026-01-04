@@ -2097,6 +2097,89 @@ class ApiService {
     }
   }
 
+  /// Connexion avec Apple Mobile (basé sur SNAL apple-mobile.ts)
+  /// Récupère un identityToken depuis Apple Sign-In et l'envoie à /api/auth/apple-mobile
+  /// Retourne un JSON avec status, iProfile, iBasket, email
+  Future<Map<String, dynamic>> loginWithAppleMobile(String identityToken) async {
+    try {
+      print('🔐 Connexion avec Apple Mobile - identityToken: ${identityToken.substring(0, 20)}...');
+      
+      // Appel à l'endpoint /api/auth/apple-mobile?identity_token=...
+      // L'endpoint attend un paramètre query 'identity_token'
+      final response = await _dio!.get(
+        '/auth/apple-mobile',
+        queryParameters: {
+          'identity_token': identityToken,
+        },
+        options: Options(
+          followRedirects: false,
+          validateStatus: (status) {
+            return status != null && status >= 200 && status < 300;
+          },
+        ),
+      );
+      
+      print('✅ Réponse apple-mobile: ${response.data}');
+      
+      final data = response.data ?? {};
+      
+      // Vérifier si la réponse indique un succès
+      if (data['status'] == 'success') {
+        print('✅ Connexion Apple réussie');
+        
+        // Récupérer les identifiants depuis la réponse
+        final iProfile = data['iProfile']?.toString();
+        final iBasket = data['iBasket']?.toString();
+        final email = data['email']?.toString();
+        
+        print('🔍 Identifiants récupérés depuis la réponse:');
+        print('   iProfile: $iProfile');
+        print('   iBasket: $iBasket');
+        print('   email: $email');
+        
+        if (iProfile != null && iBasket != null) {
+          // Récupérer le profil actuel pour conserver sPaysLangue et sPaysFav
+          final currentProfile = await LocalStorageService.getProfile();
+          final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+          final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+          
+          // Mettre à jour le profil local avec TOUTES les informations
+          final updatedProfile = {
+            ...?currentProfile,
+            'iProfile': iProfile,
+            'iBasket': iBasket,
+            if (email != null && email.isNotEmpty) 'sEmail': email,
+            if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
+            if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
+          };
+          
+          await LocalStorageService.saveProfile(updatedProfile);
+          print('💾 Profil sauvegardé avec identifiants Apple');
+          
+          // Forcer la mise à jour des cookies avant toute autre requête
+          await _updateCookiesWithNewIdentifiers(iProfile, iBasket);
+          
+          // Attendre que les cookies soient mis à jour
+          print('⏳ Attente de la mise à jour des cookies...');
+          await Future.delayed(const Duration(seconds: 1));
+          
+          print('✅ Connexion Apple réussie - identifiants mis à jour');
+        } else {
+          print('❌ Identifiants manquants dans la réponse');
+          throw Exception('Identifiants manquants dans la réponse Apple Mobile');
+        }
+      } else {
+        print('❌ Échec de la connexion Apple: ${data['message'] ?? data['error']}');
+        throw Exception(data['message']?.toString() ?? data['error']?.toString() ?? 'Erreur lors de la connexion Apple');
+      }
+      
+      return data;
+    } catch (e) {
+      print('❌ Erreur lors de la connexion Apple Mobile: $e');
+      rethrow;
+    }
+  }
+
   /// Connexion avec Facebook Mobile (basé sur SNAL facebook-mobile-token.post.ts)
   /// Retourne un JSON avec status, token (iProfile), iBasket, nom, prenom, email
   Future<Map<String, dynamic>> loginWithFacebookMobile(String accessToken) async {

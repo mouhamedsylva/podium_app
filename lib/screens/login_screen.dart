@@ -20,6 +20,7 @@ import 'package:animations/animations.dart';
 import 'dart:math' as math;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:io' show Platform;
 // import 'package:loading_animation_widget/loading_animation_widget.dart';
 
@@ -623,6 +624,130 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
+  /// Connexion avec Apple - Implémentation mobile native (iOS uniquement)
+  /// Basée sur SNAL apple-mobile.ts
+  Future<void> _loginWithApple() async {
+    final translationService = Provider.of<TranslationService>(context, listen: false);
+    
+    // Apple Sign-In n'est disponible que sur iOS
+    if (!Platform.isIOS) {
+      setState(() {
+        _errorMessage = translationService.translate('LOGIN_ERROR_APPLE') ?? 'Apple Sign-In n\'est disponible que sur iOS';
+      });
+      return;
+    }
+    
+    setState(() {
+      _isSocialLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      print('\n${List.filled(70, '=').join()}');
+      print('🍎 === DÉBUT CONNEXION APPLE ===');
+      print('${List.filled(70, '=').join()}');
+      
+      // 1. Lancer la connexion avec Apple Sign-In
+      print('📱 === ÉTAPE 1: Demande de connexion Apple Sign-In ===');
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      print('✅ Credential Apple obtenu');
+      print('   User ID: ${credential.userIdentifier}');
+      print('   Email: ${credential.email ?? 'Non fourni'}');
+      print('   Identity Token: ${credential.identityToken?.substring(0, 20) ?? 'null'}...');
+
+      // 2. Vérifier que l'identityToken est disponible
+      if (credential.identityToken == null || credential.identityToken!.isEmpty) {
+        throw Exception('Identity token non disponible depuis Apple Sign-In');
+      }
+
+      print('📱 === ÉTAPE 2: Appel API /api/auth/apple-mobile ===');
+      print('📡 URL complète: ${ApiConfig.baseUrl}/auth/apple-mobile?identity_token=...');
+      
+      // 3. Utiliser ApiService pour faire l'appel
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      await apiService.initialize();
+      
+      final responseBody = await apiService.loginWithAppleMobile(credential.identityToken!);
+
+      print('✅ Réponse API reçue:');
+      print('   Status: ${responseBody['status']}');
+      print('   Keys: ${responseBody.keys.toList()}');
+
+      if (responseBody['status'] == 'success') {
+        print('✅ Connexion Apple réussie');
+        print('📱 === ÉTAPE 3: Traitement de la réponse ===');
+        
+        // Notifier l'AuthNotifier
+        print('📢 Notification de la connexion à AuthNotifier...');
+        final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+        await authNotifier.onLogin();
+        print('✅ AuthNotifier notifié');
+        
+        // Gérer la redirection
+        String? callBackUrl = widget.callBackUrl;
+        if (callBackUrl == null || callBackUrl.isEmpty) {
+          callBackUrl = await LocalStorageService.getCallBackUrl();
+        }
+        if (callBackUrl == null || callBackUrl.isEmpty) {
+          callBackUrl = '/wishlist';
+        }
+        await LocalStorageService.clearCallBackUrl();
+
+        print('📱 === ÉTAPE 4: Redirection interne dans l\'app ===');
+        print('🔄 Redirection interne vers: $callBackUrl');
+
+        if (mounted) {
+          await _showSuccessPopup();
+          context.go(callBackUrl);
+          print('✅ Redirection interne effectuée vers: $callBackUrl');
+        }
+        print('${List.filled(70, '=').join()}\n');
+      } else {
+        throw Exception('Erreur du serveur: ${responseBody['message'] ?? 'Erreur inconnue'}');
+      }
+    } catch (e) {
+      print("❌ Erreur lors de la connexion Apple: $e");
+      print('${List.filled(70, '=').join()}\n');
+      
+      String errorMessage;
+      if (e is DioException && e.response?.data is Map) {
+        final errorData = e.response!.data as Map<String, dynamic>;
+        errorMessage = errorData['message'] ?? 'Erreur de communication avec le serveur.';
+      } else if (e is SignInWithAppleAuthorizationException) {
+        // Gérer les erreurs spécifiques à Apple Sign-In
+        if (e.code == AuthorizationErrorCode.canceled) {
+          print('ℹ️ Connexion Apple annulée par l\'utilisateur');
+          errorMessage = ''; // Ne pas afficher d'erreur si l'utilisateur a annulé
+        } else {
+          errorMessage = 'Erreur Apple Sign-In: ${e.message ?? e.code.toString()}';
+        }
+      } else {
+        errorMessage = e.toString();
+        if (errorMessage.startsWith('Exception: ')) {
+          errorMessage = errorMessage.substring('Exception: '.length);
+        }
+      }
+      
+      if (errorMessage.isNotEmpty) {
+        setState(() {
+          _errorMessage = errorMessage;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSocialLoading = false;
+        });
+      }
+    }
+  }
+
   /// Connexion avec Facebook - Implémentation mobile native
   Future<void> _loginWithFacebook() async {
     final translationService = Provider.of<TranslationService>(context, listen: false);
@@ -758,6 +883,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         translationService.translate('LOGIN_GOOGLE');
     final continueWithFacebookText =
         translationService.translate('LOGIN_FACEBOOK');
+    final continueWithAppleText =
+        translationService.translate('LOGIN_APPLE') ?? 'Continuer avec Apple';
     final termsPrefix = translationService.translate('AUTH_Msg02');
     final termsLink = translationService.translate('AUTH_Msg03');
     final privacyLink = translationService.translate('AUTH_Msg04');
@@ -1539,7 +1666,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           children: [
                                           // Logo Facebook
                                             Image.asset(
-                                            'assets/images/facebook.png',
+                                              'assets/images/facebook.png',
                                               width: 20,
                                               height: 20,
                                               errorBuilder: (context, error, stackTrace) {
@@ -1561,6 +1688,38 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           ],
                                         ),
                                       ),
+                                      // Apple avec animation (iOS uniquement)
+                                      if (Platform.isIOS) ...[
+                                        SizedBox(height: 12),
+                                        _buildSocialButton(
+                                          index: 2,
+                                          isMobile: isMobile,
+                                          onPressed: _isLoading || _isSocialLoading ? () => null : _loginWithApple,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              // Logo Apple (icône système)
+                                              Icon(
+                                                Icons.apple,
+                                                size: 20,
+                                                color: Colors.grey[700],
+                                              ),
+                                              SizedBox(width: isMobile ? 8 : 12),
+                                              Flexible(
+                                                child: Text(
+                                                  continueWithAppleText,
+                                                  style: TextStyle(
+                                                    fontSize: isMobile ? 14 : 16,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: Colors.grey[700],
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   SizedBox(height: isMobile ? 16 : 24),
