@@ -1698,11 +1698,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           child: Row(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              // Logo Apple (icône système)
-                                              Icon(
-                                                Icons.apple,
-                                                size: 20,
-                                                color: Colors.grey[700],
+                                              // Logo Apple
+                                              Image.asset(
+                                                'assets/images/apple.png',
+                                                width: 20,
+                                                height: 20,
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return Icon(Icons.apple, size: 20, color: Colors.grey[700]);
+                                                },
                                               ),
                                               SizedBox(width: isMobile ? 8 : 12),
                                               Flexible(
