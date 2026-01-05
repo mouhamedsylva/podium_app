@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
+import '../services/translation_service.dart';
 
 /// Dialog informatif sur l'utilisation de la localisation
 /// S'affiche sur le côté de l'écran avec une animation
@@ -22,6 +24,7 @@ class LocationInfoDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final translationService = Provider.of<TranslationService>(context, listen: false);
     final screenSize = MediaQuery.of(context).size;
     final screenWidth = screenSize.width;
     final screenHeight = screenSize.height;
@@ -32,27 +35,27 @@ class LocationInfoDialog extends StatelessWidget {
     final bottomPadding = padding.bottom > 0 ? padding.bottom : 0;
     
     return Dialog(
-      alignment: Alignment.centerRight, // Positionné sur le côté droit
-      insetPadding: EdgeInsets.only(
-        right: isMobile ? 12 : 20,
-        top: padding.top + 16, // Respecter la safe area du haut
-        bottom: bottomPadding + 16, // Au-dessus de la navigation native
-        left: isMobile ? 12 : 0,
+      alignment: Alignment.center, // ✅ Centré au lieu de centerRight
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 16 : 24,
+        vertical: 16,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
       elevation: 8,
       child: Container(
-        width: isMobile ? (screenWidth - 48) : 380, // Largeur adaptative avec padding
+        width: isMobile ? double.infinity : 400, // Largeur adaptative
         constraints: BoxConstraints(
-          maxHeight: screenHeight * 0.7, // Maximum 70% de la hauteur d'écran
+          maxHeight: screenHeight * 0.85, // Maximum 85% de la hauteur d'écran
+          maxWidth: isMobile ? screenWidth - 32 : 400, // Largeur max avec padding
         ),
         padding: EdgeInsets.all(isMobile ? 20 : 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView( // ✅ Permet le scroll si le contenu est trop grand
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Icône de localisation
             Row(
               children: [
@@ -71,7 +74,7 @@ class LocationInfoDialog extends StatelessWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'Localisation',
+                    translationService.translate('LOCATION_DIALOG_TITLE'),
                     style: TextStyle(
                       fontSize: isMobile ? 22 : 24,
                       fontWeight: FontWeight.bold,
@@ -87,7 +90,7 @@ class LocationInfoDialog extends StatelessWidget {
             
             // Message principal
             Text(
-              'Jirig utilise votre localisation pour :',
+              translationService.translate('LOCATION_DIALOG_MAIN_MESSAGE'),
               style: TextStyle(
                 fontSize: isMobile ? 17 : 18,
                 fontWeight: FontWeight.w600,
@@ -101,24 +104,27 @@ class LocationInfoDialog extends StatelessWidget {
             
             // Liste des utilisations
             _buildUsageItem(
+              context: context,
               icon: Icons.map,
-              text: 'Afficher les magasins IKEA à proximité sur la carte',
+              translationKey: 'LOCATION_DIALOG_USAGE_STORES',
               isMobile: isMobile,
             ),
             
             SizedBox(height: isMobile ? 16 : 18),
             
             _buildUsageItem(
+              context: context,
               icon: Icons.center_focus_strong,
-              text: 'Centrer la carte sur votre position actuelle',
+              translationKey: 'LOCATION_DIALOG_USAGE_CENTER',
               isMobile: isMobile,
             ),
             
             SizedBox(height: isMobile ? 16 : 18),
             
             _buildUsageItem(
+              context: context,
               icon: Icons.search,
-              text: 'Rechercher des magasins près de chez vous',
+              translationKey: 'LOCATION_DIALOG_USAGE_SEARCH',
               isMobile: isMobile,
             ),
             
@@ -146,12 +152,49 @@ class LocationInfoDialog extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Votre localisation est utilisée uniquement lorsque vous ouvrez la carte, et uniquement pendant que l\'application est ouverte.',
+                      translationService.translate('LOCATION_DIALOG_INFO_MESSAGE'),
                       style: TextStyle(
                         fontSize: isMobile ? 14 : 15,
                         color: Colors.blue[900],
                         height: 1.5,
                         fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            SizedBox(height: isMobile ? 24 : 28),
+            
+            // Note sur la position par défaut en cas de refus
+            Container(
+              padding: EdgeInsets.all(isMobile ? 12 : 14),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.grey[300]!,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_city,
+                    color: Colors.grey[600],
+                    size: isMobile ? 18 : 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      translationService.translate('LOCATION_DIALOG_DEFAULT_POSITION_INFO'),
+                      style: TextStyle(
+                        fontSize: isMobile ? 13 : 14,
+                        color: Colors.grey[700],
+                        height: 1.4,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
@@ -177,19 +220,20 @@ class LocationInfoDialog extends StatelessWidget {
                         width: 1.5,
                       ),
                       padding: EdgeInsets.symmetric(
-                        vertical: isMobile ? 16 : 18,
+                        vertical: isMobile ? 14 : 16,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      minimumSize: const Size(0, 48), // Hauteur minimale pour accessibilité
+                      minimumSize: Size(0, isMobile ? 48 : 52), // Hauteur minimale adaptative
                     ),
                     child: Text(
-                      'Refuser',
+                      translationService.translate('LOCATION_DIALOG_REFUSE'),
                       style: TextStyle(
-                        fontSize: isMobile ? 16 : 17,
+                        fontSize: isMobile ? 15 : 16,
                         fontWeight: FontWeight.w600,
                       ),
+                      overflow: TextOverflow.ellipsis, // ✅ Évite le débordement de texte
                     ),
                   ),
                 ),
@@ -206,36 +250,40 @@ class LocationInfoDialog extends StatelessWidget {
                       backgroundColor: const Color(0xFF2196F3),
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(
-                        vertical: isMobile ? 16 : 18,
+                        vertical: isMobile ? 14 : 16,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       elevation: 2,
-                      minimumSize: const Size(0, 48), // Hauteur minimale pour accessibilité
+                      minimumSize: Size(0, isMobile ? 48 : 52), // Hauteur minimale adaptative
                     ),
                     child: Text(
-                      'Accepter',
+                      translationService.translate('LOCATION_DIALOG_ACCEPT'),
                       style: TextStyle(
-                        fontSize: isMobile ? 16 : 17,
+                        fontSize: isMobile ? 15 : 16,
                         fontWeight: FontWeight.w600,
                       ),
+                      overflow: TextOverflow.ellipsis, // ✅ Évite le débordement de texte
                     ),
                   ),
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildUsageItem({
+    required BuildContext context,
     required IconData icon,
-    required String text,
+    required String translationKey,
     required bool isMobile,
   }) {
+    final translationService = Provider.of<TranslationService>(context, listen: false);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -256,7 +304,7 @@ class LocationInfoDialog extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              text,
+              translationService.translate(translationKey),
               style: TextStyle(
                 fontSize: isMobile ? 15 : 16,
                 color: Colors.grey[800],

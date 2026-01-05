@@ -65,6 +65,32 @@
 	<array>
 		<string>https</string>
 		<string>http</string>
+		<string>fbapi</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
+	</array>
+	
+	<!-- Configuration Facebook Login pour iOS -->
+	<key>FacebookAppID</key>
+	<string>1412145146538940</string>
+	<key>FacebookDisplayName</key>
+	<string>Jirig</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<!-- Facebook URL Scheme -->
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb1412145146538940</string>
+			</array>
+		</dict>
+		<!-- Google Sign-In URL Scheme (Reversed Client ID) -->
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.116497000948-90d84akvtp9g4favfmi63ciktp5rbgfu</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

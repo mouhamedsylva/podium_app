@@ -590,13 +590,213 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('   StackTrace:');
           print(stackTrace);
           print('ℹ️ ATTENTION: Cette erreur ne devrait PAS causer de redirection vers jirig.be');
-          String errorString = e.toString();
-          if (errorString.startsWith('Exception: ')) {
-            errorString = errorString.substring('Exception: '.length);
+          
+          // ✅ Vérifier si c'est une DioException avec erreur 500
+          // Si la connexion réussit quand même, ne pas afficher l'erreur technique
+          String errorString = '';
+          if (e is DioException) {
+            final statusCode = e.response?.statusCode;
+            if (statusCode == 500) {
+              // Erreur 500 du serveur - peut être temporaire, message user-friendly
+              errorString = 'Erreur temporaire du serveur. Veuillez réessayer.';
+              print('⚠️ Erreur 500 détectée - Message user-friendly affiché');
+            } else if (e.response?.data is Map) {
+              // Extraire le message d'erreur du backend si disponible
+              final errorData = e.response!.data as Map<String, dynamic>;
+              errorString = errorData['message']?.toString() ?? 
+                          errorData['error']?.toString() ?? 
+                          'Erreur de communication avec le serveur.';
+            } else {
+              errorString = 'Erreur de communication avec le serveur.';
+            }
+          } else {
+            // Autres types d'erreurs
+            errorString = e.toString();
+            if (errorString.startsWith('Exception: ')) {
+              errorString = errorString.substring('Exception: '.length);
+            }
+            // Ne pas afficher les messages techniques complets à l'utilisateur
+            if (errorString.contains('DioException') || 
+                errorString.contains('bad response') ||
+                errorString.contains('status code')) {
+              errorString = 'Erreur de communication avec le serveur.';
+            }
           }
+          
+          if (errorString.isNotEmpty) {
+            setState(() {
+              _errorMessage = errorString;
+            });
+          }
+          print('${List.filled(70, '=').join()}\n');
+        } finally {
           setState(() {
-            _errorMessage = errorString;
+            _isSocialLoading = false;
           });
+        }
+      } else if (Platform.isIOS) {
+        // ✅ iOS : Google Sign-In Mobile (même logique que Android)
+        print('📱 Mode iOS détecté - Utilisation de Google Sign-In Mobile');
+        print('✅ Vous êtes dans une vraie app iOS, le flux Google Sign-In devrait s\'exécuter');
+        setState(() {
+          _isSocialLoading = true;
+          _errorMessage = '';
+        });
+
+        try {
+          print('📱 === ÉTAPE 1: Configuration Google Sign-In (iOS) ===');
+          
+          // ✅ Configuration Google Sign-In selon la documentation
+          // serverClientId doit être le Web Client ID complet (XXXXX-XXXXX.apps.googleusercontent.com)
+          const webClientId = '116497000948-90d84akvtp9g4favfmi63ciktp5rbgfu.apps.googleusercontent.com';
+          
+          // ✅ VÉRIFICATION CRITIQUE: S'assurer que le webClientId est valide
+          if (webClientId.isEmpty || !webClientId.endsWith('.apps.googleusercontent.com')) {
+            print('❌ ERREUR: Web Client ID invalide');
+            throw Exception('Web Client ID invalide. Le Web Client ID doit se terminer par .apps.googleusercontent.com');
+          }
+          
+          print('🔑 Configuration Google Sign-In avec serverClientId: ${webClientId.substring(0, 30)}...');
+          
+          final GoogleSignIn googleSignIn = GoogleSignIn(
+            scopes: ['email', 'profile'],
+            serverClientId: webClientId, // Web Client ID pour iOS
+          );
+
+          // ✅ Étape 1: Récupérer l'idToken via Google Sign-In
+          print('📱 === ÉTAPE 2: Récupération idToken via Google Sign-In (iOS) ===');
+          print('🔑 Demande de connexion Google Sign-In...');
+          print('⏳ En attente de la sélection du compte Google par l\'utilisateur...');
+          
+          final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+          
+          if (googleUser == null) {
+            // L'utilisateur a annulé la connexion
+            print('⚠️ Connexion Google annulée par l\'utilisateur');
+            print('ℹ️ Pas de redirection - retour normal à l\'app');
+            setState(() {
+              _isSocialLoading = false;
+              _errorMessage = '';
+            });
+            print('${List.filled(70, '=').join()}\n');
+            return;
+          }
+
+          print('✅ Compte Google récupéré: ${googleUser.email}');
+          print('✅ Google User ID: ${googleUser.id}');
+          
+          // ✅ Étape 2: Récupérer l'idToken
+          print('📱 === ÉTAPE 3: Récupération idToken depuis Google (iOS) ===');
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          final idToken = googleAuth.idToken;
+
+          if (idToken == null) {
+            print('❌ ERREUR: idToken est null');
+            throw Exception('idToken non disponible depuis Google Sign-In');
+          }
+
+          print('✅ idToken récupéré: ${idToken.substring(0, 20)}...');
+          print('✅ idToken length: ${idToken.length}');
+
+          // ✅ Étape 3: Appeler l'endpoint Nuxt3 /api/auth/google-mobile
+          print('📱 === ÉTAPE 4: Appel API /api/auth/google-mobile (iOS) ===');
+          print('📡 URL complète: ${ApiConfig.baseUrl}/auth/google-mobile?id_token=...');
+          print('📡 Appel à /api/auth/google-mobile...');
+          
+          final apiService = ApiService();
+          final response = await apiService.loginWithGoogleMobile(idToken);
+
+          print('✅ Réponse API reçue:');
+          print('   Status: ${response['status']}');
+          print('   Keys: ${response.keys.toList()}');
+
+          // ✅ Étape 4: Gérer la réponse
+          if (response['status'] == 'success') {
+            print('✅ Connexion Google réussie (iOS)');
+            print('📱 === ÉTAPE 5: Traitement de la réponse ===');
+            
+            // Notifier l'AuthNotifier de la connexion
+            print('📢 Notification de la connexion à AuthNotifier...');
+            final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+            await authNotifier.onLogin();
+            print('✅ AuthNotifier notifié');
+            
+            // Rediriger vers la page souhaitée
+            String? callBackUrl = widget.callBackUrl;
+            if (callBackUrl == null || callBackUrl.isEmpty) {
+              callBackUrl = await LocalStorageService.getCallBackUrl();
+            }
+            if (callBackUrl == null || callBackUrl.isEmpty) {
+              callBackUrl = '/wishlist'; // Par défaut vers la wishlist
+            }
+            await LocalStorageService.clearCallBackUrl();
+
+            print('📱 === ÉTAPE 6: Redirection interne dans l\'app (iOS) ===');
+            print('🔄 Redirection interne vers: $callBackUrl');
+            print('ℹ️ ATTENTION: Cette redirection est INTERNE (context.go), pas vers jirig.be');
+
+            // Afficher le popup de succès avant la redirection
+            await _showSuccessPopup();
+
+            // Redirection après le popup
+            if (mounted) {
+              print('✅ Widget monté, redirection interne en cours...');
+              context.go(callBackUrl);
+              print('✅ Redirection interne effectuée vers: $callBackUrl');
+            } else {
+              print('⚠️ Widget non monté, redirection annulée');
+            }
+            print('${List.filled(70, '=').join()}\n');
+          } else {
+            print('❌ ERREUR: Status de la réponse n\'est pas "success"');
+            print('   Réponse complète: $response');
+            throw Exception(response['message']?.toString() ?? response['error']?.toString() ?? 'Erreur lors de la connexion Google');
+          }
+        } catch (e, stackTrace) {
+          print('❌ ERREUR connexion Google Mobile (iOS):');
+          print('   Exception: $e');
+          print('   Type: ${e.runtimeType}');
+          print('   StackTrace:');
+          print(stackTrace);
+          print('ℹ️ ATTENTION: Cette erreur ne devrait PAS causer de redirection vers jirig.be');
+          
+          // ✅ Vérifier si c'est une DioException avec erreur 500
+          // Si la connexion réussit quand même, ne pas afficher l'erreur technique
+          String errorString = '';
+          if (e is DioException) {
+            final statusCode = e.response?.statusCode;
+            if (statusCode == 500) {
+              // Erreur 500 du serveur - peut être temporaire, message user-friendly
+              errorString = 'Erreur temporaire du serveur. Veuillez réessayer.';
+              print('⚠️ Erreur 500 détectée - Message user-friendly affiché');
+            } else if (e.response?.data is Map) {
+              // Extraire le message d'erreur du backend si disponible
+              final errorData = e.response!.data as Map<String, dynamic>;
+              errorString = errorData['message']?.toString() ?? 
+                          errorData['error']?.toString() ?? 
+                          'Erreur de communication avec le serveur.';
+            } else {
+              errorString = 'Erreur de communication avec le serveur.';
+            }
+          } else {
+            // Autres types d'erreurs
+            errorString = e.toString();
+            if (errorString.startsWith('Exception: ')) {
+              errorString = errorString.substring('Exception: '.length);
+            }
+            // Ne pas afficher les messages techniques complets à l'utilisateur
+            if (errorString.contains('DioException') || 
+                errorString.contains('bad response') ||
+                errorString.contains('status code')) {
+              errorString = 'Erreur de communication avec le serveur.';
+            }
+          }
+          
+          if (errorString.isNotEmpty) {
+            setState(() {
+              _errorMessage = errorString;
+            });
+          }
           print('${List.filled(70, '=').join()}\n');
         } finally {
           setState(() {
@@ -604,7 +804,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           });
         }
       } else {
-        // iOS ou autre plateforme : Flux OAuth classique (à implémenter plus tard si nécessaire)
+        // Autre plateforme non supportée
         print('⚠️ Plateforme non supportée pour Google Sign-In Mobile: ${Platform.operatingSystem}');
         setState(() {
           _errorMessage =
@@ -613,13 +813,41 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       print('❌ Erreur connexion Google: $e');
-      String errorString = e.toString();
-      if (errorString.startsWith('Exception: ')) {
-        errorString = errorString.substring('Exception: '.length);
+      
+      // ✅ Gestion d'erreur améliorée - messages user-friendly
+      String errorString = '';
+      if (e is DioException) {
+        final statusCode = e.response?.statusCode;
+        if (statusCode == 500) {
+          errorString = 'Erreur temporaire du serveur. Veuillez réessayer.';
+          print('⚠️ Erreur 500 détectée - Message user-friendly affiché');
+        } else if (e.response?.data is Map) {
+          final errorData = e.response!.data as Map<String, dynamic>;
+          errorString = errorData['message']?.toString() ?? 
+                      errorData['error']?.toString() ?? 
+                      'Erreur de communication avec le serveur.';
+        } else {
+          errorString = 'Erreur de communication avec le serveur.';
+        }
+      } else {
+        errorString = e.toString();
+        if (errorString.startsWith('Exception: ')) {
+          errorString = errorString.substring('Exception: '.length);
+        }
+        // Ne pas afficher les messages techniques complets à l'utilisateur
+        if (errorString.contains('DioException') || 
+            errorString.contains('bad response') ||
+            errorString.contains('status code') ||
+            errorString.contains('RequestOptions.validateStatus')) {
+          errorString = 'Erreur de communication avec le serveur.';
+        }
       }
+      
       setState(() {
         _isSocialLoading = false;
-        _errorMessage = errorString;
+        if (errorString.isNotEmpty) {
+          _errorMessage = errorString;
+        }
       });
     }
   }
@@ -649,6 +877,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       
       // 1. Lancer la connexion avec Apple Sign-In
       print('📱 === ÉTAPE 1: Demande de connexion Apple Sign-In ===');
+      print('📱 Bundle ID attendu: be.jirig.app');
+      print('📱 Vérification de la disponibilité Apple Sign-In...');
+      
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
@@ -721,9 +952,25 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         errorMessage = errorData['message'] ?? 'Erreur de communication avec le serveur.';
       } else if (e is SignInWithAppleAuthorizationException) {
         // Gérer les erreurs spécifiques à Apple Sign-In
+        print('❌ Erreur Apple Sign-In - Code: ${e.code}, Message: ${e.message}');
+        print('❌ Erreur complète: $e');
+        print('❌ Type d\'erreur: ${e.runtimeType}');
+        
         if (e.code == AuthorizationErrorCode.canceled) {
           print('ℹ️ Connexion Apple annulée par l\'utilisateur');
           errorMessage = ''; // Ne pas afficher d'erreur si l'utilisateur a annulé
+        } else if (e.code == AuthorizationErrorCode.unknown || 
+                   e.message?.contains('error 1000') == true ||
+                   e.message?.contains('1000') == true ||
+                   e.toString().contains('1000')) {
+          // Erreur 1000 = Problème de configuration
+          print('❌ Erreur 1000 détectée - Problème de configuration Apple Sign-In');
+          print('🔍 Vérifications nécessaires:');
+          print('   1. Xcode: Signing & Capabilities → Sign In with Apple activé');
+          print('   2. Apple Developer Portal: App ID be.jirig.app avec Sign In with Apple');
+          print('   3. Backend: NUXT_APPLE_CLIENT_ID = be.jirig.app');
+          print('   4. Provisioning Profile: Régénéré après activation de la capability');
+          errorMessage = 'Erreur de configuration (1000). Vérifiez dans Xcode que "Sign In with Apple" est activé dans Signing & Capabilities, et que l\'App ID be.jirig.app est configuré dans Apple Developer Portal avec Sign In with Apple activé.';
         } else {
           errorMessage = 'Erreur Apple Sign-In: ${e.message ?? e.code.toString()}';
         }
@@ -758,9 +1005,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
     try {
       // 1. Lancer la connexion avec le SDK natif de Facebook
+      print('📱 === DÉBUT CONNEXION FACEBOOK ===');
+      print('📱 Plateforme: ${Platform.isIOS ? "iOS" : "Android"}');
+      
       final LoginResult result = await FacebookAuth.instance.login(
         permissions: ['public_profile', 'email'],
       );
+      
+      print('📱 Résultat Facebook: status=${result.status}, message=${result.message}');
 
       // 2. Vérifier si la connexion a réussi
       if (result.status == LoginStatus.success) {
@@ -798,10 +1050,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           throw Exception('La connexion Facebook a échoué.');
         }
       }
-    } catch (e) {
-      print("❌ Erreur lors de la connexion Facebook: $e");
+    } catch (e, stackTrace) {
+      print("❌ Erreur lors de la connexion Facebook:");
+      print("   Exception: $e");
+      print("   Type: ${e.runtimeType}");
+      print("   StackTrace: $stackTrace");
+      
       String errorMessage;
-      if (e is DioException && e.response?.data is Map) {
+      
+      // Erreurs spécifiques iOS - Configuration manquante
+      if (e.toString().contains('FacebookAppID') || 
+          e.toString().contains('CFBundleURLSchemes') ||
+          e.toString().contains('configuration') ||
+          e.toString().contains('Info.plist')) {
+        errorMessage = 'Erreur de configuration Facebook. Vérifiez que FacebookAppID est configuré dans Info.plist.';
+        print('⚠️ Erreur de configuration Facebook détectée');
+      } else if (e is DioException && e.response?.data is Map) {
         final errorData = e.response!.data as Map<String, dynamic>;
         errorMessage = errorData['message'] ?? 'Erreur de communication avec le serveur.';
       } else {
@@ -809,10 +1073,18 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         if (errorMessage.startsWith('Exception: ')) {
           errorMessage = errorMessage.substring('Exception: '.length);
         }
+        // Message plus user-friendly pour les erreurs génériques
+        if (errorMessage.contains('PlatformException') || 
+            errorMessage.contains('MissingPluginException')) {
+          errorMessage = 'Erreur de configuration Facebook. Vérifiez la configuration iOS dans Info.plist.';
+        }
       }
-      setState(() {
-        _errorMessage = errorMessage;
-      });
+      
+      if (mounted) {
+        setState(() {
+          _errorMessage = errorMessage;
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1698,14 +1970,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                           child: Row(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              // Logo Apple
-                                              Image.asset(
-                                                'assets/images/apple.png',
-                                                width: 20,
-                                                height: 20,
-                                                errorBuilder: (context, error, stackTrace) {
-                                                  return Icon(Icons.apple, size: 20, color: Colors.grey[700]);
-                                                },
+                                              // Icône Apple
+                                              Icon(
+                                                Icons.apple,
+                                                size: 20,
+                                                color: Colors.grey[700],
                                               ),
                                               SizedBox(width: isMobile ? 8 : 12),
                                               Flexible(

@@ -1350,20 +1350,25 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
 
     // Sinon, afficher en mode Dialog avec taille réduite
     final screenSize = MediaQuery.of(context).size;
-    final dialogWidth = screenSize.width * 0.92; // 92% de la largeur
-    final dialogHeight = screenSize.height * 0.88; // 88% de la hauteur
+    final isMobile = screenSize.width < 768;
+    final dialogWidth = isMobile ? screenSize.width * 0.95 : screenSize.width * 0.92; // 95% sur mobile, 92% sur desktop
+    final dialogHeight = isMobile ? screenSize.height * 0.90 : screenSize.height * 0.88; // 90% sur mobile, 88% sur desktop
     
     return Dialog(
+      alignment: Alignment.center, // ✅ Centré explicitement
       insetPadding: EdgeInsets.symmetric(
-        horizontal: (screenSize.width - dialogWidth) / 2,
-        vertical: (screenSize.height - dialogHeight) / 2,
+        horizontal: isMobile ? 8 : 16, // Padding symétrique pour centrage
+        vertical: isMobile ? 16 : 24,
       ),
       backgroundColor: Colors.transparent,
       child: Stack(
         children: [
           Container(
             width: dialogWidth,
-            height: dialogHeight,
+            constraints: BoxConstraints(
+              maxWidth: screenSize.width - 32, // Largeur max avec padding
+              maxHeight: screenSize.height - 32, // Hauteur max avec padding
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
@@ -1376,6 +1381,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
               ],
             ),
         child: Column(
+          mainAxisSize: MainAxisSize.min, // ✅ Évite le débordement
           children: [
             // En-tête avec bouton fermer
             Container(
