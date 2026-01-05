@@ -628,17 +628,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('📦 Pays depuis get-infos-status: ${paysList.length} pays');
       print('📦 PaysLangue depuis get-infos-status: ${paysLangueList.length} entrées');
       
-      // ✅ Créer un map des drapeaux depuis PaysLangue (sColor)
-      final flagMap = <String, String>{};
-      final paysLangueMap = <String, String>{}; // Map pour sPaysLangue (ex: "BE/NL" -> "BE/NL")
+      // ✅ Créer un map pour sPaysLangue (ex: "BE/NL" -> "BE/NL")
+      final paysLangueMap = <String, String>{};
       
       for (final paysLangue in paysLangueList) {
         final sPaysLangue = paysLangue['sPaysLangue']?.toString() ?? '';
         final code = sPaysLangue.contains('/') ? sPaysLangue.split('/')[0] : sPaysLangue;
-        final flag = paysLangue['sColor']?.toString() ?? '';
         
-        if (code.isNotEmpty && flag.isNotEmpty) {
-          flagMap[code.toUpperCase()] = flag;
+        if (code.isNotEmpty && sPaysLangue.isNotEmpty) {
           paysLangueMap[code.toUpperCase()] = sPaysLangue;
         }
       }
@@ -649,14 +646,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final code = pays['sExternalRef']?.toString().toUpperCase() ?? '';
         final name = pays['sDescr']?.toString() ?? '';
         final sPaysLangue = paysLangueMap[code] ?? '$code/$code';
-        final flag = flagMap[code] ?? '';
         
         if (code.isNotEmpty && name.isNotEmpty) {
           availableCountries.add({
             'code': code,
             'name': name,
             'langue': sPaysLangue,
-            'flag': flag,
           });
         }
       }
@@ -685,14 +680,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final currentSPaysLangue = _profile?['sPaysLangue']?.toString() ?? '';
                 final isSelected = currentSPaysLangue == country['langue'];
                 
-                // ✅ Construire l'URL du drapeau
-                String flagUrl = '';
-                if (country['flag'] != null && country['flag'].toString().isNotEmpty) {
-                  flagUrl = ApiConfig.getProxiedImageUrl(country['flag'].toString());
-                } else {
-                  // Fallback si pas de drapeau dans PaysLangue
-                  flagUrl = ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${country['code']}.PNG');
-                }
+                // ✅ Construire l'URL du drapeau directement depuis le code pays
+                // Utiliser toujours le code pays pour construire l'URL du drapeau
+                final countryCode = country['code'] as String;
+                final flagUrl = ApiConfig.getProxiedImageUrl('https://jirig.be/img/flags/${countryCode}.PNG');
                 
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 2),
