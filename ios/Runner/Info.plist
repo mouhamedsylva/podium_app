@@ -84,11 +84,11 @@
 				<string>fb1412145146538940</string>
 			</array>
 		</dict>
-		<!-- Google Sign-In URL Scheme (Reversed Client ID) -->
+		<!-- Google Sign-In URL Scheme (Reversed Client ID pour iOS) -->
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.116497000948-90d84akvtp9g4favfmi63ciktp5rbgfu</string>
+				<string>com.googleusercontent.apps.116497000948-rqah223nds6mkli2p74i7s713ccd8crd</string>
 			</array>
 		</dict>
 	</array>

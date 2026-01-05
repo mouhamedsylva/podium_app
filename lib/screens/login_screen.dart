@@ -646,21 +646,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         try {
           print('📱 === ÉTAPE 1: Configuration Google Sign-In (iOS) ===');
           
-          // ✅ Configuration Google Sign-In selon la documentation
-          // serverClientId doit être le Web Client ID complet (XXXXX-XXXXX.apps.googleusercontent.com)
-          const webClientId = '116497000948-90d84akvtp9g4favfmi63ciktp5rbgfu.apps.googleusercontent.com';
+          // ✅ Configuration Google Sign-In pour iOS
+          // Utiliser l'iOS Client ID spécifique (NUXT_OAUTH_IOS_CLIENT_ID)
+          const iosClientId = '116497000948-rqah223nds6mkli2p74i7s713ccd8crd.apps.googleusercontent.com';
           
-          // ✅ VÉRIFICATION CRITIQUE: S'assurer que le webClientId est valide
-          if (webClientId.isEmpty || !webClientId.endsWith('.apps.googleusercontent.com')) {
-            print('❌ ERREUR: Web Client ID invalide');
-            throw Exception('Web Client ID invalide. Le Web Client ID doit se terminer par .apps.googleusercontent.com');
+          // ✅ VÉRIFICATION CRITIQUE: S'assurer que l'iosClientId est valide
+          if (iosClientId.isEmpty || !iosClientId.endsWith('.apps.googleusercontent.com')) {
+            print('❌ ERREUR: iOS Client ID invalide');
+            throw Exception('iOS Client ID invalide. Le iOS Client ID doit se terminer par .apps.googleusercontent.com');
           }
           
-          print('🔑 Configuration Google Sign-In avec serverClientId: ${webClientId.substring(0, 30)}...');
+          print('🔑 Configuration Google Sign-In avec iOS Client ID: ${iosClientId.substring(0, 30)}...');
           
           final GoogleSignIn googleSignIn = GoogleSignIn(
             scopes: ['email', 'profile'],
-            serverClientId: webClientId, // Web Client ID pour iOS
+            serverClientId: iosClientId, // iOS Client ID spécifique
           );
 
           // ✅ Étape 1: Récupérer l'idToken via Google Sign-In
