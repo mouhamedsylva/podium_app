@@ -10,7 +10,9 @@ Ce document liste toutes les clés de traduction utilisées dans `lib/screens/su
 
 | Clé | Texte par Défaut |
 |-----|------------------|
-| `SUPPORT_SUCCESS_MESSAGE` | `Votre message a été envoyé avec succès !` |
+| `SUPPORT_SUCCESS_TITLE` | `Message envoyé !` |
+| `SUPPORT_SUCCESS_MESSAGE` | `Votre message a été envoyé avec succès. Nous vous répondrons dans les plus brefs délais.` |
+| `SUPPORT_SUCCESS_BUTTON` | `OK` |
 
 ---
 
@@ -58,11 +60,11 @@ Ce document liste toutes les clés de traduction utilisées dans `lib/screens/su
 
 ## 📊 Résumé
 
-**Total de clés de traduction : 22**
+**Total de clés de traduction : 24**
 
 ### Par Catégorie
 
-- **Message de succès** : 1 clé
+- **Message de succès** : 3 clés
 - **Section Contact** : 2 clés
 - **Section Formulaire** : 11 clés
 - **Section Liens Utiles** : 8 clés

@@ -1147,8 +1147,13 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
           
           setState(() {
-            // Stocker directement 'data' qui contient pivotArray et meta
-            _wishlistData = data;
+            // ✅ CRITIQUE: Créer une nouvelle référence pour forcer Flutter à détecter le changement
+            // Stocker une copie de 'data' qui contient pivotArray et meta
+            _wishlistData = Map<String, dynamic>.from(data);
+            _wishlistData!['pivotArray'] = List<dynamic>.from(data['pivotArray'] ?? []);
+            if (data['meta'] != null) {
+              _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
+            }
             _selectedBasketName = 'Wishlist ($articleCount Art.)';
             _isLoading = false;
             _hasLoaded = true; // Marquer comme chargé
@@ -1718,12 +1723,51 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           // ✅ CORRECTION: Créer une copie complète de l'article et mettre à jour la quantité
           final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
           articleToUpdate['iqte'] = newQuantity;
-          pivotArray[articleIndex] = articleToUpdate;
+          
+          // ✅ CRITIQUE: Créer une nouvelle liste avec l'article mis à jour
+          final newPivotArray = List<dynamic>.from(pivotArray);
+          newPivotArray[articleIndex] = articleToUpdate;
 
           print('✅ Quantité locale mise à jour pour l\'article: ${articleToUpdate['sName']}');
 
-          // ✅ CRITIQUE: Mettre à jour _wishlistData AVANT le ValueNotifier
-          _wishlistData!['pivotArray'] = pivotArray;
+          // ✅ CRITIQUE: Créer une nouvelle copie de meta pour forcer la détection du changement
+          Map<String, dynamic> newMeta = {};
+          if (_wishlistData!['meta'] != null) {
+            newMeta = Map<String, dynamic>.from(_wishlistData!['meta']);
+          }
+          
+          // Mettre à jour les totaux depuis parsedData (comme SNAL)
+          if (response['parsedData'] != null && response['parsedData'] is List) {
+            final List<dynamic> parsedData = response['parsedData'];
+            if (parsedData.isNotEmpty) {
+              final Map<String, dynamic> totals = parsedData[0];
+              
+              final List<String> keysToUpdate = [
+                'iBestResultJirig',
+                'iQuantite',
+                'iTotalPriceArticleSelected',
+                'iTotalPriceSelected4PaysProfile',
+                'iTotalQteArticle',
+                'iTotalQteArticleSelected',
+                'sResultatGainPerte',
+                'iResultatGainPertePercentage',
+                'sWarningGeneralInfo'
+              ];
+              
+              for (final key in keysToUpdate) {
+                if (totals[key] != null) {
+                  newMeta[key] = totals[key];
+                }
+              }
+              
+              print('✅ Totaux mis à jour');
+            }
+          }
+          
+          // ✅ CRITIQUE: Créer une NOUVELLE référence de _wishlistData pour forcer Flutter à détecter le changement
+          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+          _wishlistData!['pivotArray'] = newPivotArray;
+          _wishlistData!['meta'] = newMeta;
 
           // ✅ CRITIQUE: Mettre à jour le ValueNotifier IMMÉDIATEMENT pour forcer le rebuild
           final articleKey = _articleKey(articleToUpdate);
@@ -1737,50 +1781,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
         }
         
-        // Mettre à jour les totaux depuis parsedData (comme SNAL)
-        if (response['parsedData'] != null && response['parsedData'] is List) {
-          final List<dynamic> parsedData = response['parsedData'];
-          if (parsedData.isNotEmpty) {
-            final Map<String, dynamic> totals = parsedData[0];
-            
-            final List<String> keysToUpdate = [
-              'iBestResultJirig',
-              'iQuantite',
-              'iTotalPriceArticleSelected',
-              'iTotalPriceSelected4PaysProfile',
-              'iTotalQteArticle',
-              'iTotalQteArticleSelected',
-              'sResultatGainPerte',
-              'iResultatGainPertePercentage',
-              'sWarningGeneralInfo'
-            ];
-            
-            for (final key in keysToUpdate) {
-              if (totals[key] != null) {
-                if (_wishlistData!['meta'] == null) {
-                  _wishlistData!['meta'] = {};
-                }
-                if (_wishlistData!['meta'][key] != null) {
-                  _wishlistData!['meta'][key] = totals[key];
-                } else {
-                  _wishlistData![key] = totals[key];
-                }
-              }
-            }
-            
-            print('✅ Totaux mis à jour');
-          }
-        }
-        
-        // ✅ CRITIQUE: Appeler setState() APRÈS avoir mis à jour le notifier
+        // ✅ CRITIQUE: Appeler setState() APRÈS avoir mis à jour le notifier et créé de nouvelles références
         // pour garantir que l'UI se rebuild avec les nouvelles données
         if (mounted) {
           setState(() {});
-          // ✅ AJOUT: Forcer un second rebuild après un court délai pour garantir la mise à jour
-          await Future.delayed(const Duration(milliseconds: 50));
-          if (mounted) {
-            setState(() {});
-          }
+          print('✅ Interface mise à jour - quantité devrait s\'afficher immédiatement');
         }
         
         print('✅ Données mises à jour après changement de quantité');
@@ -3305,32 +3310,43 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
       // ✅ Optimistic UI update immédiat (avant l'appel API)
       if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
-        final pivotArray = _wishlistData!['pivotArray'] as List;
+        final pivotArray = List<dynamic>.from(_wishlistData!['pivotArray'] as List);
         final articleIndex = pivotArray.indexWhere(
           (item) => item['sCodeArticleCrypt'] == sCodeArticleCrypt
         );
         if (articleIndex != -1) {
           // ✅ Si désélection (-1), mettre à vide, sinon mettre le code du pays
           final newSelected = isDeselecting ? '' : countryCode;
-          pivotArray[articleIndex]['spaysSelected'] = newSelected;
-          pivotArray[articleIndex]['sPaysSelected'] = newSelected;
-          pivotArray[articleIndex]['sPays'] = newSelected;
+          
+          // ✅ CRITIQUE: Créer une nouvelle copie de l'article pour forcer la détection du changement
+          final updatedArticle = Map<String, dynamic>.from(pivotArray[articleIndex]);
+          updatedArticle['spaysSelected'] = newSelected;
+          updatedArticle['sPaysSelected'] = newSelected;
+          updatedArticle['sPays'] = newSelected;
+          
+          // ✅ CRITIQUE: Créer une nouvelle liste avec l'article mis à jour
+          final newPivotArray = List<dynamic>.from(pivotArray);
+          newPivotArray[articleIndex] = updatedArticle;
+          
+          // ✅ CRITIQUE: Créer une NOUVELLE référence de _wishlistData pour forcer Flutter à détecter le changement
+          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+          _wishlistData!['pivotArray'] = newPivotArray;
           
           // ✅ Mettre à jour le notifier du modal
           if (articleNotifier != null) {
-            articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+            articleNotifier.value = Map<String, dynamic>.from(updatedArticle);
           }
           
           // ✅ CORRECTION CRITIQUE: Mettre à jour AUSSI le notifier du wishlist_screen
           // pour que le ValueListenableBuilder dans le build method se mette à jour automatiquement
           final wishlistNotifier = _articleNotifiers[sCodeArticleCrypt];
           if (wishlistNotifier != null) {
-            wishlistNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+            wishlistNotifier.value = Map<String, dynamic>.from(updatedArticle);
             print('⚡ ValueNotifier du wishlist_screen mis à jour (optimistic)');
           } else {
             // Si le notifier n'existe pas encore, le créer
             _articleNotifiers[sCodeArticleCrypt] = ValueNotifier<Map<String, dynamic>>(
-              Map<String, dynamic>.from(pivotArray[articleIndex])
+              Map<String, dynamic>.from(updatedArticle)
             );
             print('⚡ ValueNotifier du wishlist_screen créé (optimistic)');
           }
@@ -3373,7 +3389,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           
           // Trouver l'article dans pivotArray et mettre à jour spaysSelected
           if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
-            final pivotArray = _wishlistData!['pivotArray'] as List;
+            final pivotArray = List<dynamic>.from(_wishlistData!['pivotArray'] as List);
             final articleIndex = pivotArray.indexWhere(
               (item) => item['sCodeArticleCrypt'] == sCodeArticleCrypt
             );
@@ -3383,30 +3399,45 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // Si sNewPaysSelected est -1 ou vide, désélectionner (mettre à vide)
               final rawNewSelected = totals['sNewPaysSelected']?.toString() ?? '';
               final newSelected = (rawNewSelected == '-1' || rawNewSelected.isEmpty) ? '' : rawNewSelected;
-              pivotArray[articleIndex]['spaysSelected'] = newSelected;
-              pivotArray[articleIndex]['sPaysSelected'] = newSelected;
-              pivotArray[articleIndex]['sPays'] = newSelected;
-              pivotArray[articleIndex]['sMyHomeIcon'] = totals['sMyHomeIcon'];
-              pivotArray[articleIndex]['sPaysListe'] = totals['sPaysListe'];
               
-              print('✅ Article mis à jour localement:');
-              print('   Nouveau pays: ${pivotArray[articleIndex]['spaysSelected']}');
-              print('   sMyHomeIcon: ${pivotArray[articleIndex]['sMyHomeIcon']}');
+              // ✅ CRITIQUE: Créer une nouvelle copie de l'article pour forcer la détection du changement
+              final updatedArticle = Map<String, dynamic>.from(pivotArray[articleIndex]);
+              updatedArticle['spaysSelected'] = newSelected;
+              updatedArticle['sPaysSelected'] = newSelected;
+              updatedArticle['sPays'] = newSelected;
+              updatedArticle['sMyHomeIcon'] = totals['sMyHomeIcon'];
+              updatedArticle['sPaysListe'] = totals['sPaysListe'];
+              
+              // ✅ CRITIQUE: Créer une nouvelle liste avec l'article mis à jour
+              final newPivotArray = List<dynamic>.from(pivotArray);
+              newPivotArray[articleIndex] = updatedArticle;
+              
+              // ✅ CRITIQUE: Créer une nouvelle copie de meta pour forcer la détection du changement
+              Map<String, dynamic> newMeta = {};
+              if (_wishlistData!['meta'] != null) {
+                newMeta = Map<String, dynamic>.from(_wishlistData!['meta']);
+              }
               
               // Mettre à jour les totaux (comme SNAL lignes 4097-4108)
-              if (_wishlistData!['meta'] != null) {
-                final meta = _wishlistData!['meta'];
-                meta['iBestResultJirig'] = totals['iBestResultJirig'];
-                meta['iTotalPriceArticleSelected'] = totals['iTotalPriceArticleSelected'];
-                meta['sResultatGainPerte'] = totals['sResultatGainPerte'];
-                meta['iResultatGainPertePercentage'] = totals['iResultatGainPertePercentage'];
-                meta['iTotalQteArticleSelected'] = totals['iTotalQteArticleSelected'];
-                print('✅ Totaux mis à jour dans meta');
-              }
+              newMeta['iBestResultJirig'] = totals['iBestResultJirig'];
+              newMeta['iTotalPriceArticleSelected'] = totals['iTotalPriceArticleSelected'];
+              newMeta['sResultatGainPerte'] = totals['sResultatGainPerte'];
+              newMeta['iResultatGainPertePercentage'] = totals['iResultatGainPertePercentage'];
+              newMeta['iTotalQteArticleSelected'] = totals['iTotalQteArticleSelected'];
+              print('✅ Totaux mis à jour dans meta');
+              
+              // ✅ CRITIQUE: Créer une NOUVELLE référence de _wishlistData pour forcer Flutter à détecter le changement
+              _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+              _wishlistData!['pivotArray'] = newPivotArray;
+              _wishlistData!['meta'] = newMeta;
+              
+              print('✅ Article mis à jour localement:');
+              print('   Nouveau pays: ${updatedArticle['spaysSelected']}');
+              print('   sMyHomeIcon: ${updatedArticle['sMyHomeIcon']}');
               
               // ✅ Mettre à jour le ValueNotifier du modal AVANT le setState pour que le modal se mette à jour
               if (articleNotifier != null) {
-                articleNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+                articleNotifier.value = Map<String, dynamic>.from(updatedArticle);
                 print('✅ ValueNotifier du modal mis à jour avec le nouvel article');
               }
               
@@ -3414,12 +3445,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // pour que le ValueListenableBuilder dans le build method se mette à jour automatiquement
               final wishlistNotifier = _articleNotifiers[sCodeArticleCrypt];
               if (wishlistNotifier != null) {
-                wishlistNotifier.value = Map<String, dynamic>.from(pivotArray[articleIndex]);
+                wishlistNotifier.value = Map<String, dynamic>.from(updatedArticle);
                 print('✅ ValueNotifier du wishlist_screen mis à jour');
               } else {
                 // Si le notifier n'existe pas encore, le créer
                 _articleNotifiers[sCodeArticleCrypt] = ValueNotifier<Map<String, dynamic>>(
-                  Map<String, dynamic>.from(pivotArray[articleIndex])
+                  Map<String, dynamic>.from(updatedArticle)
                 );
                 print('✅ ValueNotifier du wishlist_screen créé');
               }
@@ -3427,7 +3458,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // ✅ Forcer la mise à jour de l'interface principale
               if (mounted) {
                 setState(() {});
-                print('✅ Interface principale mise à jour');
+                print('✅ Interface principale mise à jour - UI devrait se rafraîchir immédiatement');
               }
             } else {
               print('❌ Article non trouvé dans pivotArray');
@@ -3616,6 +3647,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         
         print('📊 Articles après suppression: ${pivotArray.length}');
         
+        // ✅ CRITIQUE: Créer une nouvelle copie de meta pour forcer la détection du changement
+        Map<String, dynamic> newMeta = {};
+        if (_wishlistData!['meta'] != null) {
+          newMeta = Map<String, dynamic>.from(_wishlistData!['meta']);
+        }
+        
         // Mettre à jour les totaux depuis parsedData (comme SNAL)
         if (response['parsedData'] != null && response['parsedData'] is List) {
           final List<dynamic> parsedData = response['parsedData'];
@@ -3633,17 +3670,25 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             
             for (final key in keysToUpdate) {
               if (totals[key] != null) {
-                if (_wishlistData!['meta'] == null) {
-                  _wishlistData!['meta'] = {};
-                }
-                _wishlistData!['meta'][key] = totals[key];
+                newMeta[key] = totals[key];
               }
             }
           }
         }
         
-        // Mettre à jour pivotArray
-        _wishlistData!['pivotArray'] = pivotArray;
+        // ✅ CRITIQUE: Nettoyer les notifiers de l'article supprimé
+        final articleKey = _articleKey({'sCodeArticleCrypt': deletedCode});
+        if (_articleNotifiers.containsKey(articleKey)) {
+          _articleNotifiers[articleKey]?.dispose();
+          _articleNotifiers.remove(articleKey);
+          print('✅ Notifier de l\'article supprimé nettoyé: $articleKey');
+        }
+        
+        // ✅ CRITIQUE: Créer une NOUVELLE référence de _wishlistData pour forcer Flutter à détecter le changement
+        // Cela garantit que l'UI se met à jour immédiatement sans avoir besoin de recharger la page
+        _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+        _wishlistData!['pivotArray'] = List<dynamic>.from(pivotArray); // Nouvelle liste
+        _wishlistData!['meta'] = newMeta; // Nouvelle map meta
         
         // Mettre à jour le nom du panier
         final articleCount = pivotArray.length;
@@ -3653,14 +3698,18 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         if (_selectedBasketIndex != null && 
             _selectedBasketIndex! >= 0 && 
             _selectedBasketIndex! < _baskets.length) {
+          // Créer une nouvelle copie du basket pour forcer la détection du changement
+          _baskets[_selectedBasketIndex!] = Map<String, dynamic>.from(_baskets[_selectedBasketIndex!]);
           _baskets[_selectedBasketIndex!]['label'] = 'Wishlist ($articleCount Art.)';
           print('✅ Label du basket mis à jour dans _baskets: Wishlist ($articleCount Art.)');
         }
         
-        // Rafraîchir l'interface
-        setState(() {});
+        // ✅ CRITIQUE: Rafraîchir l'interface - Flutter détectera maintenant le changement car _wishlistData est une nouvelle référence
+        if (mounted) {
+          setState(() {});
+        }
         
-        print('✅ Données mises à jour après suppression');
+        print('✅ Données mises à jour après suppression - UI devrait se rafraîchir immédiatement');
       }
     } catch (e) {
       print('❌ Erreur lors de la mise à jour des données: $e');

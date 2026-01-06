@@ -69,10 +69,9 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
   }
 
   /// ✅ Filtrer les FAQ selon la recherche
-  List<Map<String, dynamic>> get _filteredFaqList {
+  List<Map<String, dynamic>> _filteredFaqList(TranslationService translationService) {
     if (_searchQuery.isEmpty) return _faqList;
     
-    final translationService = Provider.of<TranslationService>(context, listen: false);
     return _faqList.where((faq) {
       final label = translationService.translate(faq['label']?.toString() ?? '').toLowerCase();
       final content = translationService.translate(faq['content']?.toString() ?? '').toLowerCase();
@@ -83,29 +82,38 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final translationService = Provider.of<TranslationService>(context, listen: false);
+    return Consumer<TranslationService>(
+      builder: (context, translationService, child) {
+        // Vérifier que le service est disponible
+        if (translationService == null) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
 
-    return Container(
-      constraints: BoxConstraints(
-        maxWidth: widget.isMobile ? double.infinity : 1000,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header avec titre, sous-titre et recherche
-          _buildHeader(translationService),
-          
-          const SizedBox(height: 32),
-          
-          // Widget FAQ
-          _buildFaqContent(translationService),
-          
-          const SizedBox(height: 24),
-          
-          // Footer avec CTA
-          _buildFooter(translationService),
-        ],
-      ),
+        return Container(
+          constraints: BoxConstraints(
+            maxWidth: widget.isMobile ? double.infinity : 1000,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header avec titre, sous-titre et recherche
+              _buildHeader(translationService),
+              
+              const SizedBox(height: 32),
+              
+              // Widget FAQ
+              _buildFaqContent(translationService),
+              
+              const SizedBox(height: 24),
+              
+              // Footer avec CTA
+              _buildFooter(translationService),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -199,7 +207,7 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
                 });
               },
               decoration: InputDecoration(
-                hintText: 'Rechercher une question...',
+                hintText: translationService.translate('FAQ_SEARCH_PLACEHOLDER'),
                 hintStyle: TextStyle(
                   color: Colors.grey[400],
                   fontSize: widget.isMobile ? 15 : 16,
@@ -239,10 +247,10 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
   /// ✅ Construit le contenu de la FAQ
   Widget _buildFaqContent(TranslationService translationService) {
     if (_isLoadingFaq) {
-      return _buildLoadingState();
+      return _buildLoadingState(translationService);
     }
 
-    final filteredList = _filteredFaqList;
+    final filteredList = _filteredFaqList(translationService);
 
     if (filteredList.isEmpty) {
       return _buildEmptyState(translationService);
@@ -416,7 +424,7 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
   }
 
   /// ✅ État de chargement
-  Widget _buildLoadingState() {
+  Widget _buildLoadingState(TranslationService translationService) {
     return Container(
       padding: EdgeInsets.all(widget.isMobile ? 40 : 60),
       decoration: BoxDecoration(
@@ -435,7 +443,7 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
           ),
           const SizedBox(height: 20),
           Text(
-            'Chargement des questions...',
+            translationService.translate('FAQ_LOADING'),
             style: TextStyle(
               fontSize: widget.isMobile ? 15 : 16,
               color: Colors.grey[600],
@@ -477,8 +485,8 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
           const SizedBox(height: 20),
           Text(
             _hasSearchQuery
-                ? 'Aucun résultat trouvé'
-                : 'Aucune question disponible',
+                ? translationService.translate('FAQ_NO_RESULTS_TITLE')
+                : translationService.translate('FAQ_NO_QUESTIONS_TITLE'),
             style: TextStyle(
               fontSize: widget.isMobile ? 18 : 20,
               fontWeight: FontWeight.w600,
@@ -488,8 +496,8 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
           const SizedBox(height: 8),
           Text(
             _hasSearchQuery
-                ? 'Essayez avec d\'autres mots-clés'
-                : 'Les questions seront bientôt disponibles',
+                ? translationService.translate('FAQ_NO_RESULTS_MESSAGE')
+                : translationService.translate('FAQ_NO_QUESTIONS_MESSAGE'),
             style: TextStyle(
               fontSize: widget.isMobile ? 14 : 15,
               color: Colors.grey[500],
@@ -526,7 +534,7 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
           ),
           const SizedBox(height: 16),
           Text(
-            'Vous ne trouvez pas votre réponse ?',
+            translationService.translate('FAQ_CONTACT_TITLE'),
             style: TextStyle(
               fontSize: widget.isMobile ? 18 : 20,
               fontWeight: FontWeight.bold,
@@ -536,7 +544,7 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
           ),
           const SizedBox(height: 8),
           Text(
-            'Notre équipe est là pour vous aider',
+            translationService.translate('FAQ_CONTACT_MESSAGE'),
             style: TextStyle(
               fontSize: widget.isMobile ? 14 : 15,
               color: Colors.grey[600],
@@ -547,7 +555,7 @@ class _FaqWidgetState extends State<FaqWidget> with SingleTickerProviderStateMix
           ElevatedButton.icon(
             onPressed: widget.onContactPressed ?? () {},
             icon: const Icon(Icons.chat_bubble_outline_rounded),
-            label: const Text('Contactez-nous'),
+            label: Text(translationService.translate('FRONTPAGE_Msg27')),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0051BA),
               foregroundColor: Colors.white,
