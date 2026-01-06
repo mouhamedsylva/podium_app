@@ -153,6 +153,29 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
     }
   }
 
+  /// Rafraîchir les données de la page de recherche
+  Future<void> _refreshData() async {
+    try {
+      // Rafraîchir les traductions si nécessaire
+      final translationService = Provider.of<TranslationService>(context, listen: false);
+      await translationService.loadTranslations(translationService.currentLanguage, forceReload: true);
+      
+      // Recharger les données des pays
+      await _loadCountryData();
+      
+      // Relancer les animations
+      if (mounted) {
+        _heroController.reset();
+        _countryController.reset();
+        _searchController2.reset();
+        _resultsController.reset();
+        _startAnimations();
+      }
+    } catch (e) {
+      print('❌ Erreur lors du rafraîchissement: $e');
+    }
+  }
+
   Future<void> _loadCountryData() async {
     try {
       final shouldShowSpinner = _allCountries.isEmpty;
@@ -890,7 +913,8 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
       ),
       body: Consumer<TranslationService>(
         builder: (context, translationService, child) {
-          return SingleChildScrollView(
+          final scrollView = SingleChildScrollView(
+            physics: isMobile ? const AlwaysScrollableScrollPhysics() : const ClampingScrollPhysics(),
             child: Column(
               children: [
                 _buildHeroSection(isMobile, translationService),
@@ -900,6 +924,17 @@ class _ProductSearchScreenState extends State<ProductSearchScreen>
               ],
             ),
           );
+          
+          // Ajouter RefreshIndicator uniquement sur mobile
+          if (isMobile) {
+            return RefreshIndicator(
+              onRefresh: _refreshData,
+              color: const Color(0xFF0D6EFD),
+              child: scrollView,
+            );
+          }
+          
+          return scrollView;
         },
       ),
       bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 1),

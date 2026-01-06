@@ -823,7 +823,7 @@ class _QrScannerModalState extends State<QrScannerModal> with SingleTickerProvid
                     ),
                     IconButton(
                       icon: Icon(
-                        _isFrontCamera ? Icons.camera_alt : Icons.face,
+                        _isFrontCamera ? Icons.camera_alt : Icons.camera_alt_outlined,
                         color: Colors.white,
                         size: 28,
                       ),

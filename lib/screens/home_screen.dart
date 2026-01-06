@@ -131,6 +131,33 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  /// Rafraîchir les données de la page d'accueil
+  Future<void> _refreshData() async {
+    try {
+      // Rafraîchir l'état d'authentification
+      final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+      await authNotifier.refresh();
+      
+      // Rafraîchir les traductions si nécessaire
+      final translationService = Provider.of<TranslationService>(context, listen: false);
+      await translationService.loadTranslations(translationService.currentLanguage, forceReload: true);
+      
+      // Rafraîchir les paramètres si nécessaire
+      final settingsService = Provider.of<SettingsService>(context, listen: false);
+      await settingsService.loadSettings();
+      
+      // Relancer les animations
+      if (mounted) {
+        _titleController.reset();
+        _modulesController.reset();
+        _bannerController.reset();
+        _startStaggeredAnimations();
+      }
+    } catch (e) {
+      print('❌ Erreur lors du rafraîchissement: $e');
+    }
+  }
+
   /// Afficher un popup de succès avec check vert
   Future<void> _showSuccessPopup() async {
     return showDialog(
@@ -228,48 +255,58 @@ class _HomeScreenState extends State<HomeScreen>
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
 
-    return 
-    // buildAnimatedScreen(
-      Scaffold(
-        backgroundColor: Colors.white,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: const CustomAppBar(),
-        ),
-        body: Consumer2<TranslationService, SettingsService>(
-          builder: (context, translationService, settingsService, child) {
-            // Vérifier que les services sont disponibles
-            if (translationService == null || settingsService == null) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
-            
-            return SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 32),
-                  
-                  // Hero Section avec titre - Animation échelonnée
-                  _buildHeroSection(isMobile, translationService),
-                  
-                  const SizedBox(height: 40),
-                  
-                  // Modules Grid - Animation échelonnée
-                  _buildModulesGrid(isMobile, translationService),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Bannière promotionnelle avec animation Fade + Scale
-                  FadeScaleTransition(
-                    animation: _bannerController,
-                    child: const PremiumBanner(),
-                  ),
-                  
-                  const SizedBox(height: 32),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: const CustomAppBar(),
+      ),
+      body: Consumer2<TranslationService, SettingsService>(
+        builder: (context, translationService, settingsService, child) {
+          // Vérifier que les services sont disponibles
+          if (translationService == null || settingsService == null) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+          
+          final scrollView = SingleChildScrollView(
+            physics: isMobile ? const AlwaysScrollableScrollPhysics() : const ClampingScrollPhysics(),
+            child: Column(
+              children: [
+                const SizedBox(height: 32),
+                
+                // Hero Section avec titre - Animation échelonnée
+                _buildHeroSection(isMobile, translationService),
+                
+                const SizedBox(height: 40),
+                
+                // Modules Grid - Animation échelonnée
+                _buildModulesGrid(isMobile, translationService),
+                
+                const SizedBox(height: 32),
+                
+                // Bannière promotionnelle avec animation Fade + Scale
+                FadeScaleTransition(
+                  animation: _bannerController,
+                  child: const PremiumBanner(),
+                ),
+                
+                const SizedBox(height: 32),
               ],
             ),
           );
+          
+          // Ajouter RefreshIndicator uniquement sur mobile
+          if (isMobile) {
+            return RefreshIndicator(
+              onRefresh: _refreshData,
+              color: const Color(0xFF0D6EFD),
+              child: scrollView,
+            );
+          }
+          
+          return scrollView;
         },
       ),
       bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 0),

@@ -1350,7 +1350,7 @@ class _SimpleMapModalState extends State<SimpleMapModal> with TickerProviderStat
 
     // Sinon, afficher en mode Dialog avec taille réduite
     final screenSize = MediaQuery.of(context).size;
-    final isMobile = screenSize.width < 768;
+    // Réutiliser isMobile déjà déclaré au début de la méthode build
     final dialogWidth = isMobile ? screenSize.width * 0.95 : screenSize.width * 0.92; // 95% sur mobile, 92% sur desktop
     final dialogHeight = isMobile ? screenSize.height * 0.90 : screenSize.height * 0.88; // 90% sur mobile, 88% sur desktop
     
