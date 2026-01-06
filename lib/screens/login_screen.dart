@@ -1731,6 +1731,10 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         SizedBox(height: isMobile ? 6 : 8),
                                         TextField(
                                           controller: _codeController,
+                                          keyboardType: TextInputType.number,
+                                          inputFormatters: [
+                                            FilteringTextInputFormatter.digitsOnly,
+                                          ],
                                           decoration: InputDecoration(
                                             hintText: codePlaceholder,
                                             hintStyle: TextStyle(color: Colors.grey[400]),
