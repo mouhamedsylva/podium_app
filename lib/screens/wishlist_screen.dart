@@ -3653,24 +3653,50 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           newMeta = Map<String, dynamic>.from(_wishlistData!['meta']);
         }
         
-        // Mettre à jour les totaux depuis parsedData (comme SNAL)
-        if (response['parsedData'] != null && response['parsedData'] is List) {
-          final List<dynamic> parsedData = response['parsedData'];
-          if (parsedData.isNotEmpty) {
-            final Map<String, dynamic> totals = parsedData[0];
-            
-            // Mettre à jour les clés importantes dans meta
-            final List<String> keysToUpdate = [
-              'iBestResultJirig',
-              'iTotalQteArticleSelected', 
-              'iTotalPriceArticleSelected',
-              'sResultatGainPerte',
-              'sWarningGeneralInfo'
-            ];
-            
-            for (final key in keysToUpdate) {
-              if (totals[key] != null) {
-                newMeta[key] = totals[key];
+        // ✅ CORRECTION: Si le panier est vide après suppression, réinitialiser tous les totaux à 0
+        if (pivotArray.isEmpty) {
+          print('📊 Panier vide après suppression - Réinitialisation des totaux à 0');
+          newMeta['iBestResultJirig'] = 0.0;
+          newMeta['iTotalQteArticleSelected'] = 0;
+          newMeta['iTotalPriceArticleSelected'] = 0.0;
+          newMeta['iTotalQteArticle'] = 0;
+          newMeta['sResultatGainPerte'] = '0€';
+          newMeta['iResultatGainPertePercentage'] = 0.0;
+          newMeta['iTotalSelected4PaysProfile'] = 0.0;
+          newMeta['iTotalPriceSelected4PaysProfile'] = 0.0;
+          
+          // ✅ CRITIQUE: Recharger les données depuis l'API pour garantir la synchronisation
+          // quand le panier est vide, pour être sûr que les métadonnées sont correctement réinitialisées
+          print('🔄 Rechargement des données depuis l\'API car le panier est vide...');
+          if (mounted) {
+            // Recharger les données après un court délai pour laisser le temps à l'API de se synchroniser
+            Future.delayed(const Duration(milliseconds: 300), () async {
+              if (mounted) {
+                await _loadWishlistData(force: true);
+                print('✅ Données rechargées depuis l\'API après suppression du dernier article');
+              }
+            });
+          }
+        } else {
+          // Mettre à jour les totaux depuis parsedData (comme SNAL) seulement si le panier n'est pas vide
+          if (response['parsedData'] != null && response['parsedData'] is List) {
+            final List<dynamic> parsedData = response['parsedData'];
+            if (parsedData.isNotEmpty) {
+              final Map<String, dynamic> totals = parsedData[0];
+              
+              // Mettre à jour les clés importantes dans meta
+              final List<String> keysToUpdate = [
+                'iBestResultJirig',
+                'iTotalQteArticleSelected', 
+                'iTotalPriceArticleSelected',
+                'sResultatGainPerte',
+                'sWarningGeneralInfo'
+              ];
+              
+              for (final key in keysToUpdate) {
+                if (totals[key] != null) {
+                  newMeta[key] = totals[key];
+                }
               }
             }
           }
@@ -3704,9 +3730,13 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           print('✅ Label du basket mis à jour dans _baskets: Wishlist ($articleCount Art.)');
         }
         
-        // ✅ CRITIQUE: Rafraîchir l'interface - Flutter détectera maintenant le changement car _wishlistData est une nouvelle référence
+        // ✅ CRITIQUE: Rafraîchir l'interface IMMÉDIATEMENT - Flutter détectera maintenant le changement car _wishlistData est une nouvelle référence
         if (mounted) {
-          setState(() {});
+          setState(() {
+            // Forcer la mise à jour en créant une nouvelle référence complète
+            _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+          });
+          print('✅ setState() appelé - UI devrait se rafraîchir immédiatement');
         }
         
         print('✅ Données mises à jour après suppression - UI devrait se rafraîchir immédiatement');
