@@ -237,6 +237,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   // Variables pour le dropdown des baskets (comme SNAL-Project)
   List<Map<String, dynamic>> _baskets = []; // Liste des baskets disponibles
   int? _selectedBasketIndex; // Index du basket sélectionné (localId)
+  
+  // Variables pour l'animation du bouton "Tout supprimer"
+  late ScrollController _scrollController = ScrollController();
+  bool _isAtBottom = false; // Indique si l'utilisateur est à la fin de la liste
   OverlayEntry? _currentSwipeHintOverlay; // Pour gérer l'overlay du message de swipe
   bool _isBasketDropdownOpen = false; // Pour l'animation de la flèche du dropdown
   
@@ -326,6 +330,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     _loadWishlistData();
     _startGreenAnimation();
     
+    // ✅ Ajouter le listener au ScrollController (déjà initialisé à la déclaration)
+    _scrollController.addListener(_onScroll);
+    
     // ✅ Écouter les changements d'authentification pour vider la wishlist lors de la déconnexion
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -333,6 +340,24 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         _authNotifier?.addListener(_onAuthStateChanged);
       }
     });
+  }
+  
+  /// Écouter les changements de scroll pour détecter si on est à la fin de la liste
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    
+    // Détecter si on est proche de la fin (dans les 200 derniers pixels)
+    final threshold = 200.0;
+    final isAtBottom = (maxScroll - currentScroll) < threshold;
+    
+    if (isAtBottom != _isAtBottom) {
+      setState(() {
+        _isAtBottom = isAtBottom;
+      });
+    }
   }
   
   /// Callback appelé quand l'état d'authentification change
@@ -531,6 +556,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     } catch (e) {
       print('⚠️ Erreur retrait listener auth: $e');
     }
+    
+    // ✅ Disposer du ScrollController
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     
     // Dispose des animations
     try {
@@ -4282,21 +4311,25 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         ],
       ),
       bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 3),
-      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus
-      floatingActionButton: _shouldShowDeleteAllButton()
-          ? FloatingActionButton.extended(
-              onPressed: _deleteAllArticles,
-              backgroundColor: Colors.red[600],
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.delete_sweep),
-              label: Text(
-                _translationService.translate('WISHLIST_DELETE_ALL') ?? 'Tout supprimer',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus ET que l'utilisateur n'est PAS à la fin
+      floatingActionButton: (_shouldShowDeleteAllButton() && !_isAtBottom)
+          ? AnimatedOpacity(
+              opacity: _shouldShowDeleteAllButton() && !_isAtBottom ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: FloatingActionButton.extended(
+                onPressed: _deleteAllArticles,
+                backgroundColor: Colors.red[600],
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.delete_sweep),
+                label: Text(
+                  _translationService.translate('WISHLIST_DELETE_ALL') ?? 'Tout supprimer',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
+                elevation: 4,
               ),
-              elevation: 4,
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -4308,6 +4341,60 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   bool _shouldShowDeleteAllButton() {
     final articles = _wishlistData?['pivotArray'] as List? ?? [];
     return articles.length >= 2;
+  }
+  
+  /// Vérifier si la liste est assez longue pour nécessiter un scroll
+  /// Si la liste est courte, le bouton sera placé en fin de liste au lieu d'être flottant
+  bool _shouldUseFloatingButton(BuildContext context) {
+    final articles = _wishlistData?['pivotArray'] as List? ?? [];
+    if (articles.length < 2) return false;
+    
+    // Obtenir la hauteur de l'écran
+    final screenHeight = MediaQuery.maybeOf(context)?.size.height ?? 800;
+    final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 1024;
+    final isMobile = screenWidth < 768;
+    
+    // Estimer la hauteur totale du contenu
+    // Hauteur approximative par article (avec espacement)
+    final estimatedArticleHeight = isMobile ? 180.0 : 200.0;
+    final estimatedHeaderHeight = isMobile ? 400.0 : 500.0; // Section top avec cartes, etc.
+    final estimatedTotalHeight = estimatedHeaderHeight + (articles.length * estimatedArticleHeight);
+    
+    // Si le contenu dépasse 80% de la hauteur de l'écran, utiliser le bouton flottant
+    // Sinon, placer le bouton en fin de liste
+    return estimatedTotalHeight > (screenHeight * 0.8);
+  }
+  
+  /// Construire le bouton "Tout supprimer"
+  Widget _buildDeleteAllButton(TranslationService translationService) {
+    final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 1024;
+    final isMobile = screenWidth < 768;
+    
+    return Container(
+      margin: EdgeInsets.symmetric(
+        horizontal: isMobile ? 16 : 32,
+        vertical: 16,
+      ),
+      child: FilledButton.icon(
+        onPressed: _deleteAllArticles,
+        style: FilledButton.styleFrom(
+          backgroundColor: Colors.red[600],
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: const Icon(Icons.delete_sweep),
+        label: Text(
+          translationService.translate('WISHLIST_DELETE_ALL') ?? 'Tout supprimer',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 
 
@@ -4390,6 +4477,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       onRefresh: _loadWishlistData,
       color: const Color(0xFF0D6EFD),
       child: SingleChildScrollView(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
@@ -4573,8 +4661,33 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           // Contenu (vide ou articles)
           if (isEmpty)
             _buildEmptyContent(translationService)
-          else
+          else ...[
             _buildArticlesContent(translationService, articles, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
+            
+            // ✅ Bouton "Tout supprimer" en fin de liste avec animation
+            // Le bouton apparaît en fin de liste quand l'utilisateur est à la fin du scroll
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 0.3),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOut,
+                  )),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              },
+              child: (_shouldShowDeleteAllButton() && _isAtBottom)
+                  ? _buildDeleteAllButton(translationService)
+                  : const SizedBox.shrink(key: ValueKey('empty')),
+            ),
+          ],
         ],
       ),
     );
