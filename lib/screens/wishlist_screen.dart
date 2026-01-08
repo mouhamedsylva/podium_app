@@ -51,14 +51,17 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       if (articleIndex != -1) {
         final article = Map<String, dynamic>.from(pivotArray[articleIndex]);
-        final articleKey = _articleKey(article);
-        
-        // S'assurer que le notifier existe avant l'ouverture du modal
-        if (!_articleNotifiers.containsKey(articleKey)) {
-          print('🔧 Initialisation préventive du notifier pour: $codeCrypt');
-          final notifierData = Map<String, dynamic>.from(article);
-          _articleNotifiers[articleKey] = ValueNotifier<Map<String, dynamic>>(notifierData);
+        // ✅ CRITIQUE: Utiliser _ensureArticleNotifier au lieu de créer manuellement
+        // Cela garantit que le notifier est correctement initialisé et synchronisé
+        final notifier = _ensureArticleNotifier(article);
+        // ✅ CRITIQUE: Ajouter un _lastUpdate initial pour protéger la valeur
+        // Cela évite que _buildArticlesContent n'écrase la valeur lors du premier rebuild
+        if (!notifier.value.containsKey('_lastUpdate')) {
+          final updatedValue = Map<String, dynamic>.from(notifier.value);
+          updatedValue['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+          notifier.value = updatedValue;
         }
+        print('🔧 Notifier initialisé via _ensureArticleNotifier pour: $codeCrypt');
       }
     }
     
@@ -1559,7 +1562,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         return;
       }
 
-      // Appel API pour supprimer l'article
+      // ✅ CRITIQUE: Suppression optimiste - Mettre à jour l'UI IMMÉDIATEMENT AVANT l'appel API
+      // Cela garantit un feedback instantané pour l'utilisateur (sans await pour ne pas bloquer)
+      print('⚡ Suppression optimiste - Mise à jour UI immédiate...');
+      _updateDataAfterDeletionOptimistic(sCodeArticleCrypt).catchError((e) {
+        print('❌ Erreur suppression optimiste: $e');
+      });
+      
+      // Appel API pour supprimer l'article (en arrière-plan)
       print('🚀 Envoi de la requête de suppression...');
       print('📤 Paramètres envoyés: sCodeArticle = $sCodeArticleCrypt');
       
@@ -1591,11 +1601,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
         }
       }
-
-      if (response != null && response['success'] == true) {
-        print('✅ Article supprimé avec succès');
+      
+      if (response != null && response['success'] == true) {  
+        print('✅ Article supprimé avec succès côté API');
         
-        // Mettre à jour les données locales IMMÉDIATEMENT (comme SNAL)
+        // Mettre à jour les métadonnées depuis la réponse API (totaux, etc.)
         await _updateDataAfterDeletion(response, sCodeArticleCrypt);
         
         // Afficher le message de succès (sans await pour ne pas bloquer l'UI)
@@ -1605,9 +1615,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         );
         
       } else {
-        print('❌ Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}');
+        print('❌ Erreur lors de la suppression côté API: ${response?['error'] ?? 'Erreur inconnue'}');
         print('❌ Détails de l\'erreur: ${response?['details'] ?? 'Aucun détail'}');
         print('❌ Stack trace: ${response?['stack'] ?? 'Aucun stack trace'}');
+        
+        // ✅ CRITIQUE: Même en cas d'erreur API, l'article a déjà été supprimé de manière optimiste
+        // Ne PAS restaurer l'article - l'utilisateur a déjà vu qu'il a été supprimé
+        // On affiche juste un message d'erreur mais on garde l'article supprimé
+        print('⚠️ Erreur API mais article déjà supprimé de manière optimiste - on garde la suppression');
         
         // Afficher un message d'erreur style Notiflix
         await _showNotiflixErrorDialog(
@@ -1933,38 +1948,66 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
           articleToUpdate['iqte'] = quantity;
           
-          // ✅ CRITIQUE: Mettre à jour le notifier AVANT de mettre à jour _wishlistData
           final articleKey = _articleKey(articleToUpdate);
+          print('🔑 Clé utilisée pour trouver le notifier: $articleKey (codeCrypt: $sCodeArticleCrypt)');
           ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey];
           
-          // ✅ CRITIQUE: Créer updatedArticle AVANT le bloc if/else pour qu'il soit accessible partout
+          // ✅ CRITIQUE: Si le notifier n'est pas trouvé avec cette clé, essayer de le trouver avec le codeCrypt
+          if (notifier == null) {
+            print('⚠️ Notifier non trouvé avec clé $articleKey, recherche alternative...');
+            print('   📦 Clés disponibles: ${_articleNotifiers.keys.toList()}');
+            for (var entry in _articleNotifiers.entries) {
+              final notifValue = entry.value.value;
+              final notifCodeCrypt = notifValue['sCodeArticleCrypt']?.toString() ?? '';
+              final notifCode = notifValue['sCodeArticle']?.toString() ?? '';
+              if (notifCodeCrypt == sCodeArticleCrypt || notifCode == sCodeArticleCrypt) {
+                print('✅ Notifier trouvé avec clé alternative: ${entry.key}');
+                notifier = entry.value;
+                // Mettre à jour la clé pour utiliser la bonne clé
+                _articleNotifiers[articleKey] = notifier;
+                if (entry.key != articleKey) {
+                  _articleNotifiers.remove(entry.key);
+                }
+                break;
+              }
+            }
+          }
+          
+          // ✅ CRITIQUE: Créer updatedArticle avec timestamp
           final currentTimestamp = DateTime.now().millisecondsSinceEpoch;
           final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
           updatedArticle['_lastUpdate'] = currentTimestamp;
           updatedArticle['iqte'] = quantity; // S'assurer que la quantité est correcte
           
-          if (notifier == null) {
-            print('⚠️ Notifier non trouvé, création pour: $sCodeArticleCrypt');
-            // Créer le notifier avec un timestamp pour indiquer qu'il vient d'être mis à jour
-            notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(updatedArticle));
-            _articleNotifiers[articleKey] = notifier;
-            print('✅ Nouveau notifier créé avec timestamp: iqte=$quantity');
-          } else {
-            // ✅ FORCER la mise à jour avec une nouvelle référence AVANT de mettre à jour pivotArray
-            // ✅ CRITIQUE: Créer une NOUVELLE référence pour forcer la notification du ValueListenableBuilder
-            notifier.value = Map<String, dynamic>.from(updatedArticle);
-            
-            print('✅ Notifier forcé mis à jour SYNCHRONEMENT: $sCodeArticleCrypt, quantité: $quantity (clé: $articleKey, timestamp: $currentTimestamp)');
-          }
-          
-          // ✅ CRITIQUE: Mettre à jour aussi _wishlistData IMMÉDIATEMENT après le notifier
-          // pour garantir la cohérence et éviter que la vérification dans _buildArticlesContent n'écrase la valeur
+          // ✅ CRITIQUE ÉTAPE 1: Mettre à jour _wishlistData EN PREMIER
+          // Cela garantit que _buildArticlesContent verra la bonne valeur lors du rebuild
           final newPivotArray = List<dynamic>.from(pivotArray);
           newPivotArray[articleIndex] = articleToUpdate;
           _wishlistData = Map<String, dynamic>.from(_wishlistData!);
           _wishlistData!['pivotArray'] = newPivotArray;
           
-          print('✅ _wishlistData mis à jour IMMÉDIATEMENT après notifier');
+          print('✅ ÉTAPE 1: _wishlistData mis à jour en premier');
+          
+          // ✅ CRITIQUE ÉTAPE 2: Mettre à jour le notifier APRÈS _wishlistData
+          // Le ValueListenableBuilder se reconstruira automatiquement
+          if (notifier == null) {
+            print('⚠️ Notifier non trouvé, création pour: $sCodeArticleCrypt (clé: $articleKey)');
+            notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(updatedArticle));
+            _articleNotifiers[articleKey] = notifier;
+            print('✅ ÉTAPE 2: Nouveau notifier créé avec timestamp: iqte=$quantity (clé: $articleKey)');
+            print('   📦 Notifiers disponibles: ${_articleNotifiers.keys.toList()}');
+          } else {
+            // ✅ CRITIQUE: Créer une NOUVELLE référence pour forcer la notification
+            final oldValue = notifier.value['iqte'];
+            // ✅ FORCER une nouvelle référence en créant un nouveau Map
+            final newValue = Map<String, dynamic>.from(updatedArticle);
+            // ✅ S'assurer que c'est vraiment une nouvelle référence
+            newValue['_updateId'] = DateTime.now().millisecondsSinceEpoch;
+            notifier.value = newValue;
+            print('✅ ÉTAPE 2: Notifier mis à jour avec timestamp: iqte=$quantity (ancien: $oldValue, clé: $articleKey, timestamp: $currentTimestamp)');
+            print('   📦 Valeur actuelle du notifier après mise à jour: ${notifier.value['iqte']}');
+            print('   🔄 Nouvelle référence créée avec _updateId: ${newValue['_updateId']}');
+          }
           
           // ✅ AUSSI: Mettre à jour tous les notifiers qui pourraient correspondre
           for (var entry in _articleNotifiers.entries) {
@@ -1978,12 +2021,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             }
           }
           
-          // ✅ CRITIQUE: Le ValueListenableBuilder devrait se reconstruire automatiquement
-          // Mais on appelle setState() pour forcer un rebuild complet si nécessaire
-          if (mounted) {
-            setState(() {});
-            print('✅ setState() appelé SYNCHRONEMENT - UI devrait se mettre à jour immédiatement');
-          }
+          // ✅ CRITIQUE: Le ValueListenableBuilder se reconstruira automatiquement quand notifier.value change
+          // PAS besoin de setState() - cela causerait un rebuild prématuré qui pourrait écraser la valeur
+          print('✅ Notifier mis à jour - ValueListenableBuilder se reconstruira automatiquement');
         }
       }
     } catch (e) {
@@ -4035,32 +4075,79 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
   }
 
-  /// Mettre à jour les données après suppression (comme SNAL-Project)
-  Future<void> _updateDataAfterDeletion(Map<String, dynamic> response, String deletedCode) async {
+  /// ✅ Suppression optimiste - Mise à jour UI immédiate avant la réponse API
+  Future<void> _updateDataAfterDeletionOptimistic(String deletedCode) async {
     try {
-      print('🔄 Mise à jour des données après suppression: $response');
-      print('🗑️ Code à supprimer: $deletedCode');
+      print('⚡ Suppression optimiste de l\'article: $deletedCode');
       
-      // Retirer l'article de la liste locale (pivotArray)
+      // Retirer l'article de la liste locale IMMÉDIATEMENT
       if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
         final List<dynamic> pivotArray = List<dynamic>.from(_wishlistData!['pivotArray']);
         
-        print('📊 Articles avant suppression: ${pivotArray.length}');
-        
-        // Supprimer l'article correspondant (chercher par code crypté principalement)
+        // Supprimer l'article
+        int removedCount = 0;
         pivotArray.removeWhere((item) {
           final itemCode = item['sCodeArticle']?.toString() ?? '';
           final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
           final shouldRemove = itemCryptCode == deletedCode || itemCode == deletedCode;
           
           if (shouldRemove) {
-            print('✅ Article supprimé: $itemCode (crypt: $itemCryptCode)');
+            removedCount++;
           }
           
           return shouldRemove;
         });
         
-        print('📊 Articles après suppression: ${pivotArray.length}');
+        if (removedCount > 0) {
+          // Nettoyer les notifiers IMMÉDIATEMENT
+          final keysToRemove = <String>[];
+          for (var entry in _articleNotifiers.entries) {
+            final notifValue = entry.value.value;
+            final notifCodeCrypt = notifValue['sCodeArticleCrypt']?.toString() ?? '';
+            final notifCode = notifValue['sCodeArticle']?.toString() ?? '';
+            
+            if (notifCodeCrypt == deletedCode || notifCode == deletedCode) {
+              keysToRemove.add(entry.key);
+            }
+          }
+          
+          for (var key in keysToRemove) {
+            _articleNotifiers[key]?.dispose();
+            _articleNotifiers.remove(key);
+          }
+          
+          // Mettre à jour _wishlistData IMMÉDIATEMENT
+          final articleCount = pivotArray.length;
+          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+          _wishlistData!['pivotArray'] = List<dynamic>.from(pivotArray);
+          _selectedBasketName = 'Wishlist ($articleCount Art.)';
+          
+          // ✅ CRITIQUE: setState IMMÉDIATEMENT pour feedback instantané
+          if (mounted) {
+            setState(() {});
+            print('⚡ setState() appelé IMMÉDIATEMENT - Article supprimé visuellement');
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur suppression optimiste: $e');
+    }
+  }
+
+  /// Mettre à jour les métadonnées après suppression (l'article est déjà supprimé de manière optimiste)
+  Future<void> _updateDataAfterDeletion(Map<String, dynamic> response, String deletedCode) async {
+    try {
+      print('🔄 Mise à jour des métadonnées après suppression: $response');
+      print('🗑️ Code supprimé (déjà retiré de manière optimiste): $deletedCode');
+      
+      // ✅ CRITIQUE: L'article a déjà été supprimé de manière optimiste dans _updateDataAfterDeletionOptimistic
+      // On ne doit PAS le supprimer à nouveau, seulement mettre à jour les métadonnées (totaux, etc.)
+      if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
+        // Lire pivotArray depuis _wishlistData qui a déjà été mis à jour de manière optimiste
+        final currentPivotArray = List<dynamic>.from(_wishlistData!['pivotArray'] ?? []);
+        final articleCount = currentPivotArray.length;
+        
+        print('📊 Articles actuels dans pivotArray (après suppression optimiste): $articleCount');
         
         // ✅ CRITIQUE: Créer une nouvelle copie de meta pour forcer la détection du changement
         Map<String, dynamic> newMeta = {};
@@ -4069,8 +4156,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         }
         
         // ✅ CORRECTION: Si le panier est vide après suppression, réinitialiser tous les totaux à 0
-        if (pivotArray.isEmpty) {
-          print('📊 Panier vide après suppression - Réinitialisation des totaux à 0');
+        if (articleCount == 0) {
+          print('📊 Panier vide - Réinitialisation des totaux à 0');
           newMeta['iBestResultJirig'] = 0.0;
           newMeta['iTotalQteArticleSelected'] = 0;
           newMeta['iTotalPriceArticleSelected'] = 0.0;
@@ -4080,18 +4167,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           newMeta['iTotalSelected4PaysProfile'] = 0.0;
           newMeta['iTotalPriceSelected4PaysProfile'] = 0.0;
           
-          // ✅ CRITIQUE: Recharger les données depuis l'API pour garantir la synchronisation
-          // quand le panier est vide, pour être sûr que les métadonnées sont correctement réinitialisées
-          print('🔄 Rechargement des données depuis l\'API car le panier est vide...');
-          if (mounted) {
-            // Recharger les données après un court délai pour laisser le temps à l'API de se synchroniser
-            Future.delayed(const Duration(milliseconds: 300), () async {
-              if (mounted) {
-                await _loadWishlistData(force: true);
-                print('✅ Données rechargées depuis l\'API après suppression du dernier article');
-              }
-            });
-          }
+          // ✅ CRITIQUE: NE PAS recharger les données depuis l'API - l'article est déjà supprimé
+          // Le rechargement pourrait restaurer l'article si l'API n'est pas encore synchronisée
+          print('✅ Panier vide - Métadonnées réinitialisées (pas de rechargement pour éviter restauration)');
         } else {
           // Mettre à jour les totaux depuis parsedData (comme SNAL) seulement si le panier n'est pas vide
           if (response['parsedData'] != null && response['parsedData'] is List) {
@@ -4113,26 +4191,19 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                   newMeta[key] = totals[key];
                 }
               }
+              
+              print('✅ Métadonnées mises à jour depuis parsedData');
             }
           }
         }
         
-        // ✅ CRITIQUE: Nettoyer les notifiers de l'article supprimé
-        final articleKey = _articleKey({'sCodeArticleCrypt': deletedCode});
-        if (_articleNotifiers.containsKey(articleKey)) {
-          _articleNotifiers[articleKey]?.dispose();
-          _articleNotifiers.remove(articleKey);
-          print('✅ Notifier de l\'article supprimé nettoyé: $articleKey');
-        }
+        print('📊 Articles actuels dans pivotArray (après suppression optimiste): $articleCount');
         
-        // ✅ CRITIQUE: Créer une NOUVELLE référence de _wishlistData pour forcer Flutter à détecter le changement
-        // Cela garantit que l'UI se met à jour immédiatement sans avoir besoin de recharger la page
+        // Mettre à jour _wishlistData avec les nouvelles métadonnées
         _wishlistData = Map<String, dynamic>.from(_wishlistData!);
-        _wishlistData!['pivotArray'] = List<dynamic>.from(pivotArray); // Nouvelle liste
-        _wishlistData!['meta'] = newMeta; // Nouvelle map meta
+        _wishlistData!['meta'] = newMeta; // Nouvelle map meta avec les totaux mis à jour
         
-        // Mettre à jour le nom du panier
-        final articleCount = pivotArray.length;
+        // Mettre à jour le nom du panier si nécessaire
         _selectedBasketName = 'Wishlist ($articleCount Art.)';
         
         // ✅ CRITIQUE: Mettre à jour aussi le label du basket dans _baskets pour que le dropdown affiche le bon nombre
@@ -4145,16 +4216,16 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           print('✅ Label du basket mis à jour dans _baskets: Wishlist ($articleCount Art.)');
         }
         
-        // ✅ CRITIQUE: Rafraîchir l'interface IMMÉDIATEMENT - Flutter détectera maintenant le changement car _wishlistData est une nouvelle référence
+        // ✅ CRITIQUE: Mettre à jour l'UI pour refléter les nouvelles métadonnées (totaux, etc.)
+        // Mais NE PAS recharger les données depuis l'API pour éviter de restaurer l'article
         if (mounted) {
           setState(() {
-            // Forcer la mise à jour en créant une nouvelle référence complète
-            _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+            // _wishlistData est déjà mis à jour avec les nouvelles métadonnées
           });
-          print('✅ setState() appelé - UI devrait se rafraîchir immédiatement');
+          print('✅ setState() appelé pour mettre à jour les métadonnées (totaux, etc.)');
         }
         
-        print('✅ Données mises à jour après suppression - UI devrait se rafraîchir immédiatement');
+        print('✅ Métadonnées mises à jour après suppression - Totaux synchronisés avec l\'API');
       }
     } catch (e) {
       print('❌ Erreur lors de la mise à jour des données: $e');
@@ -5576,16 +5647,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               final isRecentUpdate = notifierLastUpdate != null && 
                 (DateTime.now().millisecondsSinceEpoch - notifierLastUpdate) < 2000;
               
-              // Seulement synchroniser si le notifier n'a pas de timestamp récent ET que les quantités diffèrent
-              // Cela évite d'écraser une mise à jour récente du notifier
-              if (!isRecentUpdate && sourceQuantity != notifierQuantity) {
-                // Synchroniser le notifier avec sourceArticle seulement si pas de mise à jour récente
-                final syncedArticle = Map<String, dynamic>.from(notifier.value);
-                syncedArticle.addAll(sourceArticle);
-                syncedArticle['iqte'] = sourceQuantity; // Utiliser la quantité de sourceArticle
-                notifier.value = Map<String, dynamic>.from(syncedArticle);
-              } else if (isRecentUpdate) {
-                // Le notifier a été mis à jour récemment (moins de 2 secondes), ne pas l'écraser
+              // ✅ CRITIQUE: Si le notifier a un timestamp récent, TOUJOURS le protéger en PRIORITÉ
+              // Ne JAMAIS écraser une mise à jour récente, même si les quantités diffèrent
+              if (isRecentUpdate) {
+                // Le notifier a été mis à jour récemment, ne JAMAIS l'écraser
                 // Mais s'assurer que tous les autres champs sont synchronisés
                 final syncedArticle = Map<String, dynamic>.from(notifier.value);
                 syncedArticle.addAll(sourceArticle);
@@ -5593,6 +5658,20 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 syncedArticle['iqte'] = notifierQuantity;
                 syncedArticle['_lastUpdate'] = notifierLastUpdate;
                 // Ne mettre à jour que si nécessaire pour éviter les rebuilds inutiles
+                if (!mapEquals(syncedArticle, notifier.value)) {
+                  notifier.value = Map<String, dynamic>.from(syncedArticle);
+                }
+              } else if (sourceQuantity != notifierQuantity) {
+                // Seulement synchroniser si le notifier n'a PAS de timestamp récent ET que les quantités diffèrent
+                final syncedArticle = Map<String, dynamic>.from(notifier.value);
+                syncedArticle.addAll(sourceArticle);
+                syncedArticle['iqte'] = sourceQuantity; // Utiliser la quantité de sourceArticle
+                notifier.value = Map<String, dynamic>.from(syncedArticle);
+              } else {
+                // Les quantités sont identiques et pas de mise à jour récente, juste synchroniser les autres champs
+                final syncedArticle = Map<String, dynamic>.from(notifier.value);
+                syncedArticle.addAll(sourceArticle);
+                syncedArticle['iqte'] = sourceQuantity;
                 if (!mapEquals(syncedArticle, notifier.value)) {
                   notifier.value = Map<String, dynamic>.from(syncedArticle);
                 }
@@ -5719,7 +5798,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           // Colonne gauche - Détails de l'article
           Expanded(
             flex: isVerySmallMobile ? 6 : (isSmallMobile ? 4 : (isMobile ? 3 : 3)),
-            child: _buildLeftColumn(baseArticle, translationService, imageUrl, name, code, quantity, codeCrypt, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
+            child: _buildLeftColumn(baseArticle, translationService, imageUrl, name, code, quantity, codeCrypt, articleNotifier: articleNotifier, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
           ),
           
           SizedBox(width: isVerySmallMobile ? 2 : (isSmallMobile ? 3 : (isMobile ? 6 : 8))),
@@ -5809,7 +5888,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
   /// Colonne gauche - Détails de l'article avec contrôles
   Widget _buildLeftColumn(Map<String, dynamic> article, TranslationService translationService, 
-                         String imageUrl, String name, String code, int quantity, String codeCrypt, {bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false}) {
+                         String imageUrl, String name, String code, int quantity, String codeCrypt, {ValueNotifier<Map<String, dynamic>>? articleNotifier, bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -5976,83 +6055,168 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                         ),
                       ],
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Bouton moins
-                        GestureDetector(
-                          onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
-                          child: Container(
-                            width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                            height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                            decoration: BoxDecoration(
-                              color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(8),
-                                bottomLeft: Radius.circular(8),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.remove,
-                              size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
-                              color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
-                            ),
-                          ),
-                        ),
-                        // Zone du nombre
-                        GestureDetector(
-                          onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
-                          child: Container(
-                            constraints: BoxConstraints(
-                              minWidth: isVerySmallMobile ? 20 : (isSmallMobile ? 24 : 28),
-                              maxWidth: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
-                            ),
-                            height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                            alignment: Alignment.center,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              border: Border.symmetric(
-                                vertical: BorderSide(
-                                  color: Color(0xFFE5E7EB),
-                                  width: 1,
+                    child: articleNotifier != null
+                      ? ValueListenableBuilder<Map<String, dynamic>>(
+                          valueListenable: articleNotifier,
+                          builder: (context, articleValue, _) {
+                            final currentQuantity = articleValue['iqte'] as int? ?? quantity;
+                            print('🔄 ValueListenableBuilder reconstruit - quantité affichée: $currentQuantity (depuis notifier: ${articleValue['iqte']}, fallback: $quantity)');
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Bouton moins
+                                GestureDetector(
+                                  onTap: currentQuantity > 1 ? () => _updateQuantity(codeCrypt, currentQuantity - 1) : null,
+                                  child: Container(
+                                    width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                    height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                    decoration: BoxDecoration(
+                                      color: currentQuantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(8),
+                                        bottomLeft: Radius.circular(8),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.remove,
+                                      size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                                      color: currentQuantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
+                                    ),
+                                  ),
+                                ),
+                                // Zone du nombre - ✅ Utilise currentQuantity du ValueListenableBuilder parent
+                                GestureDetector(
+                                  onTap: () => _showQuantityPickerDialog(codeCrypt, currentQuantity),
+                                  child: Container(
+                                    constraints: BoxConstraints(
+                                      minWidth: isVerySmallMobile ? 20 : (isSmallMobile ? 24 : 28),
+                                      maxWidth: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                                    ),
+                                    height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                    alignment: Alignment.center,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      border: Border.symmetric(
+                                        vertical: BorderSide(
+                                          color: Color(0xFFE5E7EB),
+                                          width: 1,
+                                        ),
+                                      ),
+                                    ),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        '$currentQuantity',
+                                        style: TextStyle(
+                                          fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF111827),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Bouton plus
+                                GestureDetector(
+                                  onTap: () => _updateQuantity(codeCrypt, currentQuantity + 1),
+                                  child: Container(
+                                    width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                    height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFF3F4F6),
+                                      borderRadius: BorderRadius.only(
+                                        topRight: Radius.circular(8),
+                                        bottomRight: Radius.circular(8),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.add,
+                                      size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                                      color: const Color(0xFF374151),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Bouton moins (fallback sans notifier)
+                            GestureDetector(
+                              onTap: quantity > 1 ? () => _updateQuantity(codeCrypt, quantity - 1) : null,
+                              child: Container(
+                                width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                decoration: BoxDecoration(
+                                  color: quantity > 1 ? const Color(0xFFF3F4F6) : const Color(0xFFF9FAFB),
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(8),
+                                    bottomLeft: Radius.circular(8),
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.remove,
+                                  size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                                  color: quantity > 1 ? const Color(0xFF374151) : const Color(0xFF9CA3AF),
                                 ),
                               ),
                             ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '$quantity',
-                                style: TextStyle(
-                                  fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF111827),
+                            // Zone du nombre (fallback sans notifier)
+                            GestureDetector(
+                              onTap: () => _showQuantityPickerDialog(codeCrypt, quantity),
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  minWidth: isVerySmallMobile ? 20 : (isSmallMobile ? 24 : 28),
+                                  maxWidth: isVerySmallMobile ? 28 : (isSmallMobile ? 32 : 36),
+                                ),
+                                height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                alignment: Alignment.center,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.symmetric(
+                                    vertical: BorderSide(
+                                      color: Color(0xFFE5E7EB),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '$quantity',
+                                    style: TextStyle(
+                                      fontSize: isVerySmallMobile ? 11 : (isSmallMobile ? 12 : 14),
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF111827),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                        // Bouton plus
-                        GestureDetector(
-                          onTap: () => _updateQuantity(codeCrypt, quantity + 1),
-                          child: Container(
-                            width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                            height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.only(
-                                topRight: Radius.circular(8),
-                                bottomRight: Radius.circular(8),
+                            // Bouton plus (fallback sans notifier)
+                            GestureDetector(
+                              onTap: () => _updateQuantity(codeCrypt, quantity + 1),
+                              child: Container(
+                                width: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                height: isVerySmallMobile ? 24 : (isSmallMobile ? 28 : 32),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.only(
+                                    topRight: Radius.circular(8),
+                                    bottomRight: Radius.circular(8),
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.add,
+                                  size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
+                                  color: const Color(0xFF374151),
+                                ),
                               ),
                             ),
-                            child: Icon(
-                              Icons.add,
-                              size: isVerySmallMobile ? 12 : (isSmallMobile ? 14 : 16),
-                              color: const Color(0xFF374151),
-                            ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
                   ),
                 ),
               ),
