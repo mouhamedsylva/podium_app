@@ -707,6 +707,78 @@ app.post('/api/delete-article-wishlistBasket', express.json(), async (req, res) 
   }
 });
 
+// Middleware spécial pour /delete-all-article-wishlistBasket - supprimer tous les articles
+app.post('/api/delete-all-article-wishlistBasket', express.json(), async (req, res) => {
+  console.log(`\n${'*'.repeat(70)}`);
+  console.log(`🗑️ DELETE-ALL-ARTICLE-WISHLIST: Suppression de tous les articles`);
+  console.log(`${'*'.repeat(70)}`);
+  
+  try {
+    // Récupérer les paramètres depuis les headers (pas de body nécessaire)
+    const iProfile = req.headers['x-iprofile'];
+    const iBasket = req.headers['x-ibasket'];
+    
+    console.log(`📦 Paramètres reçus:`, { iProfile, iBasket });
+    
+    if (!iProfile || !iBasket) {
+      return res.status(400).json({
+        success: false,
+        error: 'iProfile et iBasket sont requis (headers X-IProfile et X-IBasket)'
+      });
+    }
+    
+    // Créer le GuestProfile cookie (SNAL construira le XML côté serveur)
+    const guestProfile = {
+      iProfile: iProfile,
+      iBasket: iBasket,
+      sPaysLangue: getGuestProfileFromHeaders(req).sPaysLangue || '',
+      sPaysFav: ''
+    };
+    
+    const cookieString = `GuestProfile=${encodeURIComponent(JSON.stringify(guestProfile))}; Path=/; HttpOnly=false; Max-Age=864000`;
+    
+    // Faire la requête POST vers SNAL (sans body)
+    const fetch = require('node-fetch');
+    console.log(`📱 Appel SNAL API: https://jirig.be/api/delete-all-article-wishlistBasket`);
+    
+    const response = await fetch(`https://jirig.be/api/delete-all-article-wishlistBasket`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Cookie': cookieString
+      }
+      // Pas de body nécessaire - le backend utilise les cookies
+    });
+    
+    console.log(`📡 Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`❌ Error response from SNAL:`, errorText);
+      return res.status(response.status).json({
+        success: false,
+        error: 'SNAL API Error',
+        message: errorText
+      });
+    }
+    
+    const data = await response.json();
+    console.log(`✅ DELETE-ALL-ARTICLE-WISHLIST: Réponse reçue de SNAL:`, JSON.stringify(data, null, 2));
+    
+    // Retourner la réponse telle quelle
+    res.status(200).json(data);
+    console.log(`✅ DELETE-ALL-ARTICLE-WISHLIST: Réponse envoyée au client`);
+  } catch (error) {
+    console.error(`❌ Erreur DELETE-ALL-ARTICLE-WISHLIST:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la suppression de tous les articles',
+      details: error.message
+    });
+  }
+});
+
 // Middleware spécial pour /basket-delete-pdf - supprimer un panier PDF
 app.post('/api/basket-delete-pdf', express.json(), async (req, res) => {
   console.log(`\n${'*'.repeat(70)}`);
@@ -3451,6 +3523,7 @@ app.use('/api', createProxyMiddleware({
       '/api/update-country-selected',
       '/api/add-product-to-wishlist',
       '/api/delete-article-wishlistBasket',
+      '/api/delete-all-article-wishlistBasket',
       '/api/update-country-wishlistBasket',
       '/api/update-quantity-articleBasket',
       '/api/get-basket-list-article',

@@ -171,8 +171,18 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       },
     );
 
-    if (result != null && result != currentQuantity) {
-      await _updateQuantity(codeCrypt, result);
+    // ✅ Toujours mettre à jour si un résultat est retourné (même si la quantité est identique)
+    // Cela garantit que le notifier est mis à jour et que l'UI se rafraîchit
+    if (result != null) {
+      print('📊 Résultat du modal de quantité: $result (quantité actuelle: $currentQuantity)');
+      if (result != currentQuantity) {
+        await _updateQuantity(codeCrypt, result);
+      } else {
+        // ✅ Même si la quantité est identique, forcer la mise à jour du notifier
+        // pour garantir que l'UI affiche la bonne valeur
+        print('🔄 Quantité identique mais mise à jour du notifier pour garantir la synchronisation');
+        await _forceUpdateArticleNotifier(codeCrypt, result);
+      }
     }
   }
   bool _isLoading = true;
@@ -201,6 +211,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   late AnimationController _cardsController;
   late AnimationController _articlesController;
   bool _animationsInitialized = false;
+  
+  // ✅ Animation de suppression de tous les articles
+  Set<String> _articlesToDelete = {}; // Codes des articles en cours de suppression
+  bool _isDeletingAll = false; // Flag pour indiquer qu'une suppression globale est en cours
   
   ApiService get _apiService => Provider.of<ApiService>(context, listen: false);
   TranslationService get _translationService => Provider.of<TranslationService>(context, listen: false);
@@ -1563,6 +1577,181 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     }
   }
 
+  /// Supprimer tous les articles de la wishlist (comme SNAL-Project)
+  Future<void> _deleteAllArticles() async {
+    try {
+      print('🗑️ Suppression de tous les articles de la wishlist');
+      
+      // Afficher une confirmation (comme SNAL avec Notiflix)
+      final bool? confirmed = await _showNotiflixConfirmDialog(
+        title: _translationService.translate('CONFIRM_TITLE'),
+        message: _translationService.translate('CONFIRM_DELETE_ALL_ITEM') ?? 'Êtes-vous sûr de vouloir supprimer tous les articles ?',
+      );
+
+      if (confirmed != true) {
+        print('❌ Suppression annulée par l\'utilisateur');
+        return;
+      }
+
+      // ✅ DÉCLENCHER L'ANIMATION DE SUPPRESSION AVANT L'APPEL API
+      final articles = _wishlistData?['pivotArray'] as List? ?? [];
+      if (articles.isNotEmpty && mounted) {
+        setState(() {
+          _isDeletingAll = true;
+          // Marquer tous les articles pour suppression
+          _articlesToDelete = Set<String>.from(
+            articles.map((article) => 
+              article['sCodeArticleCrypt']?.toString() ?? 
+              article['sCodeArticle']?.toString() ?? 
+              ''
+            ).where((code) => code.isNotEmpty)
+          );
+        });
+        
+        print('🎬 Animation de suppression déclenchée pour ${_articlesToDelete.length} articles');
+        
+        // Attendre que l'animation soit terminée (durée totale: ~800ms pour le dernier article)
+        final animationDuration = Duration(milliseconds: 300 + (articles.length * 50));
+        await Future.delayed(animationDuration);
+      }
+
+      // Appel API pour supprimer tous les articles
+      print('🚀 Envoi de la requête de suppression de tous les articles...');
+      
+      final response = await _apiService.deleteAllArticleBasketWishlist();
+
+      print('📥 Réponse complète de l\'API:');
+      print('📥 Type de réponse: ${response.runtimeType}');
+      print('📥 Contenu de la réponse: $response');
+      
+      if (response != null) {
+        print('📥 Clés disponibles dans la réponse: ${response.keys.toList()}');
+        print('📥 Success: ${response['success']}');
+        print('📥 Message: ${response['message']}');
+        print('📥 ParsedData: ${response['parsedData']}');
+        print('📥 Error: ${response['error']}');
+      }
+
+      if (response != null && response['success'] == true) {
+        print('✅ Tous les articles supprimés avec succès');
+        
+        // Mettre à jour les données locales IMMÉDIATEMENT (comme SNAL)
+        await _updateDataAfterDeleteAll(response);
+        
+        // Réinitialiser l'état d'animation
+        if (mounted) {
+          setState(() {
+            _isDeletingAll = false;
+            _articlesToDelete.clear();
+          });
+        }
+        
+        // Afficher le message de succès
+        _showNotiflixSuccessDialog(
+          title: _translationService.translate('SUCCESS_TITTLE'),
+          message: _translationService.translate('ALL_ARTICLE_DELETED_SUCCESS') ?? 'Tous les articles ont été supprimés avec succès',
+        );
+        
+        // Recharger les données depuis l'API pour garantir la synchronisation
+        if (mounted) {
+          await _loadWishlistData(force: true);
+        }
+        
+      } else {
+        // En cas d'erreur, réinitialiser l'état d'animation
+        if (mounted) {
+          setState(() {
+            _isDeletingAll = false;
+            _articlesToDelete.clear();
+          });
+        }
+        print('❌ Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}');
+        print('❌ Détails de l\'erreur: ${response?['details'] ?? 'Aucun détail'}');
+        print('❌ Stack trace: ${response?['stack'] ?? 'Aucun stack trace'}');
+        
+        // Afficher un message d'erreur style Notiflix
+        await _showNotiflixErrorDialog(
+          title: _translationService.translate('ERROR_TITLE'),
+          message: _translationService.translate('DELETE_ERROR') ?? "Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}",
+        );
+      }
+    } catch (e) {
+      print('❌ Erreur lors de la suppression de tous les articles: $e');
+      
+      // Réinitialiser l'état d'animation en cas d'erreur
+      if (mounted) {
+        setState(() {
+          _isDeletingAll = false;
+          _articlesToDelete.clear();
+        });
+      }
+      
+      // Afficher un message d'erreur style Notiflix
+      await _showNotiflixErrorDialog(
+        title: _translationService.translate('ERROR_TITLE'),
+        message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite lors de la suppression: $e",
+      );
+    }
+  }
+
+  /// Mettre à jour les données locales après suppression de tous les articles
+  Future<void> _updateDataAfterDeleteAll(Map<String, dynamic> response) async {
+    try {
+      print('🔄 Mise à jour des données après suppression de tous les articles: $response');
+      
+      // ✅ CRITIQUE: Réinitialiser complètement la wishlist
+      _wishlistData = {
+        'meta': {
+          'iBestResultJirig': 0.0,
+          'iTotalQteArticleSelected': 0,
+          'iTotalPriceArticleSelected': 0.0,
+          'iTotalQteArticle': 0,
+          'sResultatGainPerte': '0€',
+          'iResultatGainPertePercentage': 0.0,
+          'iTotalSelected4PaysProfile': 0.0,
+          'iTotalPriceSelected4PaysProfile': 0.0,
+          // Conserver iBasket si présent dans l'ancienne meta
+          if (_wishlistData?['meta'] != null && _wishlistData!['meta']['iBasket'] != null)
+            'iBasket': _wishlistData!['meta']['iBasket'],
+        },
+        'pivotArray': [],
+      };
+      
+      // Nettoyer tous les notifiers
+      for (var notifier in _articleNotifiers.values) {
+        notifier.dispose();
+      }
+      _articleNotifiers.clear();
+      print('✅ Tous les notifiers nettoyés');
+      
+      // Mettre à jour le nom du panier
+      _selectedBasketName = 'Wishlist (0 Art.)';
+      
+      // ✅ CRITIQUE: Mettre à jour aussi le label du basket dans _baskets
+      if (_selectedBasketIndex != null && 
+          _selectedBasketIndex! >= 0 && 
+          _selectedBasketIndex! < _baskets.length) {
+        // Créer une nouvelle copie du basket pour forcer la détection du changement
+        _baskets[_selectedBasketIndex!] = Map<String, dynamic>.from(_baskets[_selectedBasketIndex!]);
+        _baskets[_selectedBasketIndex!]['label'] = 'Wishlist (0 Art.)';
+        print('✅ Label du basket mis à jour dans _baskets: Wishlist (0 Art.)');
+      }
+      
+      // ✅ CRITIQUE: Rafraîchir l'interface IMMÉDIATEMENT
+      if (mounted) {
+        setState(() {
+          // Forcer la mise à jour en créant une nouvelle référence complète
+          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+        });
+        print('✅ setState() appelé - UI devrait se rafraîchir immédiatement');
+      }
+      
+      print('✅ Données mises à jour après suppression de tous les articles - UI devrait se rafraîchir immédiatement');
+    } catch (e) {
+      print('❌ Erreur lors de la mise à jour des données: $e');
+    }
+  }
+
   /// Afficher un modal de confirmation style Notiflix (comme SNAL-Project)
   Future<bool?> _showNotiflixConfirmDialog({
     required String title,
@@ -1680,6 +1869,50 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// Mettre à jour la quantité d'un article (comme SNAL)
+  /// Forcer la mise à jour du notifier d'un article (sans appel API)
+  /// Utile quand la quantité est identique mais qu'on veut garantir la synchronisation
+  Future<void> _forceUpdateArticleNotifier(String sCodeArticleCrypt, int quantity) async {
+    try {
+      if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
+        final List<dynamic> pivotArray = List<dynamic>.from(_wishlistData!['pivotArray']);
+        
+        // Trouver l'article
+        final articleIndex = pivotArray.indexWhere(
+          (item) => item['sCodeArticleCrypt'] == sCodeArticleCrypt || item['sCodeArticle'] == sCodeArticleCrypt
+        );
+        
+        if (articleIndex != -1) {
+          final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
+          articleToUpdate['iqte'] = quantity;
+          
+          // Mettre à jour le notifier
+          final articleKey1 = _articleKey(articleToUpdate);
+          final articleKey2 = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
+          final articleKey3 = _articleKey({'sCodeArticle': sCodeArticleCrypt});
+          
+          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey1] ?? 
+                                                           _articleNotifiers[articleKey2] ?? 
+                                                           _articleNotifiers[articleKey3];
+          
+          if (notifier != null) {
+            final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+            updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+            notifier.value = updatedArticle;
+            print('✅ Notifier forcé mis à jour pour: $sCodeArticleCrypt avec quantité: $quantity');
+          } else {
+            print('⚠️ Notifier non trouvé pour forcer la mise à jour: $sCodeArticleCrypt');
+          }
+          
+          if (mounted) {
+            setState(() {});
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur _forceUpdateArticleNotifier: $e');
+    }
+  }
+
   Future<void> _updateQuantity(String sCodeArticleCrypt, int newQuantity) async {
     try {
       print('📊 Mise à jour quantité: $sCodeArticleCrypt -> $newQuantity');
@@ -1770,15 +2003,29 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           _wishlistData!['meta'] = newMeta;
 
           // ✅ CRITIQUE: Mettre à jour le ValueNotifier IMMÉDIATEMENT pour forcer le rebuild
-          final articleKey = _articleKey(articleToUpdate);
-          final notifier = _articleNotifiers[articleKey];
-          if (notifier != null) {
-            // ✅ Créer une NOUVELLE map avec un timestamp pour forcer la mise à jour
-            final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
-            updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
-            notifier.value = updatedArticle;
-            print('✅ ValueNotifier mis à jour IMMÉDIATEMENT pour l\'article: $articleKey');
+          // Essayer plusieurs clés possibles pour trouver le notifier
+          final articleKey1 = _articleKey(articleToUpdate);
+          final articleKey2 = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
+          final articleKey3 = _articleKey({'sCodeArticle': sCodeArticleCrypt});
+          
+          // Trouver le notifier (essayer toutes les clés possibles)
+          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey1] ?? 
+                                                           _articleNotifiers[articleKey2] ?? 
+                                                           _articleNotifiers[articleKey3];
+          
+          // Si le notifier n'existe pas, le créer
+          if (notifier == null) {
+            print('⚠️ Notifier non trouvé, création d\'un nouveau notifier pour: $sCodeArticleCrypt');
+            final key = articleKey1;
+            notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(articleToUpdate));
+            _articleNotifiers[key] = notifier;
           }
+          
+          // ✅ Créer une NOUVELLE map avec un timestamp pour forcer la mise à jour
+          final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+          updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+          notifier.value = updatedArticle;
+          print('✅ ValueNotifier mis à jour IMMÉDIATEMENT pour l\'article: ${notifier.value['iqte']} (clé: ${_articleKey(articleToUpdate)})');
         }
         
         // ✅ CRITIQUE: Appeler setState() APRÈS avoir mis à jour le notifier et créé de nouvelles références
@@ -3796,7 +4043,32 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         ],
       ),
       bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 3),
+      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus
+      floatingActionButton: _shouldShowDeleteAllButton()
+          ? FloatingActionButton.extended(
+              onPressed: _deleteAllArticles,
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.delete_sweep),
+              label: Text(
+                _translationService.translate('WISHLIST_DELETE_ALL') ?? 'Tout supprimer',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              elevation: 4,
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
+  }
+
+  /// Vérifier si le bouton "Tout supprimer" doit être affiché
+  /// Le bouton apparaît quand il y a 2 articles ou plus
+  bool _shouldShowDeleteAllButton() {
+    final articles = _wishlistData?['pivotArray'] as List? ?? [];
+    return articles.length >= 2;
   }
 
 
@@ -5252,11 +5524,53 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       ),
     );
     
+    // ✅ Vérifier si cet article est en cours de suppression
+    final articleCode = codeCrypt.isNotEmpty ? codeCrypt : code;
+    final isDeleting = _isDeletingAll && _articlesToDelete.contains(articleCode);
+    
     if (!_animationsInitialized) {
       return rowWidget;
     }
     
-    // ✨ Animation Articles : Slide in séquencé depuis le bas avec bounce
+    // ✨ Animation de SUPPRESSION : Fade out + Slide out + Scale down (en cascade)
+    if (isDeleting) {
+      // Utiliser l'index passé en paramètre pour créer un délai progressif
+      // Chaque article commence son animation avec un délai de 50ms * index
+      final delayMs = itemIndex * 50; // 50ms entre chaque article pour l'effet cascade
+      
+      return TweenAnimationBuilder<double>(
+        duration: const Duration(milliseconds: 500), // Durée de l'animation de suppression
+        tween: Tween<double>(begin: 1.0, end: 0.0),
+        curve: Curves.easeInCubic, // Animation fluide de sortie
+        builder: (context, value, child) {
+          // Calculer la valeur avec délai : si on est dans la période de délai, value reste à 1.0
+          final totalDuration = 500.0;
+          final delayRatio = delayMs / totalDuration;
+          final animatedValue = value > (1.0 - delayRatio)
+              ? 1.0 // Pendant le délai, garder à 1.0
+              : ((value - (1.0 - delayRatio)) / delayRatio).clamp(0.0, 1.0); // Après le délai, animer
+          
+          // Combinaison de fade, slide et scale pour un effet élégant
+          final opacity = animatedValue.clamp(0.0, 1.0);
+          final scale = 0.5 + (animatedValue * 0.5); // Scale de 1.0 à 0.5 (rétrécissement prononcé)
+          final slideOffset = 400 * (1 - animatedValue); // Slide vers la droite (400px max)
+          
+          return Transform.scale(
+            scale: scale,
+            child: Transform.translate(
+              offset: Offset(slideOffset, 0), // Slide vers la droite
+              child: Opacity(
+                opacity: opacity, // Fade out progressif
+                child: child,
+              ),
+            ),
+          );
+        },
+        child: rowWidget,
+      );
+    }
+    
+    // ✨ Animation Articles : Slide in séquencé depuis le bas avec bounce (entrée normale)
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 400 + (itemIndex * 100)), // Délai progressif (vague)
       tween: Tween<double>(begin: 0.0, end: 1.0),

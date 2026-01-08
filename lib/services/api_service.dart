@@ -947,6 +947,59 @@ class ApiService {
     }
   }
 
+  /// Supprimer tous les articles du panier wishlist (comme SNAL-Project)
+  Future<Map<String, dynamic>?> deleteAllArticleBasketWishlist() async {
+    try {
+      print('🗑️ Suppression de tous les articles du panier');
+      print('🌐 URL complète: ${_dio!.options.baseUrl}/delete-all-article-wishlistBasket');
+      print('🌐 Base URL configurée: ${_dio!.options.baseUrl}');
+      print('🌐 Plateforme Web: ${kIsWeb}');
+
+      // Récupérer iProfile et iBasket depuis le localStorage
+      final profileData = await LocalStorageService.getProfile();
+      final iProfile = profileData?['iProfile']?.toString() ?? '';
+      final iBasket = profileData?['iBasket']?.toString() ?? '';
+
+      print('👤 iProfile récupéré: $iProfile');
+      print('🛒 iBasket récupéré: $iBasket');
+
+      // ✅ Pas de body nécessaire, le backend utilise les cookies
+      final response = await _dio!.post('/delete-all-article-wishlistBasket',
+        options: Options(
+          headers: {
+            'X-IProfile': iProfile,
+            'X-IBasket': iBasket,
+          },
+        ),
+      );
+
+      print('📡 Status Code: ${response.statusCode}');
+      print('📡 Headers: ${response.headers}');
+      print('📡 Données brutes: ${response.data}');
+      print('📡 Type de données: ${response.data.runtimeType}');
+
+      if (response.statusCode == 200) {
+        print('✅ Tous les articles supprimés avec succès');
+        print('✅ Données retournées: ${response.data}');
+        return response.data;
+      } else {
+        print('❌ Status code non-200: ${response.statusCode}');
+        print('❌ Données d\'erreur: ${response.data}');
+        throw Exception('Erreur lors de la suppression: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Erreur deleteAllArticleBasketWishlist: $e');
+      print('❌ Type d\'erreur: ${e.runtimeType}');
+      if (e is DioException) {
+        print('❌ DioException - Type: ${e.type}');
+        print('❌ DioException - Message: ${e.message}');
+        print('❌ DioException - Response: ${e.response?.data}');
+        print('❌ DioException - Status Code: ${e.response?.statusCode}');
+      }
+      return null;
+    }
+  }
+
   /// Supprimer un panier PDF (comme SNAL-Project)
   Future<Map<String, dynamic>?> deleteBasketPdf({
     required String iBasket,
