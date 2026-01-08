@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../services/translation_service.dart';
 import '../services/api_service.dart';
@@ -40,12 +41,34 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
   /// Afficher un dialogue pour la saisie manuelle de la quantité avec un sélecteur à défilement
   Future<void> _showQuantityPickerDialog(String codeCrypt, int currentQuantity) async {
+    // ✅ CRITIQUE: S'assurer que le notifier existe AVANT d'ouvrir le modal
+    // Cela évite le délai lors de la première mise à jour
+    if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
+      final List<dynamic> pivotArray = List<dynamic>.from(_wishlistData!['pivotArray']);
+      final articleIndex = pivotArray.indexWhere(
+        (item) => item['sCodeArticleCrypt'] == codeCrypt || item['sCodeArticle'] == codeCrypt
+      );
+      
+      if (articleIndex != -1) {
+        final article = Map<String, dynamic>.from(pivotArray[articleIndex]);
+        final articleKey = _articleKey(article);
+        
+        // S'assurer que le notifier existe avant l'ouverture du modal
+        if (!_articleNotifiers.containsKey(articleKey)) {
+          print('🔧 Initialisation préventive du notifier pour: $codeCrypt');
+          final notifierData = Map<String, dynamic>.from(article);
+          _articleNotifiers[articleKey] = ValueNotifier<Map<String, dynamic>>(notifierData);
+        }
+      }
+    }
+    
     final result = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       useRootNavigator: false,
       builder: (BuildContext context) {
+        // ✅ Initialiser avec la quantité actuelle pour pré-sélectionner la valeur existante
         int newQuantity = currentQuantity;
 
         return Container(
@@ -171,17 +194,25 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       },
     );
 
-    // ✅ Toujours mettre à jour si un résultat est retourné (même si la quantité est identique)
-    // Cela garantit que le notifier est mis à jour et que l'UI se rafraîchit
+    // ✅ CRITIQUE: Mettre à jour le notifier IMMÉDIATEMENT, même avant l'appel API
+    // Cela garantit que l'UI se met à jour instantanément dès la première fois
     if (result != null) {
       print('📊 Résultat du modal de quantité: $result (quantité actuelle: $currentQuantity)');
+      
+      // ✅ TOUJOURS mettre à jour le notifier en premier pour un feedback immédiat
+      // Ne pas utiliser await pour que la mise à jour soit synchrone et immédiate
+      print('🔄 Mise à jour immédiate du notifier (avant API si nécessaire)...');
+      _forceUpdateArticleNotifierSync(codeCrypt, result);
+      
+      // Si la quantité a changé, appeler l'API pour synchroniser avec le backend (en arrière-plan)
       if (result != currentQuantity) {
-        await _updateQuantity(codeCrypt, result);
+        print('🔄 Quantité changée, appel API pour synchronisation en arrière-plan...');
+        // Ne pas attendre l'API - l'appeler en arrière-plan
+        _updateQuantity(codeCrypt, result).catchError((e) {
+          print('❌ Erreur lors de la synchronisation API: $e');
+        });
       } else {
-        // ✅ Même si la quantité est identique, forcer la mise à jour du notifier
-        // pour garantir que l'UI affiche la bonne valeur
-        print('🔄 Quantité identique mais mise à jour du notifier pour garantir la synchronisation');
-        await _forceUpdateArticleNotifier(codeCrypt, result);
+        print('✅ Quantité identique, notifier déjà mis à jour');
       }
     }
   }
@@ -233,13 +264,31 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     final mapData = Map<String, dynamic>.from(article);
     final existing = _articleNotifiers[key];
     if (existing != null) {
-      if (!mapEquals(existing.value, mapData)) {
-        existing.value = mapData;
+      // ✅ CORRECTION: Toujours mettre à jour si les données diffèrent, même légèrement
+      // Cela garantit que le notifier est toujours synchronisé avec les données source
+      final currentValue = existing.value;
+      bool needsUpdate = false;
+      
+      // Vérifier si iqte a changé
+      if (currentValue['iqte'] != mapData['iqte']) {
+        needsUpdate = true;
+      }
+      
+      // Vérifier si d'autres champs importants ont changé
+      if (!mapEquals(currentValue, mapData)) {
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        // ✅ Créer une nouvelle référence pour forcer la mise à jour
+        existing.value = Map<String, dynamic>.from(mapData);
+        print('🔄 Notifier mis à jour dans _ensureArticleNotifier: iqte=${mapData['iqte']}');
       }
       return existing;
     }
-    final notifier = ValueNotifier<Map<String, dynamic>>(mapData);
+    final notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(mapData));
     _articleNotifiers[key] = notifier;
+    print('✅ Nouveau notifier créé: clé=$key, iqte=${mapData['iqte']}');
     return notifier;
   }
 
@@ -1868,8 +1917,81 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
   }
 
-  /// Mettre à jour la quantité d'un article (comme SNAL)
-  /// Forcer la mise à jour du notifier d'un article (sans appel API)
+  /// Forcer la mise à jour du notifier d'un article de manière SYNCHRONE (sans appel API)
+  /// Utile pour un feedback immédiat dans l'UI
+  void _forceUpdateArticleNotifierSync(String sCodeArticleCrypt, int quantity) {
+    try {
+      if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
+        final List<dynamic> pivotArray = List<dynamic>.from(_wishlistData!['pivotArray']);
+        
+        // Trouver l'article
+        final articleIndex = pivotArray.indexWhere(
+          (item) => item['sCodeArticleCrypt'] == sCodeArticleCrypt || item['sCodeArticle'] == sCodeArticleCrypt
+        );
+        
+        if (articleIndex != -1) {
+          final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
+          articleToUpdate['iqte'] = quantity;
+          
+          // ✅ CRITIQUE: Mettre à jour le notifier AVANT de mettre à jour _wishlistData
+          final articleKey = _articleKey(articleToUpdate);
+          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey];
+          
+          // ✅ CRITIQUE: Créer updatedArticle AVANT le bloc if/else pour qu'il soit accessible partout
+          final currentTimestamp = DateTime.now().millisecondsSinceEpoch;
+          final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+          updatedArticle['_lastUpdate'] = currentTimestamp;
+          updatedArticle['iqte'] = quantity; // S'assurer que la quantité est correcte
+          
+          if (notifier == null) {
+            print('⚠️ Notifier non trouvé, création pour: $sCodeArticleCrypt');
+            // Créer le notifier avec un timestamp pour indiquer qu'il vient d'être mis à jour
+            notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(updatedArticle));
+            _articleNotifiers[articleKey] = notifier;
+            print('✅ Nouveau notifier créé avec timestamp: iqte=$quantity');
+          } else {
+            // ✅ FORCER la mise à jour avec une nouvelle référence AVANT de mettre à jour pivotArray
+            // ✅ CRITIQUE: Créer une NOUVELLE référence pour forcer la notification du ValueListenableBuilder
+            notifier.value = Map<String, dynamic>.from(updatedArticle);
+            
+            print('✅ Notifier forcé mis à jour SYNCHRONEMENT: $sCodeArticleCrypt, quantité: $quantity (clé: $articleKey, timestamp: $currentTimestamp)');
+          }
+          
+          // ✅ CRITIQUE: Mettre à jour aussi _wishlistData IMMÉDIATEMENT après le notifier
+          // pour garantir la cohérence et éviter que la vérification dans _buildArticlesContent n'écrase la valeur
+          final newPivotArray = List<dynamic>.from(pivotArray);
+          newPivotArray[articleIndex] = articleToUpdate;
+          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+          _wishlistData!['pivotArray'] = newPivotArray;
+          
+          print('✅ _wishlistData mis à jour IMMÉDIATEMENT après notifier');
+          
+          // ✅ AUSSI: Mettre à jour tous les notifiers qui pourraient correspondre
+          for (var entry in _articleNotifiers.entries) {
+            final notifValue = entry.value.value;
+            final notifCodeCrypt = notifValue['sCodeArticleCrypt']?.toString() ?? '';
+            final notifCode = notifValue['sCodeArticle']?.toString() ?? '';
+            
+            if ((notifCodeCrypt == sCodeArticleCrypt || notifCode == sCodeArticleCrypt) && entry.key != articleKey) {
+              final updatedCopy = Map<String, dynamic>.from(updatedArticle);
+              entry.value.value = updatedCopy;
+            }
+          }
+          
+          // ✅ CRITIQUE: Le ValueListenableBuilder devrait se reconstruire automatiquement
+          // Mais on appelle setState() pour forcer un rebuild complet si nécessaire
+          if (mounted) {
+            setState(() {});
+            print('✅ setState() appelé SYNCHRONEMENT - UI devrait se mettre à jour immédiatement');
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur _forceUpdateArticleNotifierSync: $e');
+    }
+  }
+
+  /// Forcer la mise à jour du notifier d'un article (sans appel API) - Version async (pour compatibilité)
   /// Utile quand la quantité est identique mais qu'on veut garantir la synchronisation
   Future<void> _forceUpdateArticleNotifier(String sCodeArticleCrypt, int quantity) async {
     try {
@@ -1885,26 +2007,45 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
           articleToUpdate['iqte'] = quantity;
           
-          // Mettre à jour le notifier
-          final articleKey1 = _articleKey(articleToUpdate);
-          final articleKey2 = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
-          final articleKey3 = _articleKey({'sCodeArticle': sCodeArticleCrypt});
+          // ✅ CRITIQUE: Mettre à jour le notifier AVANT de mettre à jour _wishlistData
+          final articleKey = _articleKey(articleToUpdate);
+          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey];
           
-          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey1] ?? 
-                                                           _articleNotifiers[articleKey2] ?? 
-                                                           _articleNotifiers[articleKey3];
+          if (notifier == null) {
+            print('⚠️ Notifier non trouvé, création pour: $sCodeArticleCrypt');
+            notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(articleToUpdate));
+            _articleNotifiers[articleKey] = notifier;
+          }
           
-          if (notifier != null) {
-            final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
-            updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
-            notifier.value = updatedArticle;
-            print('✅ Notifier forcé mis à jour pour: $sCodeArticleCrypt avec quantité: $quantity');
-          } else {
-            print('⚠️ Notifier non trouvé pour forcer la mise à jour: $sCodeArticleCrypt');
+          // ✅ FORCER la mise à jour avec une nouvelle référence AVANT de mettre à jour pivotArray
+          final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+          updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+          notifier.value = Map<String, dynamic>.from(updatedArticle);
+          
+          print('✅ Notifier forcé mis à jour AVANT pivotArray: $sCodeArticleCrypt, quantité: $quantity (clé: $articleKey)');
+          
+          // ✅ CRITIQUE: Mettre à jour aussi _wishlistData pour garantir la cohérence
+          final newPivotArray = List<dynamic>.from(pivotArray);
+          newPivotArray[articleIndex] = articleToUpdate;
+          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+          _wishlistData!['pivotArray'] = newPivotArray;
+          
+          // ✅ AUSSI: Mettre à jour tous les notifiers qui pourraient correspondre
+          for (var entry in _articleNotifiers.entries) {
+            final notifValue = entry.value.value;
+            final notifCodeCrypt = notifValue['sCodeArticleCrypt']?.toString() ?? '';
+            final notifCode = notifValue['sCodeArticle']?.toString() ?? '';
+            
+            if ((notifCodeCrypt == sCodeArticleCrypt || notifCode == sCodeArticleCrypt) && entry.key != articleKey) {
+              final updatedCopy = Map<String, dynamic>.from(updatedArticle);
+              entry.value.value = updatedCopy;
+              print('✅ Notifier alternatif forcé mis à jour (clé: ${entry.key})');
+            }
           }
           
           if (mounted) {
             setState(() {});
+            print('✅ setState() appelé après _forceUpdateArticleNotifier');
           }
         }
       }
@@ -1957,6 +2098,24 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           final articleToUpdate = Map<String, dynamic>.from(pivotArray[articleIndex]);
           articleToUpdate['iqte'] = newQuantity;
           
+          // ✅ CRITIQUE: Mettre à jour le notifier AVANT de mettre à jour _wishlistData
+          // Cela garantit que le ValueListenableBuilder utilise la nouvelle valeur
+          final articleKey = _articleKey(articleToUpdate);
+          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey];
+          
+          if (notifier == null) {
+            // Créer le notifier s'il n'existe pas
+            notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(articleToUpdate));
+            _articleNotifiers[articleKey] = notifier;
+            print('✅ Notifier créé AVANT mise à jour pivotArray: clé=$articleKey, iqte=$newQuantity');
+          } else {
+            // Mettre à jour le notifier IMMÉDIATEMENT
+            final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+            updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+            notifier.value = Map<String, dynamic>.from(updatedArticle);
+            print('✅ Notifier mis à jour AVANT pivotArray: clé=$articleKey, iqte=$newQuantity');
+          }
+          
           // ✅ CRITIQUE: Créer une nouvelle liste avec l'article mis à jour
           final newPivotArray = List<dynamic>.from(pivotArray);
           newPivotArray[articleIndex] = articleToUpdate;
@@ -2002,30 +2161,39 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           _wishlistData!['pivotArray'] = newPivotArray;
           _wishlistData!['meta'] = newMeta;
 
-          // ✅ CRITIQUE: Mettre à jour le ValueNotifier IMMÉDIATEMENT pour forcer le rebuild
-          // Essayer plusieurs clés possibles pour trouver le notifier
-          final articleKey1 = _articleKey(articleToUpdate);
-          final articleKey2 = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
-          final articleKey3 = _articleKey({'sCodeArticle': sCodeArticleCrypt});
-          
-          // Trouver le notifier (essayer toutes les clés possibles)
-          ValueNotifier<Map<String, dynamic>>? notifier = _articleNotifiers[articleKey1] ?? 
-                                                           _articleNotifiers[articleKey2] ?? 
-                                                           _articleNotifiers[articleKey3];
-          
-          // Si le notifier n'existe pas, le créer
-          if (notifier == null) {
-            print('⚠️ Notifier non trouvé, création d\'un nouveau notifier pour: $sCodeArticleCrypt');
-            final key = articleKey1;
+          // ✅ Le notifier a déjà été mis à jour AVANT (voir plus haut aux lignes 2002-2016)
+          // Vérifier que le notifier est bien synchronisé avec articleToUpdate
+          if (notifier != null) {
+            // Vérifier que le notifier a bien la bonne valeur
+            if (notifier.value['iqte'] != newQuantity) {
+              // Forcer la mise à jour si nécessaire
+              final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
+              updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+              notifier.value = Map<String, dynamic>.from(updatedArticle);
+              print('✅ Notifier resynchronisé: iqte=${notifier.value['iqte']}');
+            }
+            
+            // ✅ AUSSI: Mettre à jour tous les notifiers qui pourraient correspondre
+            for (var entry in _articleNotifiers.entries) {
+              final notifValue = entry.value.value;
+              final notifCodeCrypt = notifValue['sCodeArticleCrypt']?.toString() ?? '';
+              final notifCode = notifValue['sCodeArticle']?.toString() ?? '';
+              
+              if ((notifCodeCrypt == sCodeArticleCrypt || notifCode == sCodeArticleCrypt) && entry.key != articleKey) {
+                final updatedCopy = Map<String, dynamic>.from(articleToUpdate);
+                updatedCopy['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+                entry.value.value = updatedCopy;
+                print('✅ Notifier alternatif mis à jour (clé: ${entry.key})');
+              }
+            }
+            
+            print('✅ ValueNotifier final: iqte=${notifier.value['iqte']} (clé: $articleKey)');
+          } else {
+            print('⚠️ Notifier non trouvé après mise à jour pivotArray, création...');
             notifier = ValueNotifier<Map<String, dynamic>>(Map<String, dynamic>.from(articleToUpdate));
-            _articleNotifiers[key] = notifier;
+            _articleNotifiers[articleKey] = notifier;
+            print('✅ Nouveau notifier créé: iqte=${notifier.value['iqte']} (clé: $articleKey)');
           }
-          
-          // ✅ Créer une NOUVELLE map avec un timestamp pour forcer la mise à jour
-          final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
-          updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
-          notifier.value = updatedArticle;
-          print('✅ ValueNotifier mis à jour IMMÉDIATEMENT pour l\'article: ${notifier.value['iqte']} (clé: ${_articleKey(articleToUpdate)})');
         }
         
         // ✅ CRITIQUE: Appeler setState() APRÈS avoir mis à jour le notifier et créé de nouvelles références
@@ -5396,20 +5564,69 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               }
               final sourceArticle = rawArticle as Map<String, dynamic>;
               final notifier = _ensureArticleNotifier(sourceArticle);
+              
+              // ✅ CRITIQUE: Le notifier est la source de vérité pour les mises à jour en temps réel
+              // Ne PAS écraser la valeur du notifier avec sourceArticle si le notifier a une valeur plus récente
+              // Vérifier si le notifier a un timestamp de mise à jour récent (moins de 2 secondes)
+              final notifierLastUpdate = notifier.value['_lastUpdate'] as int?;
+              final sourceQuantity = sourceArticle['iqte'] ?? 1;
+              final notifierQuantity = notifier.value['iqte'] ?? 1;
+              
+              // Vérifier si le timestamp est récent (moins de 2 secondes)
+              final isRecentUpdate = notifierLastUpdate != null && 
+                (DateTime.now().millisecondsSinceEpoch - notifierLastUpdate) < 2000;
+              
+              // Seulement synchroniser si le notifier n'a pas de timestamp récent ET que les quantités diffèrent
+              // Cela évite d'écraser une mise à jour récente du notifier
+              if (!isRecentUpdate && sourceQuantity != notifierQuantity) {
+                // Synchroniser le notifier avec sourceArticle seulement si pas de mise à jour récente
+                final syncedArticle = Map<String, dynamic>.from(notifier.value);
+                syncedArticle.addAll(sourceArticle);
+                syncedArticle['iqte'] = sourceQuantity; // Utiliser la quantité de sourceArticle
+                notifier.value = Map<String, dynamic>.from(syncedArticle);
+              } else if (isRecentUpdate) {
+                // Le notifier a été mis à jour récemment (moins de 2 secondes), ne pas l'écraser
+                // Mais s'assurer que tous les autres champs sont synchronisés
+                final syncedArticle = Map<String, dynamic>.from(notifier.value);
+                syncedArticle.addAll(sourceArticle);
+                // Garder iqte du notifier (priorité absolue pour les mises à jour récentes)
+                syncedArticle['iqte'] = notifierQuantity;
+                syncedArticle['_lastUpdate'] = notifierLastUpdate;
+                // Ne mettre à jour que si nécessaire pour éviter les rebuilds inutiles
+                if (!mapEquals(syncedArticle, notifier.value)) {
+                  notifier.value = Map<String, dynamic>.from(syncedArticle);
+                }
+              }
+              
               return ValueListenableBuilder<Map<String, dynamic>>(
                 valueListenable: notifier,
                 builder: (context, articleValue, _) {
-                  final displayArticle = articleValue.isNotEmpty ? articleValue : Map<String, dynamic>.from(sourceArticle);
-              return _buildTableRow(
-                displayArticle,
-                translationService,
-                sourceArticle: sourceArticle,
-                articleNotifier: notifier,
-                isMobile: isMobile,
-                isSmallMobile: isSmallMobile,
-                isVerySmallMobile: isVerySmallMobile,
-                itemIndex: index,
-              );
+                  // ✅ CRITIQUE: TOUJOURS utiliser la valeur du notifier si elle existe et contient des données valides
+                  // Le notifier est la source de vérité pour les mises à jour en temps réel
+                  Map<String, dynamic> displayArticle;
+                  
+                  if (articleValue.isNotEmpty && articleValue.containsKey('iqte')) {
+                    // Utiliser la valeur du notifier (source de vérité pour les mises à jour)
+                    displayArticle = Map<String, dynamic>.from(articleValue);
+                    // Fusionner avec sourceArticle pour garantir tous les champs
+                    displayArticle.addAll(sourceArticle);
+                    // Mais garder iqte du notifier (priorité absolue)
+                    displayArticle['iqte'] = articleValue['iqte'];
+                  } else {
+                    // Fallback: utiliser sourceArticle si le notifier est vide
+                    displayArticle = Map<String, dynamic>.from(sourceArticle);
+                  }
+                  
+                  return _buildTableRow(
+                    displayArticle,
+                    translationService,
+                    sourceArticle: sourceArticle,
+                    articleNotifier: notifier,
+                    isMobile: isMobile,
+                    isSmallMobile: isSmallMobile,
+                    isVerySmallMobile: isVerySmallMobile,
+                    itemIndex: index,
+                  );
                 },
               );
             },
