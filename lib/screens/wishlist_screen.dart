@@ -224,6 +224,20 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   Map<String, dynamic>? _wishlistData;
   String? _selectedBasketName;
   bool _hasLoaded = false; // Flag pour éviter les rechargements multiples
+  int _listVersion = 0; // ✅ Compteur de version pour forcer la reconstruction immédiate
+  
+  // ✅ Helper pour obtenir la version de manière sûre (compatible Web/JS)
+  // S'assurer que la valeur est toujours définie, même si _listVersion est undefined
+  int get _safeListVersion {
+    try {
+      // En JavaScript/Web, vérifier explicitement si la valeur existe
+      final value = _listVersion;
+      return value is int ? value : 0;
+    } catch (e) {
+      // En cas d'erreur, retourner 0 par défaut
+      return 0;
+    }
+  }
   String? _lastRefreshParam; // Pour détecter les changements de refresh query param (comme SNAL avec index)
   bool _showMap = false; // Pour afficher/masquer la carte
   DateTime? _lastLoadTime; // Timestamp du dernier chargement pour éviter les rechargements trop fréquents
@@ -238,11 +252,11 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   List<Map<String, dynamic>> _baskets = []; // Liste des baskets disponibles
   int? _selectedBasketIndex; // Index du basket sélectionné (localId)
   
-  // Variables pour l'animation du bouton "Tout supprimer"
+  // Variables pour le scroll
   late ScrollController _scrollController = ScrollController();
-  bool _isAtBottom = false; // Indique si l'utilisateur est à la fin de la liste
   OverlayEntry? _currentSwipeHintOverlay; // Pour gérer l'overlay du message de swipe
   bool _isBasketDropdownOpen = false; // Pour l'animation de la flèche du dropdown
+  bool _isAtBottom = false; // Pour suivre si l'utilisateur est à la fin de la liste
   
   // ✨ ANIMATIONS - Style "Cascade Fluide" (différent des 3 autres pages)
   late AnimationController _buttonsController;
@@ -303,6 +317,30 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     final articles = (_wishlistData?['pivotArray'] as List?) ?? const [];
     final activeKeys = <String>{};
 
+    print('🔄 _refreshArticleNotifiers - Nombre d\'articles: ${articles.length}');
+    
+    // ✅ CRITIQUE: D'abord, supprimer TOUS les notifiers qui ne sont plus dans la liste
+    // Cela évite qu'ils ne soient recréés par erreur
+    final currentNotifierKeys = _articleNotifiers.keys.toList();
+    for (final key in currentNotifierKeys) {
+      final notifierValue = _articleNotifiers[key]?.value;
+      if (notifierValue != null) {
+        final notifierCode = notifierValue['sCodeArticleCrypt']?.toString() ?? notifierValue['sCodeArticle']?.toString() ?? '';
+        final isInList = articles.any((item) {
+          if (item is! Map) return false;
+          final itemCode = item['sCodeArticleCrypt']?.toString() ?? item['sCodeArticle']?.toString() ?? '';
+          return itemCode == notifierCode;
+        });
+        
+        if (!isInList) {
+          print('🗑️ Notifier orphelin supprimé: $key (code: $notifierCode)');
+          _articleNotifiers[key]?.dispose();
+          _articleNotifiers.remove(key);
+        }
+      }
+    }
+
+    // Ensuite, créer/mettre à jour les notifiers pour les articles existants
     for (final item in articles) {
       if (item is Map) {
         final mapData = Map<String, dynamic>.from(item as Map);
@@ -315,11 +353,15 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       }
     }
 
+    // Supprimer les notifiers restants qui ne sont pas dans activeKeys
     final toRemove = _articleNotifiers.keys.where((key) => !activeKeys.contains(key)).toList();
     for (final key in toRemove) {
+      print('🗑️ Notifier supplémentaire supprimé: $key');
       _articleNotifiers[key]?.dispose();
       _articleNotifiers.remove(key);
     }
+    
+    print('✅ _refreshArticleNotifiers terminé - Notifiers actifs: ${_articleNotifiers.length}');
   }
 
   @override
@@ -330,7 +372,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     _loadWishlistData();
     _startGreenAnimation();
     
-    // ✅ Ajouter le listener au ScrollController (déjà initialisé à la déclaration)
+    // ✅ Ajouter un listener sur le ScrollController pour détecter la position
     _scrollController.addListener(_onScroll);
     
     // ✅ Écouter les changements d'authentification pour vider la wishlist lors de la déconnexion
@@ -342,23 +384,6 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     });
   }
   
-  /// Écouter les changements de scroll pour détecter si on est à la fin de la liste
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-    
-    // Détecter si on est proche de la fin (dans les 200 derniers pixels)
-    final threshold = 200.0;
-    final isAtBottom = (maxScroll - currentScroll) < threshold;
-    
-    if (isAtBottom != _isAtBottom) {
-      setState(() {
-        _isAtBottom = isAtBottom;
-      });
-    }
-  }
   
   /// Callback appelé quand l'état d'authentification change
   void _onAuthStateChanged() async {
@@ -557,8 +582,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       print('⚠️ Erreur retrait listener auth: $e');
     }
     
+    // ✅ Retirer le listener du ScrollController avant de le disposer
+    try {
+      _scrollController.removeListener(_onScroll);
+    } catch (e) {
+      print('⚠️ Erreur retrait listener scroll: $e');
+    }
+    
     // ✅ Disposer du ScrollController
-    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     
     // Dispose des animations
@@ -1242,19 +1273,48 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
           
           setState(() {
-            // ✅ CRITIQUE: Créer une nouvelle référence pour forcer Flutter à détecter le changement
-            // Stocker une copie de 'data' qui contient pivotArray et meta
-            _wishlistData = Map<String, dynamic>.from(data);
-            _wishlistData!['pivotArray'] = List<dynamic>.from(data['pivotArray'] ?? []);
-            if (data['meta'] != null) {
-              _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
+            // ✅ CRITIQUE: Si des articles sont en cours de suppression, NE PAS écraser pivotArray
+            // Cela préserve la suppression optimiste
+            if (_articlesToDelete.isNotEmpty) {
+              print('⚠️ Articles en cours de suppression détectés - Préservation de pivotArray optimiste');
+              print('⚠️ Articles à supprimer: ${_articlesToDelete.toList()}');
+              // Utiliser le pivotArray existant (déjà mis à jour par suppression optimiste)
+              final existingPivotArray = _wishlistData?['pivotArray'] as List?;
+              if (existingPivotArray != null) {
+                print('✅ Préservation du pivotArray optimiste (${existingPivotArray.length} articles)');
+                // Créer une nouvelle référence mais garder le pivotArray optimiste
+                _wishlistData = Map<String, dynamic>.from(data);
+                _wishlistData!['pivotArray'] = List<dynamic>.from(existingPivotArray);
+                if (data['meta'] != null) {
+                  _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
+                }
+                _selectedBasketName = 'Wishlist (${existingPivotArray.length} Art.)';
+              } else {
+                // Pas de pivotArray optimiste, utiliser celui de l'API
+                _wishlistData = Map<String, dynamic>.from(data);
+                _wishlistData!['pivotArray'] = List<dynamic>.from(data['pivotArray'] ?? []);
+                if (data['meta'] != null) {
+                  _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
+                }
+                _selectedBasketName = 'Wishlist ($articleCount Art.)';
+              }
+            } else {
+              // Pas de suppression en cours, utiliser les données de l'API normalement
+              _wishlistData = Map<String, dynamic>.from(data);
+              _wishlistData!['pivotArray'] = List<dynamic>.from(data['pivotArray'] ?? []);
+              if (data['meta'] != null) {
+                _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
+              }
+              _selectedBasketName = 'Wishlist ($articleCount Art.)';
             }
-            _selectedBasketName = 'Wishlist ($articleCount Art.)';
             _isLoading = false;
             _hasLoaded = true; // Marquer comme chargé
           });
           _refreshArticleNotifiers();
-          print('✅ Articles chargés: $articleCount');
+          print('✅ Articles chargés: ${(_wishlistData?['pivotArray'] as List?)?.length ?? 0}');
+          
+          // ✅ Vérifier la position du scroll après le chargement
+          _checkScrollPosition();
         } else {
           // Pas de données
           setState(() {
@@ -1271,6 +1331,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             _hasLoaded = true; // Marquer comme chargé même si vide
           });
           _refreshArticleNotifiers();
+          
+          // ✅ Vérifier la position du scroll après le chargement
+          _checkScrollPosition();
         }
       } else {
         setState(() {
@@ -1287,6 +1350,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           _hasLoaded = true; // Marquer comme chargé même si vide
         });
         _refreshArticleNotifiers();
+        
+        // ✅ Vérifier la position du scroll après le chargement
+        _checkScrollPosition();
       }
     } catch (e) {
       print('❌ Erreur _loadArticlesDirectly: $e');
@@ -1580,92 +1646,42 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     try {
       print('🗑️ Suppression de l\'article: $sCodeArticleCrypt ($articleName)');
       
-      // Afficher une confirmation (comme SNAL avec Notiflix)
+      // Confirmation
       final bool? confirmed = await _showNotiflixConfirmDialog(
         title: _translationService.translate('CONFIRM_TITLE'),
         message: _translationService.translate('CONFIRM_DELETE_ITEM'),
       );
 
       if (confirmed != true) {
-        print('❌ Suppression annulée par l\'utilisateur');
         return;
       }
 
-      // ✅ CRITIQUE: Suppression optimiste - Mettre à jour l'UI IMMÉDIATEMENT AVANT l'appel API
-      // Cela garantit un feedback instantané pour l'utilisateur (synchrone pour garantir l'exécution)
-      print('⚡ Suppression optimiste - Mise à jour UI immédiate...');
-      // ✅ CORRECTION: Appel synchrone pour garantir que setState() est exécuté immédiatement
+      // ✅ CRITIQUE: Suppression optimiste IMMÉDIATE (synchrone)
       _updateDataAfterDeletionOptimistic(sCodeArticleCrypt);
       
-      // Appel API pour supprimer l'article (en arrière-plan)
-      print('🚀 Envoi de la requête de suppression...');
-      print('📤 Paramètres envoyés: sCodeArticle = $sCodeArticleCrypt');
-      
-      final response = await _apiService.deleteArticleBasketWishlist(
+      // Appel API en arrière-plan (ne pas attendre)
+      unawaited(_apiService.deleteArticleBasketWishlist(
         sCodeArticle: sCodeArticleCrypt,
-      );
-
-      print('📥 Réponse complète de l\'API:');
-      print('📥 Type de réponse: ${response.runtimeType}');
-      print('📥 Contenu de la réponse: $response');
-      
-      if (response != null) {
-        print('📥 Clés disponibles dans la réponse: ${response.keys.toList()}');
-        print('📥 Success: ${response['success']}');
-        print('📥 Message: ${response['message']}');
-        print('📥 ParsedData: ${response['parsedData']}');
-        print('📥 Error: ${response['error']}');
-        
-        if (response['parsedData'] != null) {
-          print('📥 ParsedData type: ${response['parsedData'].runtimeType}');
-          if (response['parsedData'] is List) {
-            print('📥 ParsedData length: ${response['parsedData'].length}');
-            if (response['parsedData'].isNotEmpty) {
-              print('📥 Premier élément parsedData: ${response['parsedData'][0]}');
-              if (response['parsedData'][0] is Map) {
-                print('📥 Clés du premier élément: ${response['parsedData'][0].keys.toList()}');
-              }
-            }
-          }
+      ).then((response) {
+        if (response != null && response['success'] == true) {
+          print('✅ Article supprimé avec succès côté API');
+          _updateDataAfterDeletion(response, sCodeArticleCrypt);
+          _showNotiflixSuccessDialog(
+            title: _translationService.translate('SUCCESS_TITTLE'),
+            message: _translationService.translate('SUCCES_DELETE_ARTICLE'),
+          );
+        } else {
+          print('❌ Erreur API mais article déjà supprimé localement');
+          print('❌ Réponse: $response');
         }
-      }
+      }).catchError((error) {
+        print('❌ Erreur lors de l\'appel API de suppression: $error');
+        print('⚠️ L\'article reste supprimé localement (suppression optimiste conservée)');
+        // L'article reste supprimé localement - comportement souhaité pour une meilleure UX
+      }));
       
-      if (response != null && response['success'] == true) {  
-        print('✅ Article supprimé avec succès côté API');
-        
-        // Mettre à jour les métadonnées depuis la réponse API (totaux, etc.)
-        await _updateDataAfterDeletion(response, sCodeArticleCrypt);
-        
-        // Afficher le message de succès (sans await pour ne pas bloquer l'UI)
-        _showNotiflixSuccessDialog(
-          title: _translationService.translate('SUCCESS_TITTLE'),
-          message: _translationService.translate('SUCCES_DELETE_ARTICLE'),
-        );
-        
-      } else {
-        print('❌ Erreur lors de la suppression côté API: ${response?['error'] ?? 'Erreur inconnue'}');
-        print('❌ Détails de l\'erreur: ${response?['details'] ?? 'Aucun détail'}');
-        print('❌ Stack trace: ${response?['stack'] ?? 'Aucun stack trace'}');
-        
-        // ✅ CRITIQUE: Même en cas d'erreur API, l'article a déjà été supprimé de manière optimiste
-        // Ne PAS restaurer l'article - l'utilisateur a déjà vu qu'il a été supprimé
-        // On affiche juste un message d'erreur mais on garde l'article supprimé
-        print('⚠️ Erreur API mais article déjà supprimé de manière optimiste - on garde la suppression');
-        
-        // Afficher un message d'erreur style Notiflix
-        await _showNotiflixErrorDialog(
-          title: _translationService.translate('ERROR_TITLE'),
-          message: _translationService.translate('DELETE_ERROR') ?? "Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}",
-        );
-      }
     } catch (e) {
       print('❌ Erreur lors de la suppression: $e');
-      
-      // Afficher un message d'erreur style Notiflix
-      await _showNotiflixErrorDialog(
-        title: _translationService.translate('ERROR_TITLE'),
-        message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite lors de la suppression: $e",
-      );
     }
   }
 
@@ -2001,16 +2017,18 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             }
           }
           
-          // ✅ CRITIQUE: Créer updatedArticle avec timestamp
+          // ✅ CRITIQUE: Créer updatedArticle avec timestamp et champ mis à jour
           final currentTimestamp = DateTime.now().millisecondsSinceEpoch;
           final updatedArticle = Map<String, dynamic>.from(articleToUpdate);
           updatedArticle['_lastUpdate'] = currentTimestamp;
+          updatedArticle['_lastUpdateField'] = 'iqte'; // ✅ CRITIQUE: Indiquer quel champ a été mis à jour
           updatedArticle['iqte'] = quantity; // S'assurer que la quantité est correcte
           
           // ✅ CRITIQUE ÉTAPE 1: Mettre à jour _wishlistData EN PREMIER
           // Cela garantit que _buildArticlesContent verra la bonne valeur lors du rebuild
+          // ✅ CRITIQUE: Utiliser updatedArticle (avec timestamp) au lieu de articleToUpdate
           final newPivotArray = List<dynamic>.from(pivotArray);
-          newPivotArray[articleIndex] = articleToUpdate;
+          newPivotArray[articleIndex] = updatedArticle; // ✅ Utiliser updatedArticle avec timestamp
           _wishlistData = Map<String, dynamic>.from(_wishlistData!);
           _wishlistData!['pivotArray'] = newPivotArray;
           
@@ -2045,6 +2063,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             
             if ((notifCodeCrypt == sCodeArticleCrypt || notifCode == sCodeArticleCrypt) && entry.key != articleKey) {
               final updatedCopy = Map<String, dynamic>.from(updatedArticle);
+              // ✅ CRITIQUE: S'assurer que le timestamp et le champ sont présents
+              updatedCopy['_lastUpdate'] = currentTimestamp;
+              updatedCopy['_lastUpdateField'] = 'iqte';
               entry.value.value = updatedCopy;
             }
           }
@@ -3806,6 +3827,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           updatedArticle['spaysSelected'] = newSelected;
           updatedArticle['sPaysSelected'] = newSelected;
           updatedArticle['sPays'] = newSelected;
+          // ✅ CRITIQUE: Ajouter un timestamp pour protéger cette mise à jour
+          updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+          updatedArticle['_lastUpdateField'] = 'spaysSelected'; // Indiquer quel champ a été mis à jour
           
           // ✅ CRITIQUE: Créer une nouvelle liste avec l'article mis à jour
           final newPivotArray = List<dynamic>.from(pivotArray);
@@ -3824,6 +3848,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           // pour que le ValueListenableBuilder dans le build method se mette à jour automatiquement
           final wishlistNotifier = _articleNotifiers[sCodeArticleCrypt];
           if (wishlistNotifier != null) {
+            // ✅ CRITIQUE: Créer une nouvelle référence pour forcer la notification
             wishlistNotifier.value = Map<String, dynamic>.from(updatedArticle);
             print('⚡ ValueNotifier du wishlist_screen mis à jour (optimistic)');
           } else {
@@ -3834,9 +3859,17 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             print('⚡ ValueNotifier du wishlist_screen créé (optimistic)');
           }
           
-          if (mounted) setState(() {});
-          print('⚡ UI mise à jour immédiatement (optimistic) avec pays: ${isDeselecting ? "(aucun)" : countryCode}');
-          unawaited(_loadWishlistData(force: true));
+          // ✅ CRITIQUE: Incrémenter _listVersion pour forcer la reconstruction des widgets
+          _listVersion++;
+          
+          // ✅ CRITIQUE: setState() IMMÉDIAT pour mettre à jour l'UI instantanément
+          if (mounted) {
+            setState(() {});
+            print('⚡ UI mise à jour immédiatement (optimistic) avec pays: ${isDeselecting ? "(aucun)" : countryCode}');
+          }
+          
+          // ❌ SUPPRIMER cet appel qui peut écraser la mise à jour optimiste
+          // unawaited(_loadWishlistData(force: true));
         }
       }
       
@@ -3890,6 +3923,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               updatedArticle['sPays'] = newSelected;
               updatedArticle['sMyHomeIcon'] = totals['sMyHomeIcon'];
               updatedArticle['sPaysListe'] = totals['sPaysListe'];
+              // ✅ CRITIQUE: Ajouter un timestamp pour protéger cette mise à jour
+              updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+              updatedArticle['_lastUpdateField'] = 'spaysSelected'; // Indiquer quel champ a été mis à jour
+              // ✅ CRITIQUE: Ajouter un timestamp pour protéger cette mise à jour
+              updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
+              updatedArticle['_lastUpdateField'] = 'spaysSelected'; // Indiquer quel champ a été mis à jour
               
               // ✅ CRITIQUE: Créer une nouvelle liste avec l'article mis à jour
               final newPivotArray = List<dynamic>.from(pivotArray);
@@ -3928,6 +3967,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
               // pour que le ValueListenableBuilder dans le build method se mette à jour automatiquement
               final wishlistNotifier = _articleNotifiers[sCodeArticleCrypt];
               if (wishlistNotifier != null) {
+                // ✅ CRITIQUE: Créer une nouvelle référence pour forcer la notification
                 wishlistNotifier.value = Map<String, dynamic>.from(updatedArticle);
                 print('✅ ValueNotifier du wishlist_screen mis à jour');
               } else {
@@ -3937,6 +3977,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 );
                 print('✅ ValueNotifier du wishlist_screen créé');
               }
+              
+              // ✅ CRITIQUE: Incrémenter _listVersion pour forcer la reconstruction des widgets
+              _listVersion++;
               
               // ✅ Forcer la mise à jour de l'interface principale
               if (mounted) {
@@ -4107,25 +4150,69 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   void _updateDataAfterDeletionOptimistic(String deletedCode) {
     try {
       print('⚡ Suppression optimiste de l\'article: $deletedCode');
+      print('🔍 État AVANT suppression optimiste:');
+      print('   _wishlistData est null: ${_wishlistData == null}');
+      print('   pivotArray est null: ${_wishlistData?['pivotArray'] == null}');
+      
+      // ✅ CRITIQUE ÉTAPE 1: setState IMMÉDIAT pour ajouter à _articlesToDelete
+      if (mounted) {
+        setState(() {
+          _articlesToDelete.add(deletedCode);
+        });
+        print('🚫 Article ajouté à _articlesToDelete (setState immédiat): $deletedCode');
+        
+        // ✅ CRITIQUE ÉTAPE 2: Forcer un rebuild immédiat
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {}); // Force un rebuild pour appliquer le filtre
+            print('⚡ Rebuild forcé pour cacher l\'article visuellement');
+          }
+        });
+      }
       
       // Retirer l'article de la liste locale IMMÉDIATEMENT
       if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
-        final List<dynamic> pivotArray = List<dynamic>.from(_wishlistData!['pivotArray']);
+        final List<dynamic> originalPivotArray = _wishlistData!['pivotArray'] as List<dynamic>;
+        print('🔍 Nombre d\'articles AVANT suppression: ${originalPivotArray.length}');
+        for (var i = 0; i < originalPivotArray.length; i++) {
+          final item = originalPivotArray[i];
+          final itemCode = item['sCodeArticle']?.toString() ?? '';
+          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+          print('   Article $i: Code=$itemCode, CodeCrypt=$itemCryptCode');
+        }
         
-        // Supprimer l'article
+        final List<dynamic> pivotArray = [];
+        
+        // ✅ CRITIQUE: Créer une NOUVELLE liste en copiant seulement les articles NON supprimés
+        // Cela garantit une référence complètement différente
+        // NE JAMAIS mettre null ou des valeurs vides - supprimer complètement l'article
         int removedCount = 0;
-        pivotArray.removeWhere((item) {
+        for (var item in originalPivotArray) {
+          // ✅ Vérifier que l'item est valide (pas null)
+          if (item == null) {
+            print('⚠️ Article null détecté et ignoré');
+            continue;
+          }
+          
           final itemCode = item['sCodeArticle']?.toString() ?? '';
           final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
           final shouldRemove = itemCryptCode == deletedCode || itemCode == deletedCode;
           
           if (shouldRemove) {
             removedCount++;
-            print('🗑️ Article trouvé et marqué pour suppression: $itemCryptCode / $itemCode');
+            print('🗑️ Article trouvé et SUPPRIMÉ COMPLÈTEMENT: Code=$itemCode, CodeCrypt=$itemCryptCode');
+            print('🗑️ Code recherché: $deletedCode');
+            // ✅ NE PAS ajouter à pivotArray - l'article est complètement supprimé
+          } else {
+            // ✅ Copier seulement les articles qui ne sont PAS supprimés (et qui sont valides)
+            if (item is Map && item.isNotEmpty) {
+              pivotArray.add(Map<String, dynamic>.from(item as Map));
+              print('✅ Article conservé: Code=$itemCode, CodeCrypt=$itemCryptCode');
+            } else {
+              print('⚠️ Article invalide ignoré: $itemCode');
+            }
           }
-          
-          return shouldRemove;
-        });
+        }
         
         print('📊 Articles supprimés: $removedCount, Articles restants: ${pivotArray.length}');
         
@@ -4149,28 +4236,113 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             print('✅ Notifier supprimé: $key');
           }
           
-          // ✅ CRITIQUE: Créer une NOUVELLE référence pour forcer la détection du changement
+          // ✅ CRITIQUE: Créer une NOUVELLE référence COMPLÈTE pour forcer la détection du changement
           final articleCount = pivotArray.length;
-          _wishlistData = Map<String, dynamic>.from(_wishlistData!);
-          _wishlistData!['pivotArray'] = List<dynamic>.from(pivotArray);
-          // ✅ CRITIQUE: Créer aussi une nouvelle référence pour meta pour forcer le rebuild
-          if (_wishlistData!['meta'] != null) {
-            _wishlistData!['meta'] = Map<String, dynamic>.from(_wishlistData!['meta']);
-          }
-          _selectedBasketName = 'Wishlist ($articleCount Art.)';
+          final newWishlistData = <String, dynamic>{};
           
-          print('✅ _wishlistData mis à jour - Articles restants: $articleCount');
-          print('✅ Nouvelle référence créée pour forcer le rebuild');
+          // Copier toutes les clés sauf pivotArray
+          for (var key in _wishlistData!.keys) {
+            if (key != 'pivotArray') {
+              if (_wishlistData![key] is Map) {
+                newWishlistData[key] = Map<String, dynamic>.from(_wishlistData![key] as Map);
+              } else {
+                newWishlistData[key] = _wishlistData![key];
+              }
+            }
+          }
+          
+          // ✅ CRITIQUE: Assigner la NOUVELLE liste pivotArray (référence complètement différente)
+          // Créer une copie finale pour garantir une référence unique
+          // ✅ S'assurer qu'il n'y a pas de null ou de valeurs vides dans la liste
+          final finalPivotArray = pivotArray.where((item) => item != null && item is Map && item.isNotEmpty).toList();
+          newWishlistData['pivotArray'] = finalPivotArray;
+          print('✅ pivotArray final créé: ${finalPivotArray.length} articles (sans null ni valeurs vides)');
+          
+          // ✅ VÉRIFICATION FINALE: S'assurer que l'article supprimé n'est PAS dans la nouvelle liste
+          final verificationCheck = newWishlistData['pivotArray'] as List<dynamic>;
+          final stillInList = verificationCheck.any((item) {
+            final itemCode = item['sCodeArticle']?.toString() ?? '';
+            final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+            return itemCryptCode == deletedCode || itemCode == deletedCode;
+          });
+          
+          if (stillInList) {
+            print('❌ ERREUR CRITIQUE: L\'article supprimé est toujours dans pivotArray après création de newWishlistData !');
+            print('❌ Suppression immédiate...');
+            final cleanedList = verificationCheck.where((item) {
+              final itemCode = item['sCodeArticle']?.toString() ?? '';
+              final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+              return !(itemCryptCode == deletedCode || itemCode == deletedCode);
+            }).toList();
+            newWishlistData['pivotArray'] = cleanedList;
+            print('✅ Article supprimé manuellement de newWishlistData');
+          } else {
+            print('✅ Vérification OK: L\'article supprimé n\'est PAS dans pivotArray');
+          }
+          
+          print('✅ _wishlistData préparé - Articles restants: $articleCount');
+          print('✅ Nouvelle référence COMPLÈTE créée pour forcer le rebuild');
+          print('✅ pivotArray avant: ${originalPivotArray.length}, après: ${pivotArray.length}');
+          print('✅ HashCode pivotArray avant: ${originalPivotArray.hashCode}, après: ${pivotArray.hashCode}');
+          
+          // ✅ CRITIQUE: Incrémenter _listVersion AVANT setState pour que la clé change immédiatement
+          // Cela garantit que les ValueKey dans _buildTopSection et _buildArticlesContent changent
+          _listVersion++;
+          print('⚡ _listVersion incrémenté AVANT setState: $_listVersion');
           
           // ✅ CRITIQUE: setState IMMÉDIATEMENT pour feedback instantané
+          // MODIFIER _wishlistData UNIQUEMENT dans setState pour forcer la détection
           if (mounted) {
-            setState(() {});
-            print('⚡ setState() appelé IMMÉDIATEMENT - Article supprimé visuellement');
+            // ✅ CRITIQUE: Créer une NOUVELLE référence dans setState pour forcer la détection
+            setState(() {
+              // ✅ CRITIQUE: Créer une copie complète profonde pour forcer la détection du changement
+              final updatedWishlistData = <String, dynamic>{};
+              for (var key in newWishlistData.keys) {
+                if (newWishlistData[key] is List) {
+                  updatedWishlistData[key] = List<dynamic>.from(newWishlistData[key] as List);
+                } else if (newWishlistData[key] is Map) {
+                  updatedWishlistData[key] = Map<String, dynamic>.from(newWishlistData[key] as Map);
+                } else {
+                  updatedWishlistData[key] = newWishlistData[key];
+                }
+              }
+              // ✅ CRITIQUE: Modifier _wishlistData UNIQUEMENT dans setState
+              _wishlistData = updatedWishlistData;
+              _selectedBasketName = 'Wishlist ($articleCount Art.)';
+            });
+            print('⚡ setState() appelé IMMÉDIATEMENT - Article supprimé visuellement (version: $_listVersion)');
+            print('⚡ Nombre d\'articles après setState: ${(_wishlistData?['pivotArray'] as List?)?.length ?? 0}');
+            
+            // ✅ CRITIQUE: Forcer un rebuild immédiat avec SchedulerBinding pour garantir la mise à jour
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  // Forcer un rebuild en touchant _listVersion (déjà incrémenté)
+                  // Cela garantit que tous les widgets avec ValueKey sont reconstruits
+                });
+                print('⚡ Rebuild forcé avec addPostFrameCallback (version: $_listVersion)');
+              }
+            });
+            
+            // ✅ CRITIQUE: Appeler _refreshArticleNotifiers APRÈS setState pour nettoyer les notifiers orphelins
+            // Utiliser un délai minimal pour s'assurer que setState a pris effet
+            Future.microtask(() {
+              if (mounted) {
+                _refreshArticleNotifiers();
+                print('✅ Notifiers rafraîchis après microtask pour supprimer les orphelins');
+              }
+            });
           } else {
             print('⚠️ Widget non monté - setState() non appelé');
           }
         } else {
           print('⚠️ Aucun article trouvé à supprimer pour le code: $deletedCode');
+          print('⚠️ Articles dans pivotArray: ${originalPivotArray.length}');
+          for (var item in originalPivotArray) {
+            final itemCode = item['sCodeArticle']?.toString() ?? '';
+            final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+            print('   - Code: $itemCode, CodeCrypt: $itemCryptCode');
+          }
         }
       } else {
         print('⚠️ _wishlistData ou pivotArray est null');
@@ -4189,10 +4361,26 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       
       // ✅ CRITIQUE: L'article a déjà été supprimé de manière optimiste dans _updateDataAfterDeletionOptimistic
       // On ne doit PAS le supprimer à nouveau, seulement mettre à jour les métadonnées (totaux, etc.)
+      // On ne doit JAMAIS toucher à pivotArray - il a déjà été mis à jour de manière optimiste
       if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
-        // Lire pivotArray depuis _wishlistData qui a déjà été mis à jour de manière optimiste
-        final currentPivotArray = List<dynamic>.from(_wishlistData!['pivotArray'] ?? []);
+        // ✅ CRITIQUE: Lire pivotArray depuis _wishlistData qui a déjà été mis à jour de manière optimiste
+        // NE PAS modifier pivotArray - seulement le lire pour connaître le nombre d'articles
+        final currentPivotArray = _wishlistData!['pivotArray'] as List<dynamic>;
         final articleCount = currentPivotArray.length;
+        
+        // ✅ VÉRIFICATION: S'assurer que l'article supprimé n'est PAS dans la liste
+        final deletedArticleStillPresent = currentPivotArray.any((item) {
+          final itemCode = item['sCodeArticle']?.toString() ?? '';
+          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+          return itemCryptCode == deletedCode || itemCode == deletedCode;
+        });
+        
+        if (deletedArticleStillPresent) {
+          print('⚠️ ATTENTION: L\'article supprimé est toujours présent dans pivotArray !');
+          print('⚠️ Cela ne devrait PAS arriver - l\'article devrait avoir été supprimé de manière optimiste');
+        } else {
+          print('✅ Confirmation: L\'article supprimé n\'est PAS dans pivotArray');
+        }
         
         print('📊 Articles actuels dans pivotArray (après suppression optimiste): $articleCount');
         
@@ -4219,12 +4407,19 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           print('✅ Panier vide - Métadonnées réinitialisées (pas de rechargement pour éviter restauration)');
         } else {
           // Mettre à jour les totaux depuis parsedData (comme SNAL) seulement si le panier n'est pas vide
+          // ✅ CRITIQUE: NE JAMAIS utiliser parsedData pour restaurer pivotArray - seulement pour meta
           if (response['parsedData'] != null && response['parsedData'] is List) {
             final List<dynamic> parsedData = response['parsedData'];
             if (parsedData.isNotEmpty) {
               final Map<String, dynamic> totals = parsedData[0];
               
-              // Mettre à jour les clés importantes dans meta
+              // ✅ VÉRIFICATION: S'assurer que parsedData ne contient PAS de pivotArray qui pourrait restaurer l'article
+              if (totals.containsKey('pivotArray')) {
+                print('⚠️ ATTENTION: parsedData contient pivotArray - IGNORÉ pour éviter de restaurer l\'article');
+                print('⚠️ On utilise uniquement les métadonnées (totaux) de parsedData');
+              }
+              
+              // Mettre à jour UNIQUEMENT les clés importantes dans meta (PAS pivotArray)
               final List<String> keysToUpdate = [
                 'iBestResultJirig',
                 'iTotalQteArticleSelected', 
@@ -4239,15 +4434,18 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 }
               }
               
-              print('✅ Métadonnées mises à jour depuis parsedData');
+              print('✅ Métadonnées mises à jour depuis parsedData (pivotArray ignoré)');
             }
           }
         }
         
         print('📊 Articles actuels dans pivotArray (après suppression optimiste): $articleCount');
         
-        // Mettre à jour _wishlistData avec les nouvelles métadonnées
+        // ✅ CRITIQUE: S'assurer que pivotArray n'est PAS modifié - il a déjà été mis à jour de manière optimiste
+        // Créer une nouvelle référence de _wishlistData en préservant le pivotArray mis à jour
+        final currentPivotArrayCopy = List<dynamic>.from(currentPivotArray); // Copie pour sécurité
         _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+        _wishlistData!['pivotArray'] = currentPivotArrayCopy; // ✅ GARANTIR que pivotArray reste celui de la suppression optimiste
         _wishlistData!['meta'] = newMeta; // Nouvelle map meta avec les totaux mis à jour
         
         // Mettre à jour le nom du panier si nécessaire
@@ -4263,19 +4461,64 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           print('✅ Label du basket mis à jour dans _baskets: Wishlist ($articleCount Art.)');
         }
         
+        // ✅ CRITIQUE: Vérifier une dernière fois que l'article supprimé n'est PAS dans pivotArray
+        final finalCheck = _wishlistData!['pivotArray'] as List<dynamic>;
+        final stillPresent = finalCheck.any((item) {
+          final itemCode = item['sCodeArticle']?.toString() ?? '';
+          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+          return itemCryptCode == deletedCode || itemCode == deletedCode;
+        });
+        
+        if (stillPresent) {
+          print('❌ ERREUR CRITIQUE: L\'article supprimé est toujours présent après _updateDataAfterDeletion !');
+          print('❌ Suppression immédiate et COMPLÈTE de l\'article...');
+          // ✅ Supprimer complètement l'article (sans laisser null ou valeurs vides)
+          final cleanedList = finalCheck.where((item) {
+            if (item == null) return false; // Exclure les null
+            final itemCode = item['sCodeArticle']?.toString() ?? '';
+            final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
+            // Exclure l'article supprimé
+            return !(itemCryptCode == deletedCode || itemCode == deletedCode);
+          }).toList();
+          _wishlistData!['pivotArray'] = cleanedList;
+          _listVersion++; // Incrémenter pour forcer la reconstruction
+          print('✅ Article supprimé COMPLÈTEMENT (sans null ni valeurs vides) - Version incrémentée: $_listVersion');
+        }
+        
+        // ✅ CRITIQUE: Incrémenter aussi _listVersion pour forcer la reconstruction
+        _listVersion++;
+        print('✅ Version de la liste incrémentée dans _updateDataAfterDeletion: $_listVersion');
+        
         // ✅ CRITIQUE: Mettre à jour l'UI pour refléter les nouvelles métadonnées (totaux, etc.)
         // Mais NE PAS recharger les données depuis l'API pour éviter de restaurer l'article
         if (mounted) {
           setState(() {
             // _wishlistData est déjà mis à jour avec les nouvelles métadonnées
+            // pivotArray est garanti d'être sans l'article supprimé
+            // _listVersion est incrémenté pour forcer la reconstruction
           });
           print('✅ setState() appelé pour mettre à jour les métadonnées (totaux, etc.)');
+          
+          // ✅ Vérifier la position du scroll après la suppression
+          _checkScrollPosition();
         }
         
         print('✅ Métadonnées mises à jour après suppression - Totaux synchronisés avec l\'API');
+        
+        // ✅ CRITIQUE: NE PAS retirer l'article de _articlesToDelete immédiatement
+        // Attendre un délai pour s'assurer qu'aucun rechargement ne restaure l'article
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _articlesToDelete.remove(deletedCode);
+            print('✅ Article retiré de _articlesToDelete après délai de sécurité: $deletedCode');
+          }
+        });
       }
     } catch (e) {
       print('❌ Erreur lors de la mise à jour des données: $e');
+      // En cas d'erreur, retirer quand même l'article de _articlesToDelete pour éviter qu'il reste bloqué
+      _articlesToDelete.remove(deletedCode);
+      print('⚠️ Article retiré de _articlesToDelete malgré l\'erreur: $deletedCode');
     }
   }
 
@@ -4329,10 +4572,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         ],
       ),
       bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 3),
-      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus ET que l'utilisateur n'est PAS à la fin
-      floatingActionButton: (_shouldShowDeleteAllButton() && !_isAtBottom)
+      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus ET que l'utilisateur n'est pas à la fin
+      floatingActionButton: _shouldShowDeleteAllButton() && !_isAtBottom
           ? AnimatedOpacity(
-              opacity: _shouldShowDeleteAllButton() && !_isAtBottom ? 1.0 : 0.0,
+              opacity: _isAtBottom ? 0.0 : 1.0,
               duration: const Duration(milliseconds: 300),
               child: FloatingActionButton.extended(
                 onPressed: _deleteAllArticles,
@@ -4361,59 +4604,117 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     return articles.length >= 2;
   }
   
-  /// Vérifier si la liste est assez longue pour nécessiter un scroll
-  /// Si la liste est courte, le bouton sera placé en fin de liste au lieu d'être flottant
-  bool _shouldUseFloatingButton(BuildContext context) {
-    final articles = _wishlistData?['pivotArray'] as List? ?? [];
-    if (articles.length < 2) return false;
+  /// Détecter si l'utilisateur est à la fin de la liste
+  void _onScroll() {
+    if (!_scrollController.hasClients) {
+      // ✅ Si pas de clients, réinitialiser l'état
+      if (_isAtBottom) {
+        setState(() {
+          _isAtBottom = false;
+        });
+      }
+      return;
+    }
     
-    // Obtenir la hauteur de l'écran
-    final screenHeight = MediaQuery.maybeOf(context)?.size.height ?? 800;
-    final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 1024;
-    final isMobile = screenWidth < 768;
-    
-    // Estimer la hauteur totale du contenu
-    // Hauteur approximative par article (avec espacement)
-    final estimatedArticleHeight = isMobile ? 180.0 : 200.0;
-    final estimatedHeaderHeight = isMobile ? 400.0 : 500.0; // Section top avec cartes, etc.
-    final estimatedTotalHeight = estimatedHeaderHeight + (articles.length * estimatedArticleHeight);
-    
-    // Si le contenu dépasse 80% de la hauteur de l'écran, utiliser le bouton flottant
-    // Sinon, placer le bouton en fin de liste
-    return estimatedTotalHeight > (screenHeight * 0.8);
+    try {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentScroll = _scrollController.position.pixels;
+      final threshold = 200.0; // Seuil de 200px avant la fin
+      
+      // ✅ Gérer le cas où il n'y a pas de scroll (maxScroll = 0)
+      if (maxScroll <= 0) {
+        // Pas de scroll possible, le bouton doit rester flottant
+        if (_isAtBottom) {
+          setState(() {
+            _isAtBottom = false;
+          });
+          print('📍 Pas de scroll possible - Bouton reste flottant');
+        }
+        return;
+      }
+      
+      // ✅ Détecter si l'utilisateur est proche de la fin (dans les 200 derniers pixels)
+      final isNearBottom = (maxScroll - currentScroll) <= threshold;
+      
+      if (isNearBottom != _isAtBottom) {
+        if (mounted) {
+          setState(() {
+            _isAtBottom = isNearBottom;
+          });
+          print('📍 Position scroll: $_isAtBottom (maxScroll: $maxScroll, currentScroll: $currentScroll, diff: ${maxScroll - currentScroll})');
+        }
+      }
+    } catch (e) {
+      print('⚠️ Erreur dans _onScroll: $e');
+      // En cas d'erreur, réinitialiser l'état
+      if (_isAtBottom && mounted) {
+        setState(() {
+          _isAtBottom = false;
+        });
+      }
+    }
   }
   
-  /// Construire le bouton "Tout supprimer"
-  Widget _buildDeleteAllButton(TranslationService translationService) {
-    final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 1024;
-    final isMobile = screenWidth < 768;
+  /// Vérifier la position du scroll après un rebuild
+  void _checkScrollPosition() {
+    if (!_scrollController.hasClients) return;
     
-    return Container(
-      margin: EdgeInsets.symmetric(
-        horizontal: isMobile ? 16 : 32,
-        vertical: 16,
-      ),
-      child: FilledButton.icon(
-        onPressed: _deleteAllArticles,
-        style: FilledButton.styleFrom(
-          backgroundColor: Colors.red[600],
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollController.hasClients) {
+        _onScroll();
+      }
+    });
+  }
+  
+  /// Construire le bouton "Tout supprimer" pour la fin de liste
+  Widget _buildDeleteAllButton(TranslationService translationService, {bool isMobile = false}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.3),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          )),
+          child: FadeTransition(
+            opacity: animation,
+            child: child,
           ),
-        ),
-        icon: const Icon(Icons.delete_sweep),
-        label: Text(
-          translationService.translate('WISHLIST_DELETE_ALL') ?? 'Tout supprimer',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+        );
+      },
+      child: Container(
+        key: const ValueKey('delete_all_button'),
+        margin: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: FilledButton.icon(
+          onPressed: _deleteAllArticles,
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.red[600],
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 20 : 24,
+              vertical: isMobile ? 14 : 16,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 4,
+          ),
+          icon: const Icon(Icons.delete_sweep, size: 20),
+          label: Text(
+            translationService.translate('WISHLIST_DELETE_ALL') ?? 'Tout supprimer',
+            style: TextStyle(
+              fontSize: isMobile ? 14 : 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
     );
   }
+  
 
 
   Widget _buildLoadingState(TranslationService translationService) {
@@ -4491,13 +4792,20 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   Widget _buildWishlistView(TranslationService translationService) {
+    // ✅ CRITIQUE: Utiliser _listVersion comme clé pour forcer la reconstruction complète
+    // Utiliser une valeur par défaut sûre pour éviter les erreurs JS/Web
+    final versionNum = _safeListVersion;
+    final versionStr = versionNum.toString();
     return RefreshIndicator(
+      key: ValueKey('refresh_' + versionStr),
       onRefresh: _loadWishlistData,
       color: const Color(0xFF0D6EFD),
       child: SingleChildScrollView(
+        key: ValueKey('scroll_' + versionStr),
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
+          key: ValueKey('column_' + versionStr),
           children: [
             _buildTopSection(translationService),
           ],
@@ -4507,8 +4815,38 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   Widget _buildTopSection(TranslationService translationService) {
-    final articles = _wishlistData?['pivotArray'] as List? ?? [];
+    // ✅ CRITIQUE: Créer une NOUVELLE liste à chaque fois pour forcer la détection du changement
+    final pivotArray = _wishlistData?['pivotArray'] as List?;
+    
+    // ✅ CRITIQUE: Filtrer les articles qui sont en cours de suppression
+    // Cela évite d'afficher temporairement un article qui vient d'être supprimé
+    final articles = pivotArray != null 
+        ? List<dynamic>.from(pivotArray).where((item) {
+            if (item is! Map) return false;
+            final itemCode = item['sCodeArticleCrypt']?.toString() ?? item['sCodeArticle']?.toString() ?? '';
+            // Ne pas afficher les articles en cours de suppression
+            return !_articlesToDelete.contains(itemCode);
+          }).toList()
+        : <dynamic>[];
+    
     final isEmpty = articles.isEmpty;
+    
+    // ✅ DEBUG: Log pour tracer le problème
+    print('🔍 _buildTopSection - Nombre d\'articles: ${articles.length}, Version: $_listVersion');
+    print('🔍 pivotArray original: ${pivotArray?.length ?? 0}, articles filtrés: ${articles.length}, _articlesToDelete: ${_articlesToDelete.length}');
+    if (articles.isNotEmpty) {
+      for (var i = 0; i < articles.length; i++) {
+        final article = articles[i];
+        final code = article['sCodeArticleCrypt']?.toString() ?? article['sCodeArticle']?.toString() ?? 'unknown';
+        print('   Article $i: $code');
+      }
+    }
+    
+    // ✅ CRITIQUE: Utiliser _listVersion comme clé pour forcer la reconstruction
+    // Utiliser une valeur par défaut sûre pour éviter les erreurs JS/Web
+    final versionNum = _safeListVersion;
+    final versionStr = versionNum.toString();
+    final sectionKey = ValueKey('topSection_' + versionStr);
     final meta = _wishlistData?['meta'] ?? {};
     final optimalPrice = _extractPriceFromString(meta['iBestResultJirig']?.toString() ?? '0');
     final currentPrice = _extractPriceFromString(meta['iTotalPriceArticleSelected']?.toString() ?? '0');
@@ -4524,6 +4862,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     final isTablet = screenWidth >= 768 && screenWidth < 1024; // Tablettes
 
     return Container(
+      key: sectionKey, // ✅ Clé pour forcer la reconstruction
       color: Colors.white,
       width: double.infinity,
       child: Column(
@@ -4682,29 +5021,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           else ...[
             _buildArticlesContent(translationService, articles, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
             
-            // ✅ Bouton "Tout supprimer" en fin de liste avec animation
-            // Le bouton apparaît en fin de liste quand l'utilisateur est à la fin du scroll
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.0, 0.3),
-                    end: Offset.zero,
-                  ).animate(CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOut,
-                  )),
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                );
-              },
-              child: (_shouldShowDeleteAllButton() && _isAtBottom)
-                  ? _buildDeleteAllButton(translationService)
-                  : const SizedBox.shrink(key: ValueKey('empty')),
-            ),
+            // ✅ Bouton "Tout supprimer" en fin de liste si l'utilisateur est à la fin
+            if (_shouldShowDeleteAllButton() && _isAtBottom) ...[
+              SizedBox(height: isMobile ? 16 : 24),
+              _buildDeleteAllButton(translationService, isMobile: isMobile),
+              SizedBox(height: isMobile ? 16 : 24),
+            ],
           ],
         ],
       ),
@@ -5745,9 +6067,36 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
 
   Widget _buildArticlesContent(TranslationService translationService, List articles, {bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false}) {
+    // ✅ CRITIQUE: Filtrer DEUX FOIS pour garantir l'exclusion
+    // Première fois au début de _buildTopSection (ligne 1949)
+    // Deuxième fois ici pour être sûr
+    final filteredArticles = articles.where((item) {
+      if (item is! Map) return false;
+      final itemCode = item['sCodeArticleCrypt']?.toString() ?? 
+                       item['sCodeArticle']?.toString() ?? '';
+      final isDeleting = _articlesToDelete.contains(itemCode);
+      
+      if (isDeleting) {
+        print('🚫 Article filtré (en cours de suppression): $itemCode');
+      }
+      
+      return !isDeleting; // ✅ Exclure si en cours de suppression
+    }).toList();
+    
+    print('📊 Articles après filtre: ${filteredArticles.length} (supprimés: ${_articlesToDelete.length})');
+    
+    // ✅ CRITIQUE: Utiliser _listVersion pour forcer la reconstruction immédiate
+    // Utiliser une valeur par défaut sûre pour éviter les erreurs JS/Web
+    final versionNum = _safeListVersion;
+    final versionStr = versionNum.toString();
+    final articlesLength = filteredArticles.length; // ✅ Utiliser la liste filtrée
+    final articlesLengthStr = articlesLength.toString();
+    final listKey = ValueKey('articles_' + articlesLengthStr + '_' + versionStr);
+    
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isVerySmallMobile ? 6 : (isSmallMobile ? 8 : (isMobile ? 12 : 16))),
       child: Column(
+        key: listKey, // ✅ Clé pour forcer la reconstruction quand la liste change
         children: [
           // En-tête du tableau
           // _buildTableHeader(),
@@ -5755,54 +6104,86 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           
           // Contenu du tableau avec animations
           ListView.separated(
+            key: ValueKey('listview_' + articlesLengthStr + '_' + versionStr), // ✅ Clé unique basée sur la version pour forcer la reconstruction
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: articles.length,
+            itemCount: filteredArticles.length, // ✅ Utiliser la liste filtrée
             separatorBuilder: (context, index) => SizedBox(height: isMobile ? 8 : 12),
             itemBuilder: (context, index) {
-              final rawArticle = articles[index];
+              final rawArticle = filteredArticles[index]; // ✅ Utiliser la liste filtrée
               if (rawArticle is! Map) {
                 return const SizedBox.shrink();
               }
               final sourceArticle = rawArticle as Map<String, dynamic>;
+              
+              // ✅ DEBUG: Log pour tracer quel article est affiché
+              final articleCode = sourceArticle['sCodeArticleCrypt']?.toString() ?? sourceArticle['sCodeArticle']?.toString() ?? 'unknown';
+              print('🔍 _buildArticlesContent itemBuilder - Index $index: $articleCode');
+              
               final notifier = _ensureArticleNotifier(sourceArticle);
               
               // ✅ CRITIQUE: Le notifier est la source de vérité pour les mises à jour en temps réel
               // Ne PAS écraser la valeur du notifier avec sourceArticle si le notifier a une valeur plus récente
               // Vérifier si le notifier a un timestamp de mise à jour récent (moins de 2 secondes)
               final notifierLastUpdate = notifier.value['_lastUpdate'] as int?;
+              final lastUpdateField = notifier.value['_lastUpdateField'] as String?;
               final sourceQuantity = sourceArticle['iqte'] ?? 1;
               final notifierQuantity = notifier.value['iqte'] ?? 1;
+              final sourceSpaysSelected = sourceArticle['spaysSelected'] ?? sourceArticle['sPaysSelected'] ?? '';
+              final notifierSpaysSelected = notifier.value['spaysSelected'] ?? notifier.value['sPaysSelected'] ?? '';
               
               // Vérifier si le timestamp est récent (moins de 2 secondes)
               final isRecentUpdate = notifierLastUpdate != null && 
                 (DateTime.now().millisecondsSinceEpoch - notifierLastUpdate) < 2000;
               
               // ✅ CRITIQUE: Si le notifier a un timestamp récent, TOUJOURS le protéger en PRIORITÉ
-              // Ne JAMAIS écraser une mise à jour récente, même si les quantités diffèrent
+              // Ne JAMAIS écraser une mise à jour récente, même si les valeurs diffèrent
               if (isRecentUpdate) {
                 // Le notifier a été mis à jour récemment, ne JAMAIS l'écraser
                 // Mais s'assurer que tous les autres champs sont synchronisés
                 final syncedArticle = Map<String, dynamic>.from(notifier.value);
                 syncedArticle.addAll(sourceArticle);
-                // Garder iqte du notifier (priorité absolue pour les mises à jour récentes)
-                syncedArticle['iqte'] = notifierQuantity;
+                
+                // ✅ PROTECTION: Garder les champs protégés selon _lastUpdateField
+                if (lastUpdateField == 'iqte') {
+                  // Garder iqte du notifier (priorité absolue pour les mises à jour récentes)
+                  syncedArticle['iqte'] = notifierQuantity;
+                } else if (lastUpdateField == 'spaysSelected') {
+                  // Garder spaysSelected du notifier (priorité absolue pour les mises à jour récentes)
+                  syncedArticle['spaysSelected'] = notifierSpaysSelected;
+                  syncedArticle['sPaysSelected'] = notifierSpaysSelected;
+                  syncedArticle['sPays'] = notifierSpaysSelected;
+                } else {
+                  // Si pas de champ spécifique, protéger les deux
+                  syncedArticle['iqte'] = notifierQuantity;
+                  syncedArticle['spaysSelected'] = notifierSpaysSelected;
+                  syncedArticle['sPaysSelected'] = notifierSpaysSelected;
+                  syncedArticle['sPays'] = notifierSpaysSelected;
+                }
+                
                 syncedArticle['_lastUpdate'] = notifierLastUpdate;
+                syncedArticle['_lastUpdateField'] = lastUpdateField;
                 // Ne mettre à jour que si nécessaire pour éviter les rebuilds inutiles
                 if (!mapEquals(syncedArticle, notifier.value)) {
                   notifier.value = Map<String, dynamic>.from(syncedArticle);
                 }
-              } else if (sourceQuantity != notifierQuantity) {
-                // Seulement synchroniser si le notifier n'a PAS de timestamp récent ET que les quantités diffèrent
+              } else if (sourceQuantity != notifierQuantity || sourceSpaysSelected != notifierSpaysSelected) {
+                // Seulement synchroniser si le notifier n'a PAS de timestamp récent ET que les valeurs diffèrent
                 final syncedArticle = Map<String, dynamic>.from(notifier.value);
                 syncedArticle.addAll(sourceArticle);
                 syncedArticle['iqte'] = sourceQuantity; // Utiliser la quantité de sourceArticle
+                syncedArticle['spaysSelected'] = sourceSpaysSelected;
+                syncedArticle['sPaysSelected'] = sourceSpaysSelected;
+                syncedArticle['sPays'] = sourceSpaysSelected;
                 notifier.value = Map<String, dynamic>.from(syncedArticle);
               } else {
-                // Les quantités sont identiques et pas de mise à jour récente, juste synchroniser les autres champs
+                // Les valeurs sont identiques et pas de mise à jour récente, juste synchroniser les autres champs
                 final syncedArticle = Map<String, dynamic>.from(notifier.value);
                 syncedArticle.addAll(sourceArticle);
                 syncedArticle['iqte'] = sourceQuantity;
+                syncedArticle['spaysSelected'] = sourceSpaysSelected;
+                syncedArticle['sPaysSelected'] = sourceSpaysSelected;
+                syncedArticle['sPays'] = sourceSpaysSelected;
                 if (!mapEquals(syncedArticle, notifier.value)) {
                   notifier.value = Map<String, dynamic>.from(syncedArticle);
                 }
@@ -5935,17 +6316,33 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           SizedBox(width: isVerySmallMobile ? 2 : (isSmallMobile ? 3 : (isMobile ? 6 : 8))),
           
           // Colonne droite - Prix et pays
+          // ✅ CRITIQUE: Utiliser ValueListenableBuilder pour une mise à jour en temps réel
           Expanded(
             flex: isVerySmallMobile ? 4 : (isSmallMobile ? 3 : (isMobile ? 2 : 2)),
-            child: _buildRightColumn(
-              article,
-              paysListe,
-              sourceArticle: baseArticle,
-              articleNotifier: articleNotifier,
-              isMobile: isMobile,
-              isSmallMobile: isSmallMobile,
-              isVerySmallMobile: isVerySmallMobile,
-            ),
+            child: articleNotifier != null
+                ? ValueListenableBuilder<Map<String, dynamic>>(
+                    valueListenable: articleNotifier,
+                    builder: (context, articleValue, _) {
+                      return _buildRightColumn(
+                        articleValue,
+                        paysListe,
+                        sourceArticle: baseArticle,
+                        articleNotifier: articleNotifier,
+                        isMobile: isMobile,
+                        isSmallMobile: isSmallMobile,
+                        isVerySmallMobile: isVerySmallMobile,
+                      );
+                    },
+                  )
+                : _buildRightColumn(
+                    article,
+                    paysListe,
+                    sourceArticle: baseArticle,
+                    articleNotifier: articleNotifier,
+                    isMobile: isMobile,
+                    isSmallMobile: isSmallMobile,
+                    isVerySmallMobile: isVerySmallMobile,
+                  ),
           ),
         ],
       ),
@@ -5959,28 +6356,26 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       return rowWidget;
     }
     
-    // ✨ Animation de SUPPRESSION : Fade out + Slide out + Scale down (en cascade)
+    // ✅ Animation de SUPPRESSION plus rapide (300ms au lieu de 500ms)
     if (isDeleting) {
-      // Utiliser l'index passé en paramètre pour créer un délai progressif
-      // Chaque article commence son animation avec un délai de 50ms * index
-      final delayMs = itemIndex * 50; // 50ms entre chaque article pour l'effet cascade
+      final delayMs = itemIndex * 30; // ✅ Délai réduit de 50ms à 30ms
       
       return TweenAnimationBuilder<double>(
-        duration: const Duration(milliseconds: 500), // Durée de l'animation de suppression
+        duration: const Duration(milliseconds: 300), // ✅ Réduit de 500ms à 300ms
         tween: Tween<double>(begin: 1.0, end: 0.0),
-        curve: Curves.easeInCubic, // Animation fluide de sortie
+        curve: Curves.easeInCubic,
         builder: (context, value, child) {
-          // Calculer la valeur avec délai : si on est dans la période de délai, value reste à 1.0
-          final totalDuration = 500.0;
+          // Calculer avec le délai progressif
+          final totalDuration = 300.0; // ✅ Durée cohérente
           final delayRatio = delayMs / totalDuration;
           final animatedValue = value > (1.0 - delayRatio)
-              ? 1.0 // Pendant le délai, garder à 1.0
-              : ((value - (1.0 - delayRatio)) / delayRatio).clamp(0.0, 1.0); // Après le délai, animer
+              ? 1.0
+              : ((value - (1.0 - delayRatio)) / delayRatio).clamp(0.0, 1.0);
           
-          // Combinaison de fade, slide et scale pour un effet élégant
+          // Animation accélérée: fade + scale + slide
           final opacity = animatedValue.clamp(0.0, 1.0);
-          final scale = 0.5 + (animatedValue * 0.5); // Scale de 1.0 à 0.5 (rétrécissement prononcé)
-          final slideOffset = 400 * (1 - animatedValue); // Slide vers la droite (400px max)
+          final scale = 0.7 + (animatedValue * 0.3); // ✅ Scale plus prononcé (0.7 au lieu de 0.5)
+          final slideOffset = 300 * (1 - animatedValue); // ✅ Slide réduit (300px au lieu de 400px)
           
           return Transform.scale(
             scale: scale,
@@ -6428,9 +6823,13 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     bool isSmallMobile = false,
     bool isVerySmallMobile = false,
   }) {
+    // ✅ CRITIQUE: Utiliser le notifier si disponible pour une mise à jour en temps réel
+    // Sinon, utiliser l'article passé en paramètre
+    final articleToUse = articleNotifier != null ? articleNotifier.value : article;
+    
     // ✅ Vérifier si un pays est sélectionné (comme SNAL isCountrySelected)
     // spaysSelected peut être null, '', false, ou un code pays
-    final rawSpaysSelected = article['spaysSelected'] ?? article['sPaysSelected'];
+    final rawSpaysSelected = articleToUse['spaysSelected'] ?? articleToUse['sPaysSelected'];
     final bool isCountrySelected = rawSpaysSelected != null && 
                                    rawSpaysSelected != '' && 
                                    rawSpaysSelected != false &&
@@ -6449,7 +6848,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     // Trouver le meilleur prix parmi tous les pays disponibles
     for (final pays in paysListe) {
       final sPays = pays['sPays'] ?? '';
-      final priceStr = article[sPays]?.toString() ?? '';
+      final priceStr = articleToUse[sPays]?.toString() ?? '';
       final price = _extractPriceFromString(priceStr);
       
       if (price > 0 && price < bestPrice) {
@@ -6460,7 +6859,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     
     // Si un pays est sélectionné, utiliser son prix
     if (isCountrySelected && selectedCountry?.isNotEmpty == true) {
-      final priceStr = article[selectedCountry]?.toString() ?? '';
+      final priceStr = articleToUse[selectedCountry]?.toString() ?? '';
       selectedPrice = _extractPriceFromString(priceStr);
     }
     
