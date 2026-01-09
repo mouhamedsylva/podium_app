@@ -1592,11 +1592,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       }
 
       // ✅ CRITIQUE: Suppression optimiste - Mettre à jour l'UI IMMÉDIATEMENT AVANT l'appel API
-      // Cela garantit un feedback instantané pour l'utilisateur (sans await pour ne pas bloquer)
+      // Cela garantit un feedback instantané pour l'utilisateur (synchrone pour garantir l'exécution)
       print('⚡ Suppression optimiste - Mise à jour UI immédiate...');
-      _updateDataAfterDeletionOptimistic(sCodeArticleCrypt).catchError((e) {
-        print('❌ Erreur suppression optimiste: $e');
-      });
+      // ✅ CORRECTION: Appel synchrone pour garantir que setState() est exécuté immédiatement
+      _updateDataAfterDeletionOptimistic(sCodeArticleCrypt);
       
       // Appel API pour supprimer l'article (en arrière-plan)
       print('🚀 Envoi de la requête de suppression...');
@@ -4105,7 +4104,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   }
 
   /// ✅ Suppression optimiste - Mise à jour UI immédiate avant la réponse API
-  Future<void> _updateDataAfterDeletionOptimistic(String deletedCode) async {
+  void _updateDataAfterDeletionOptimistic(String deletedCode) {
     try {
       print('⚡ Suppression optimiste de l\'article: $deletedCode');
       
@@ -4122,10 +4121,13 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           
           if (shouldRemove) {
             removedCount++;
+            print('🗑️ Article trouvé et marqué pour suppression: $itemCryptCode / $itemCode');
           }
           
           return shouldRemove;
         });
+        
+        print('📊 Articles supprimés: $removedCount, Articles restants: ${pivotArray.length}');
         
         if (removedCount > 0) {
           // Nettoyer les notifiers IMMÉDIATEMENT
@@ -4137,29 +4139,45 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             
             if (notifCodeCrypt == deletedCode || notifCode == deletedCode) {
               keysToRemove.add(entry.key);
+              print('🗑️ Notifier à supprimer: ${entry.key}');
             }
           }
           
           for (var key in keysToRemove) {
             _articleNotifiers[key]?.dispose();
             _articleNotifiers.remove(key);
+            print('✅ Notifier supprimé: $key');
           }
           
-          // Mettre à jour _wishlistData IMMÉDIATEMENT
+          // ✅ CRITIQUE: Créer une NOUVELLE référence pour forcer la détection du changement
           final articleCount = pivotArray.length;
           _wishlistData = Map<String, dynamic>.from(_wishlistData!);
           _wishlistData!['pivotArray'] = List<dynamic>.from(pivotArray);
+          // ✅ CRITIQUE: Créer aussi une nouvelle référence pour meta pour forcer le rebuild
+          if (_wishlistData!['meta'] != null) {
+            _wishlistData!['meta'] = Map<String, dynamic>.from(_wishlistData!['meta']);
+          }
           _selectedBasketName = 'Wishlist ($articleCount Art.)';
+          
+          print('✅ _wishlistData mis à jour - Articles restants: $articleCount');
+          print('✅ Nouvelle référence créée pour forcer le rebuild');
           
           // ✅ CRITIQUE: setState IMMÉDIATEMENT pour feedback instantané
           if (mounted) {
             setState(() {});
             print('⚡ setState() appelé IMMÉDIATEMENT - Article supprimé visuellement');
+          } else {
+            print('⚠️ Widget non monté - setState() non appelé');
           }
+        } else {
+          print('⚠️ Aucun article trouvé à supprimer pour le code: $deletedCode');
         }
+      } else {
+        print('⚠️ _wishlistData ou pivotArray est null');
       }
     } catch (e) {
       print('❌ Erreur suppression optimiste: $e');
+      print('❌ Stack trace: ${StackTrace.current}');
     }
   }
 
