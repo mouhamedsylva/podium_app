@@ -1543,94 +1543,98 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
   }
 
-  /// Supprimer un article de la wishlist (comme SNAL-Project)
   Future<void> _deleteArticle(String sCodeArticleCrypt, String articleName) async {
     try {
-      print('🗑️ Suppression de l\'article: $sCodeArticleCrypt ($articleName)');
+      final pivotArray = _wishlistData?['pivotArray'] as List? ?? [];
+      final articleIndex = pivotArray.indexWhere((item) {
+        if (item is! Map) return false;
+        final currentItemCode = item['sCodeArticleCrypt']?.toString() ??
+                              item['scodearticlecrypt']?.toString() ??
+                              item['sCodeArticle']?.toString() ??
+                              item['scodearticle']?.toString() ??
+                              '';
+        return currentItemCode == sCodeArticleCrypt;
+      });
+
+      if (articleIndex == -1) {
+        print('❌ Article à supprimer non trouvé dans la liste locale (code: $sCodeArticleCrypt).');
+        _showErrorDialog('Erreur', 'Article non trouvé pour la suppression.');
+        return;
+      }
       
-      // 1. Confirmation
+      final articleToDelete = pivotArray[articleIndex];
+
       final bool? confirmed = await _showNotiflixConfirmDialog(
         title: _translationService.translate('CONFIRM_TITLE'),
         message: _translationService.translate('CONFIRM_DELETE_ITEM'),
       );
+      if (confirmed != true) return;
 
-      if (confirmed != true) {
-        return;
-      }
-
-      // ✅ 2. Nettoyer le notifier AVANT le setState pour éviter qu'il soit récupéré pendant la reconstruction
-      final notifierKey = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
-      _articleNotifiers[notifierKey]?.dispose();
-      _articleNotifiers.remove(notifierKey);
-      print('🗑️ Notifier supprimé AVANT setState pour: $sCodeArticleCrypt');
-      
-      // ✅ 3. Créer la nouvelle liste SANS l'article
-      final pivotArray = _wishlistData?['pivotArray'] as List? ?? [];
-      final newPivotArray = pivotArray.where((item) {
-        if (item is! Map) return false;
-        final itemCode = item['sCodeArticleCrypt']?.toString() ?? 
-                        item['sCodeArticle']?.toString() ?? '';
-        return itemCode != sCodeArticleCrypt;
-      }).toList();
-      
-      print('✅ Article filtré - Avant: ${pivotArray.length}, Après: ${newPivotArray.length}');
-
-      // Mettre à jour l'interface de manière optimiste
+      // Mise à jour optimiste
       if (mounted) {
+        final newPivotArray = List.from(pivotArray)..removeAt(articleIndex);
+        final notifierKey = _articleKey(articleToDelete);
+        _articleNotifiers[notifierKey]?.dispose();
+        _articleNotifiers.remove(notifierKey);
+
         setState(() {
           _listVersion++;
-          if (_wishlistData != null) {
-            _wishlistData = Map<String, dynamic>.from(_wishlistData!);
-            _wishlistData!['pivotArray'] = newPivotArray;
-            _selectedBasketName = 'Wishlist (${newPivotArray.length} Art.)';
-          }
+          _wishlistData!['pivotArray'] = newPivotArray;
+          _selectedBasketName = 'Wishlist (${newPivotArray.length} Art.)';
         });
         _refreshArticleNotifiers();
       }
 
-      // Appeler l'API en arrière-plan
-      try {
-        final response = await _apiService.deleteArticleBasketWishlist(
-          sCodeArticle: sCodeArticleCrypt,
+      // Appel API
+      final response = await _apiService.deleteArticleBasketWishlist(
+        sCodeArticle: sCodeArticleCrypt,
+      );
+
+      if (mounted && response != null && response['success'] == true) {
+        _showNotiflixSuccessDialog(
+          title: _translationService.translate('SUCCESS_TITTLE'),
+          message: _translationService.translate('SUCCES_DELETE_ARTICLE'),
         );
-
-        if (mounted && response != null && response['success'] == true) {
-          // Afficher le message de succès
-          _showNotiflixSuccessDialog(
-            title: _translationService.translate('SUCCESS_TITTLE'),
-            message: _translationService.translate('SUCCES_DELETE_ARTICLE'),
-          );
-
-          // Recharger les données pour assurer la cohérence après la suppression
-          final profileData = await LocalStorageService.getProfile();
-          final iProfile = profileData?['iProfile']?.toString() ?? '';
-          final iBasket = profileData?['iBasket']?.toString() ?? '';
-          if (iProfile.isNotEmpty) {
-            await _loadArticlesDirectly(iProfile, iBasket);
-          }
-        } else if (mounted) {
-          // Gérer l'échec de l'API
-          _showNotiflixErrorDialog(
-            title: _translationService.translate('ERROR_TITLE'),
-            message: response?['error'] ?? _translationService.translate('DELETE_ERROR') ?? 'Erreur lors de la suppression',
-          );
-          // Annuler la suppression optimiste en rechargeant
-          _loadWishlistData(force: true);
+        
+        if (response['parsedData'] != null) {
+          final totals = (response['parsedData'] as List).first;
+          setState(() {
+             if (_wishlistData!['meta'] != null) {
+               final meta = _wishlistData!['meta'];
+               meta['iBestResultJirig'] = totals['iBestResultJirig'];
+               meta['iTotalPriceArticleSelected'] = totals['iTotalPriceArticleSelected'];
+               meta['sResultatGainPerte'] = totals['sResultatGainPerte'];
+               meta['iTotalQteArticleSelected'] = totals['iTotalQteArticleSelected'];
+               meta['sWarningGeneralInfo'] = totals['sWarningGeneralInfo'];
+             }
+          });
         }
-      } catch (error) {
-        print('❌ Erreur lors de l\'appel API de suppression: $error');
+        await _loadBaskets();
+      } else {
+        // Annuler la suppression
         if (mounted) {
           _showNotiflixErrorDialog(
             title: _translationService.translate('ERROR_TITLE'),
-            message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite",
+            message: response?['error'] ?? _translationService.translate('DELETE_ERROR') ?? 'Erreur',
           );
-          // Annuler la suppression optimiste
-          _loadWishlistData(force: true);
+          setState(() {
+            _listVersion++;
+            final restoredPivotArray = List.from(_wishlistData!['pivotArray'])..insert(articleIndex, articleToDelete);
+            _wishlistData!['pivotArray'] = restoredPivotArray;
+            _selectedBasketName = 'Wishlist (${restoredPivotArray.length} Art.)';
+          });
+          _refreshArticleNotifiers();
         }
       }
-      
     } catch (e) {
       print('❌ Erreur lors de la suppression: $e');
+      if (mounted) {
+        _showNotiflixErrorDialog(
+          title: _translationService.translate('ERROR_TITLE'),
+          message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite",
+        );
+        _loadWishlistData(force: true);
+      }
     }
   }
 
