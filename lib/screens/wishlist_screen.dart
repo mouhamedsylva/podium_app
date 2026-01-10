@@ -241,7 +241,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   String? _lastRefreshParam; // Pour détecter les changements de refresh query param (comme SNAL avec index)
   bool _showMap = false; // Pour afficher/masquer la carte
   DateTime? _lastLoadTime; // Timestamp du dernier chargement pour éviter les rechargements trop fréquents
-  bool _isGreenLight = false; // Pour l'animation du point vert
+  // bool _isGreenLight = false; // Unused variable from a faulty animation loop.
   int _currentImageIndex = 0; // Index de l'image actuellement affichée en plein écran
   bool _isCountrySidebarOpen = false; // Empêcher ouvertures multiples du sidebar
   final Map<String, ValueNotifier<Map<String, dynamic>>> _articleNotifiers = {};
@@ -265,8 +265,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   bool _animationsInitialized = false;
   
   // ✅ Animation de suppression de tous les articles
-  Set<String> _articlesToDelete = {}; // Codes des articles en cours de suppression
-  bool _isDeletingAll = false; // Flag pour indiquer qu'une suppression globale est en cours
+  bool _isDeletingAll = false; // Flag pour indiquer qu'une suppression globale est en cours (uniquement pour animation)
   
   ApiService get _apiService => Provider.of<ApiService>(context, listen: false);
   TranslationService get _translationService => Provider.of<TranslationService>(context, listen: false);
@@ -283,8 +282,35 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   ValueNotifier<Map<String, dynamic>> _ensureArticleNotifier(Map<String, dynamic> article) {
     final key = _articleKey(article);
     final mapData = Map<String, dynamic>.from(article);
+    
+    // ✅ CRITIQUE: Vérifier d'abord si l'article existe encore dans _wishlistData['pivotArray']
+    final articleCode = mapData['sCodeArticleCrypt']?.toString() ?? 
+                       mapData['sCodeArticle']?.toString() ?? '';
+    final pivotArray = _wishlistData?['pivotArray'] as List? ?? [];
+    final articleExists = pivotArray.any((item) {
+      if (item is! Map) return false;
+      final itemCode = item['sCodeArticleCrypt']?.toString() ?? 
+                      item['sCodeArticle']?.toString() ?? '';
+      return itemCode == articleCode && itemCode.isNotEmpty;
+    });
+    
+    // ✅ Si l'article n'existe plus dans _wishlistData, nettoyer le notifier existant et retourner un notifier vide
+    if (!articleExists) {
+      final existing = _articleNotifiers[key];
+      if (existing != null) {
+        print('⚠️ Article supprimé détecté dans _ensureArticleNotifier: $articleCode - Nettoyage du notifier');
+        existing.dispose();
+        _articleNotifiers.remove(key);
+      }
+      // Retourner un notifier vide pour éviter l'affichage de l'article supprimé
+      final emptyNotifier = ValueNotifier<Map<String, dynamic>>(<String, dynamic>{});
+      _articleNotifiers[key] = emptyNotifier;
+      return emptyNotifier;
+    }
+    
     final existing = _articleNotifiers[key];
     if (existing != null) {
+      
       // ✅ CORRECTION: Toujours mettre à jour si les données diffèrent, même légèrement
       // Cela garantit que le notifier est toujours synchronisé avec les données source
       final currentValue = existing.value;
@@ -370,7 +396,6 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     WidgetsBinding.instance.addObserver(this);
     _initializeAnimations();
     _loadWishlistData();
-    _startGreenAnimation();
     
     // ✅ Ajouter un listener sur le ScrollController pour détecter la position
     _scrollController.addListener(_onScroll);
@@ -380,192 +405,6 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       if (mounted) {
         _authNotifier = Provider.of<AuthNotifier>(context, listen: false);
         _authNotifier?.addListener(_onAuthStateChanged);
-      }
-    });
-  }
-  
-  
-  /// Callback appelé quand l'état d'authentification change
-  void _onAuthStateChanged() async {
-    if (!mounted || _authNotifier == null) return;
-    
-    // ✅ GARDE: Éviter les appels multiples simultanés
-    if (_isHandlingAuthChange) {
-      print('⚠️ _onAuthStateChanged déjà en cours, ignoré');
-      return;
-    }
-    
-    _isHandlingAuthChange = true;
-    
-    try {
-      // Si l'utilisateur s'est connecté, recharger les baskets et la wishlist
-      if (_authNotifier!.isLoggedIn) {
-        print('✅ Utilisateur connecté - Rechargement des baskets et de la wishlist...');
-        
-        // ✅ CRITIQUE: Attendre que les cookies soient bien synchronisés après la connexion
-        // Le backend utilise les cookies pour identifier l'utilisateur
-        print('⏳ Attente de la synchronisation des cookies (3 secondes)...');
-        await Future.delayed(const Duration(seconds: 3));
-        
-        // ✅ VÉRIFICATION CRITIQUE: Vérifier que le profil local contient bien le nouveau iProfile
-        // Faire plusieurs tentatives pour s'assurer que le profil est bien synchronisé
-        Map<String, dynamic>? profileData;
-        String iProfile = '';
-        String sEmail = '';
-        int retryCount = 0;
-        const maxRetries = 3;
-        
-        while (retryCount < maxRetries && (iProfile.isEmpty || iProfile.startsWith('guest_') || sEmail.isEmpty)) {
-          profileData = await LocalStorageService.getProfile();
-          iProfile = profileData?['iProfile']?.toString() ?? '';
-          sEmail = profileData?['sEmail']?.toString() ?? '';
-          
-          print('🔍 Vérification du profil après connexion (tentative ${retryCount + 1}/$maxRetries):');
-          print('   iProfile: $iProfile');
-          print('   sEmail: $sEmail');
-          print('   Est connecté: ${sEmail.isNotEmpty}');
-          
-          if (iProfile.isEmpty || iProfile.startsWith('guest_') || sEmail.isEmpty) {
-            print('⚠️ Profil non synchronisé - Attente de 1 seconde...');
-            await Future.delayed(const Duration(seconds: 1));
-            retryCount++;
-          }
-        }
-        
-        if (iProfile.isNotEmpty && !iProfile.startsWith('guest_') && sEmail.isNotEmpty) {
-          print('✅ Profil valide détecté - Rechargement des baskets...');
-          print('   iProfile final: $iProfile');
-          print('   sEmail final: $sEmail');
-          
-          // ✅ CRITIQUE: Recharger les baskets d'abord (pour obtenir tous les baskets de l'utilisateur)
-          // Le backend SNAL utilise le cookie GuestProfile pour identifier l'utilisateur
-          // et retourner tous ses baskets (y compris ceux créés sur le web)
-          await _loadBaskets();
-          
-          // ✅ Après avoir chargé les baskets, récupérer le premier basket (celui créé sur le web)
-          // Comme SNAL-Project ligne 3657-3659: fallback sur le premier basket
-          final updatedProfileData = await LocalStorageService.getProfile();
-          final firstIBasket = updatedProfileData?['iBasket']?.toString() ?? '';
-          
-          if (firstIBasket.isNotEmpty && mounted) {
-            print('✅ Rechargement de la wishlist avec le premier basket: $firstIBasket');
-            // Recharger la wishlist avec le premier basket (celui créé sur le web)
-            await _loadArticlesDirectly(iProfile, firstIBasket);
-          } else if (mounted) {
-            // Fallback: utiliser _loadWishlistData si pas de basket trouvé
-            await _loadWishlistData(force: true);
-          }
-        } else {
-          print('⚠️ Profil invalide ou non synchronisé - Réessayer dans 1 seconde...');
-          // Réessayer après un délai supplémentaire
-          await Future.delayed(const Duration(seconds: 1));
-          if (mounted) {
-            await _loadBaskets();
-            
-            // ✅ Après avoir chargé les baskets, récupérer le premier basket
-            final updatedProfileData = await LocalStorageService.getProfile();
-            final firstIBasket = updatedProfileData?['iBasket']?.toString() ?? '';
-            final retryIProfile = updatedProfileData?['iProfile']?.toString() ?? '';
-            
-            if (firstIBasket.isNotEmpty && retryIProfile.isNotEmpty && mounted) {
-              print('✅ Rechargement de la wishlist avec le premier basket (retry): $firstIBasket');
-              await _loadArticlesDirectly(retryIProfile, firstIBasket);
-            } else if (mounted) {
-              await _loadWishlistData(force: true);
-            }
-          }
-        }
-      } 
-      // Si l'utilisateur s'est déconnecté, vider la wishlist
-      else {
-        final articles = (_wishlistData?['pivotArray'] as List?) ?? [];
-        final hasArticles = articles.isNotEmpty;
-        
-        print('🚪 Utilisateur déconnecté - Vidage de la wishlist (${articles.length} articles)');
-        
-        setState(() {
-          _wishlistData = {
-            'meta': {
-              'iBestResultJirig': 0,
-              'iTotalPriceArticleSelected': 0.0,
-              'sResultatGainPerte': '0€',
-            },
-            'pivotArray': [],
-          };
-          _selectedBasketName = 'Wishlist (0 Art.)';
-          _baskets = []; // Vider aussi la liste des baskets
-          _selectedBasketIndex = null;
-          _hasLoaded = true;
-          _isLoading = false; // Arrêter le chargement
-        });
-        
-        // Nettoyer les notifiers d'articles
-        for (final notifier in _articleNotifiers.values) {
-          notifier.dispose();
-        }
-        _articleNotifiers.clear();
-        
-        print('✅ Wishlist vidée - Ne pas recharger automatiquement après déconnexion');
-        // ❌ NE PAS recharger automatiquement la wishlist après déconnexion
-        // L'utilisateur devra recharger manuellement ou naviguer vers une autre page
-      }
-    } finally {
-      // ✅ Libérer le garde après traitement
-      _isHandlingAuthChange = false;
-    }
-  }
-  
-  /// ✨ Initialiser les animations (Style "Cascade Fluide")
-  void _initializeAnimations() {
-    try {
-      // Marquer comme initialisé IMMÉDIATEMENT pour éviter les erreurs
-      _animationsInitialized = true;
-      
-      // Boutons circulaires : Float effect (monte/descend légèrement)
-      _buttonsController = AnimationController(
-        duration: const Duration(milliseconds: 800),
-        vsync: this,
-      );
-      
-      // Cartes : Cascade (apparaissent l'une après l'autre)
-      _cardsController = AnimationController(
-        duration: const Duration(milliseconds: 1200),
-        vsync: this,
-      );
-      
-      // Articles : Slide in séquencé
-      _articlesController = AnimationController(
-        duration: const Duration(milliseconds: 1000),
-        vsync: this,
-      );
-      
-      print('✅ Animations Wishlist initialisées (style Cascade Fluide)');
-      
-      // Démarrer les animations après un court délai
-      Future.delayed(Duration.zero, () {
-        if (mounted && _animationsInitialized) {
-          try {
-            _buttonsController.forward();
-            _cardsController.forward();
-            _articlesController.forward();
-          } catch (e) {
-            print('❌ Erreur démarrage animations: $e');
-          }
-        }
-      });
-    } catch (e) {
-      print('❌ Erreur initialisation animations wishlist: $e');
-      _animationsInitialized = false;
-    }
-  }
-
-  void _startGreenAnimation() {
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _isGreenLight = !_isGreenLight;
-        });
-        _startGreenAnimation(); // Répète l'animation
       }
     });
   }
@@ -607,6 +446,90 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     }
     _articleNotifiers.clear();
     super.dispose();
+  }
+
+  /// Initialiser les controllers d'animation (style Cascade Fluide)
+  void _initializeAnimations() {
+    try {
+      // ✅ Boutons : Animation pour les boutons circulaires
+      _buttonsController = AnimationController(
+        duration: const Duration(milliseconds: 400),
+        vsync: this,
+      );
+      
+      // ✅ Cartes : Animation pour les cartes de prix
+      _cardsController = AnimationController(
+        duration: const Duration(milliseconds: 500),
+        vsync: this,
+      );
+      
+      // ✅ Articles : Animation pour les articles dans la liste
+      _articlesController = AnimationController(
+        duration: const Duration(milliseconds: 600),
+        vsync: this,
+      );
+      
+      _animationsInitialized = true;
+      print('✅ Animations Wishlist initialisées (style Cascade Fluide)');
+    } catch (e) {
+      print('❌ Erreur initialisation animations wishlist: $e');
+      _animationsInitialized = false;
+    }
+  }
+
+  /// Gérer les changements d'état d'authentification (comme SNAL-Project)
+  void _onAuthStateChanged() {
+    if (_isHandlingAuthChange) {
+      return; // Éviter les appels multiples
+    }
+    
+    try {
+      _isHandlingAuthChange = true;
+      
+      if (_authNotifier != null) {
+        final isLoggedIn = _authNotifier!.isLoggedIn;
+        
+        if (!isLoggedIn) {
+          // ✅ Utilisateur déconnecté : vider la wishlist (comme SNAL-Project)
+          print('🔓 Utilisateur déconnecté - Vidage de la wishlist');
+          
+          if (mounted) {
+            setState(() {
+              _wishlistData = {
+                'meta': {
+                  'iBestResultJirig': 0,
+                  'iTotalPriceArticleSelected': 0.0,
+                  'sResultatGainPerte': '0€',
+                },
+                'pivotArray': [],
+              };
+              _selectedBasketName = 'Wishlist (0 Art.)';
+              _baskets = [];
+              _selectedBasketIndex = null;
+            });
+            
+            // Nettoyer tous les notifiers
+            for (var notifier in _articleNotifiers.values) {
+              notifier.dispose();
+            }
+            _articleNotifiers.clear();
+            
+            print('✅ Wishlist vidée après déconnexion');
+          }
+        } else {
+          // ✅ Utilisateur connecté : recharger les données (comme SNAL-Project)
+          print('🔐 Utilisateur connecté - Rechargement de la wishlist');
+          
+          if (mounted) {
+            _loadWishlistData(force: true);
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur _onAuthStateChanged: $e');
+    } finally {
+      _isHandlingAuthChange = false;
+    }
   }
 
   @override
@@ -1183,6 +1106,10 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   /// Charger les articles directement avec iProfile et iBasket (optimisé)
   Future<void> _loadArticlesDirectly(String iProfile, String iBasket) async {
     try {
+      // ✅ CRITIQUE: Éviter les rechargements PENDANT une suppression récente
+      // Si une suppression vient d'avoir lieu (moins de 3 secondes), NE PAS recharger pour éviter de restaurer l'article
+      final now = DateTime.now();
+      
       print('📦 Chargement des articles - iProfile: $iProfile, iBasket: ${iBasket.isEmpty ? "(vide)" : iBasket}');
       
       // ✅ Récupérer sPaysFav depuis le LocalStorage
@@ -1273,40 +1200,15 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           }
           
           setState(() {
-            // ✅ CRITIQUE: Si des articles sont en cours de suppression, NE PAS écraser pivotArray
-            // Cela préserve la suppression optimiste
-            if (_articlesToDelete.isNotEmpty) {
-              print('⚠️ Articles en cours de suppression détectés - Préservation de pivotArray optimiste');
-              print('⚠️ Articles à supprimer: ${_articlesToDelete.toList()}');
-              // Utiliser le pivotArray existant (déjà mis à jour par suppression optimiste)
-              final existingPivotArray = _wishlistData?['pivotArray'] as List?;
-              if (existingPivotArray != null) {
-                print('✅ Préservation du pivotArray optimiste (${existingPivotArray.length} articles)');
-                // Créer une nouvelle référence mais garder le pivotArray optimiste
-                _wishlistData = Map<String, dynamic>.from(data);
-                _wishlistData!['pivotArray'] = List<dynamic>.from(existingPivotArray);
-                if (data['meta'] != null) {
-                  _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
-                }
-                _selectedBasketName = 'Wishlist (${existingPivotArray.length} Art.)';
-              } else {
-                // Pas de pivotArray optimiste, utiliser celui de l'API
-                _wishlistData = Map<String, dynamic>.from(data);
-                _wishlistData!['pivotArray'] = List<dynamic>.from(data['pivotArray'] ?? []);
-                if (data['meta'] != null) {
-                  _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
-                }
-                _selectedBasketName = 'Wishlist ($articleCount Art.)';
-              }
-            } else {
-              // Pas de suppression en cours, utiliser les données de l'API normalement
-              _wishlistData = Map<String, dynamic>.from(data);
-              _wishlistData!['pivotArray'] = List<dynamic>.from(data['pivotArray'] ?? []);
-              if (data['meta'] != null) {
-                _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
-              }
-              _selectedBasketName = 'Wishlist ($articleCount Art.)';
+            // ✅ Utiliser directement les données de l'API
+            // La liste est déjà à jour dans _wishlistData['pivotArray']
+            _wishlistData = Map<String, dynamic>.from(data);
+            // ✅ INVERSER la liste pour que les nouveaux articles apparaissent en premier
+            _wishlistData!['pivotArray'] = List<dynamic>.from((data['pivotArray'] ?? []).reversed);
+            if (data['meta'] != null) {
+              _wishlistData!['meta'] = Map<String, dynamic>.from(data['meta']);
             }
+            _selectedBasketName = 'Wishlist ($articleCount Art.)';
             _isLoading = false;
             _hasLoaded = true; // Marquer comme chargé
           });
@@ -1646,7 +1548,7 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     try {
       print('🗑️ Suppression de l\'article: $sCodeArticleCrypt ($articleName)');
       
-      // Confirmation
+      // 1. Confirmation
       final bool? confirmed = await _showNotiflixConfirmDialog(
         title: _translationService.translate('CONFIRM_TITLE'),
         message: _translationService.translate('CONFIRM_DELETE_ITEM'),
@@ -1656,149 +1558,159 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         return;
       }
 
-      // ✅ CRITIQUE: Suppression optimiste IMMÉDIATE (synchrone)
-      _updateDataAfterDeletionOptimistic(sCodeArticleCrypt);
+      // ✅ 2. Nettoyer le notifier AVANT le setState pour éviter qu'il soit récupéré pendant la reconstruction
+      final notifierKey = _articleKey({'sCodeArticleCrypt': sCodeArticleCrypt});
+      _articleNotifiers[notifierKey]?.dispose();
+      _articleNotifiers.remove(notifierKey);
+      print('🗑️ Notifier supprimé AVANT setState pour: $sCodeArticleCrypt');
       
-      // Appel API en arrière-plan (ne pas attendre)
-      unawaited(_apiService.deleteArticleBasketWishlist(
-        sCodeArticle: sCodeArticleCrypt,
-      ).then((response) {
-        if (response != null && response['success'] == true) {
-          print('✅ Article supprimé avec succès côté API');
-          _updateDataAfterDeletion(response, sCodeArticleCrypt);
+      // ✅ 3. Créer la nouvelle liste SANS l'article
+      final pivotArray = _wishlistData?['pivotArray'] as List? ?? [];
+      final newPivotArray = pivotArray.where((item) {
+        if (item is! Map) return false;
+        final itemCode = item['sCodeArticleCrypt']?.toString() ?? 
+                        item['sCodeArticle']?.toString() ?? '';
+        return itemCode != sCodeArticleCrypt;
+      }).toList();
+      
+      print('✅ Article filtré - Avant: ${pivotArray.length}, Après: ${newPivotArray.length}');
+
+      // Mettre à jour l'interface de manière optimiste
+      if (mounted) {
+        setState(() {
+          _listVersion++;
+          if (_wishlistData != null) {
+            _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+            _wishlistData!['pivotArray'] = newPivotArray;
+            _selectedBasketName = 'Wishlist (${newPivotArray.length} Art.)';
+          }
+        });
+        _refreshArticleNotifiers();
+      }
+
+      // Appeler l'API en arrière-plan
+      try {
+        final response = await _apiService.deleteArticleBasketWishlist(
+          sCodeArticle: sCodeArticleCrypt,
+        );
+
+        if (mounted && response != null && response['success'] == true) {
+          // Afficher le message de succès
           _showNotiflixSuccessDialog(
             title: _translationService.translate('SUCCESS_TITTLE'),
             message: _translationService.translate('SUCCES_DELETE_ARTICLE'),
           );
-        } else {
-          print('❌ Erreur API mais article déjà supprimé localement');
-          print('❌ Réponse: $response');
+
+          // Recharger les données pour assurer la cohérence après la suppression
+          final profileData = await LocalStorageService.getProfile();
+          final iProfile = profileData?['iProfile']?.toString() ?? '';
+          final iBasket = profileData?['iBasket']?.toString() ?? '';
+          if (iProfile.isNotEmpty) {
+            await _loadArticlesDirectly(iProfile, iBasket);
+          }
+        } else if (mounted) {
+          // Gérer l'échec de l'API
+          _showNotiflixErrorDialog(
+            title: _translationService.translate('ERROR_TITLE'),
+            message: response?['error'] ?? _translationService.translate('DELETE_ERROR') ?? 'Erreur lors de la suppression',
+          );
+          // Annuler la suppression optimiste en rechargeant
+          _loadWishlistData(force: true);
         }
-      }).catchError((error) {
+      } catch (error) {
         print('❌ Erreur lors de l\'appel API de suppression: $error');
-        print('⚠️ L\'article reste supprimé localement (suppression optimiste conservée)');
-        // L'article reste supprimé localement - comportement souhaité pour une meilleure UX
-      }));
+        if (mounted) {
+          _showNotiflixErrorDialog(
+            title: _translationService.translate('ERROR_TITLE'),
+            message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite",
+          );
+          // Annuler la suppression optimiste
+          _loadWishlistData(force: true);
+        }
+      }
       
     } catch (e) {
       print('❌ Erreur lors de la suppression: $e');
     }
   }
 
-  /// Supprimer tous les articles de la wishlist (comme SNAL-Project)
+  /// Supprimer tous les articles de la wishlist
   Future<void> _deleteAllArticles() async {
     try {
       print('🗑️ Suppression de tous les articles de la wishlist');
       
-      // Afficher une confirmation (comme SNAL avec Notiflix)
+      // Confirmation
       final bool? confirmed = await _showNotiflixConfirmDialog(
         title: _translationService.translate('CONFIRM_TITLE'),
         message: _translationService.translate('CONFIRM_DELETE_ALL_ITEM') ?? 'Êtes-vous sûr de vouloir supprimer tous les articles ?',
       );
 
       if (confirmed != true) {
-        print('❌ Suppression annulée par l\'utilisateur');
         return;
       }
 
-      // ✅ DÉCLENCHER L'ANIMATION DE SUPPRESSION AVANT L'APPEL API
+      // Animation de suppression (si nécessaire)
       final articles = _wishlistData?['pivotArray'] as List? ?? [];
       if (articles.isNotEmpty && mounted) {
         setState(() {
           _isDeletingAll = true;
-          // Marquer tous les articles pour suppression
-          _articlesToDelete = Set<String>.from(
-            articles.map((article) => 
-              article['sCodeArticleCrypt']?.toString() ?? 
-              article['sCodeArticle']?.toString() ?? 
-              ''
-            ).where((code) => code.isNotEmpty)
-          );
         });
         
-        print('🎬 Animation de suppression déclenchée pour ${_articlesToDelete.length} articles');
-        
-        // Attendre que l'animation soit terminée (durée totale: ~800ms pour le dernier article)
+        // Attendre que l'animation soit terminée
         final animationDuration = Duration(milliseconds: 300 + (articles.length * 50));
         await Future.delayed(animationDuration);
       }
 
-      // Appel API pour supprimer tous les articles
-      print('🚀 Envoi de la requête de suppression de tous les articles...');
-      
-      final response = await _apiService.deleteAllArticleBasketWishlist();
-
-      print('📥 Réponse complète de l\'API:');
-      print('📥 Type de réponse: ${response.runtimeType}');
-      print('📥 Contenu de la réponse: $response');
-      
-      if (response != null) {
-        print('📥 Clés disponibles dans la réponse: ${response.keys.toList()}');
-        print('📥 Success: ${response['success']}');
-        print('📥 Message: ${response['message']}');
-        print('📥 ParsedData: ${response['parsedData']}');
-        print('📥 Error: ${response['error']}');
+      // Suppression optimiste IMMÉDIATE (setState)
+      // Nettoyer tous les notifiers
+      for (var notifier in _articleNotifiers.values) {
+        notifier.dispose();
       }
+      _articleNotifiers.clear();
+      
+      // Mettre à jour _wishlistData
+      setState(() {
+        _wishlistData!['pivotArray'] = [];
+        _selectedBasketName = 'Wishlist (0 Art.)';
+        _isDeletingAll = false;
+      });
 
-      if (response != null && response['success'] == true) {
-        print('✅ Tous les articles supprimés avec succès');
-        
-        // Mettre à jour les données locales IMMÉDIATEMENT (comme SNAL)
-        await _updateDataAfterDeleteAll(response);
-        
-        // Réinitialiser l'état d'animation
+      // API en arrière-plan + message succès
+      unawaited(_apiService.deleteAllArticleBasketWishlist().then((response) {
         if (mounted) {
-          setState(() {
-            _isDeletingAll = false;
-            _articlesToDelete.clear();
-          });
+          if (response != null && response['success'] == true) {
+            _showNotiflixSuccessDialog(
+              title: _translationService.translate('SUCCESS_TITTLE'),
+              message: _translationService.translate('ALL_ARTICLE_DELETED_SUCCESS') ?? 'Tous les articles ont été supprimés avec succès',
+            );
+          } else {
+            _showNotiflixErrorDialog(
+              title: _translationService.translate('ERROR_TITLE'),
+              message: _translationService.translate('DELETE_ERROR') ?? "Erreur lors de la suppression",
+            );
+          }
         }
-        
-        // Afficher le message de succès
-        _showNotiflixSuccessDialog(
-          title: _translationService.translate('SUCCESS_TITTLE'),
-          message: _translationService.translate('ALL_ARTICLE_DELETED_SUCCESS') ?? 'Tous les articles ont été supprimés avec succès',
-        );
-        
-        // Recharger les données depuis l'API pour garantir la synchronisation
+      }).catchError((error) {
+        print('❌ Erreur lors de l\'appel API: $error');
         if (mounted) {
-          await _loadWishlistData(force: true);
+          _showNotiflixErrorDialog(
+            title: _translationService.translate('ERROR_TITLE'),
+            message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite lors de la suppression",
+          );
         }
-        
-      } else {
-        // En cas d'erreur, réinitialiser l'état d'animation
-        if (mounted) {
-          setState(() {
-            _isDeletingAll = false;
-            _articlesToDelete.clear();
-          });
-        }
-        print('❌ Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}');
-        print('❌ Détails de l\'erreur: ${response?['details'] ?? 'Aucun détail'}');
-        print('❌ Stack trace: ${response?['stack'] ?? 'Aucun stack trace'}');
-        
-        // Afficher un message d'erreur style Notiflix
-        await _showNotiflixErrorDialog(
-          title: _translationService.translate('ERROR_TITLE'),
-          message: _translationService.translate('DELETE_ERROR') ?? "Erreur lors de la suppression: ${response?['error'] ?? 'Erreur inconnue'}",
-        );
-      }
+      }));
+      
     } catch (e) {
       print('❌ Erreur lors de la suppression de tous les articles: $e');
-      
-      // Réinitialiser l'état d'animation en cas d'erreur
       if (mounted) {
         setState(() {
           _isDeletingAll = false;
-          _articlesToDelete.clear();
         });
+        _showNotiflixErrorDialog(
+          title: _translationService.translate('ERROR_TITLE'),
+          message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite lors de la suppression: $e",
+        );
       }
-      
-      // Afficher un message d'erreur style Notiflix
-      await _showNotiflixErrorDialog(
-        title: _translationService.translate('ERROR_TITLE'),
-        message: _translationService.translate('DELETE_ERROR') ?? "Une erreur s'est produite lors de la suppression: $e",
-      );
     }
   }
 
@@ -4146,381 +4058,9 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     );
   }
 
-  /// ✅ Suppression optimiste - Mise à jour UI immédiate avant la réponse API
-  void _updateDataAfterDeletionOptimistic(String deletedCode) {
-    try {
-      print('⚡ Suppression optimiste de l\'article: $deletedCode');
-      print('🔍 État AVANT suppression optimiste:');
-      print('   _wishlistData est null: ${_wishlistData == null}');
-      print('   pivotArray est null: ${_wishlistData?['pivotArray'] == null}');
-      
-      // ✅ CRITIQUE ÉTAPE 1: setState IMMÉDIAT pour ajouter à _articlesToDelete
-      if (mounted) {
-        setState(() {
-          _articlesToDelete.add(deletedCode);
-        });
-        print('🚫 Article ajouté à _articlesToDelete (setState immédiat): $deletedCode');
-        
-        // ✅ CRITIQUE ÉTAPE 2: Forcer un rebuild immédiat
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            setState(() {}); // Force un rebuild pour appliquer le filtre
-            print('⚡ Rebuild forcé pour cacher l\'article visuellement');
-          }
-        });
-      }
-      
-      // Retirer l'article de la liste locale IMMÉDIATEMENT
-      if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
-        final List<dynamic> originalPivotArray = _wishlistData!['pivotArray'] as List<dynamic>;
-        print('🔍 Nombre d\'articles AVANT suppression: ${originalPivotArray.length}');
-        for (var i = 0; i < originalPivotArray.length; i++) {
-          final item = originalPivotArray[i];
-          final itemCode = item['sCodeArticle']?.toString() ?? '';
-          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-          print('   Article $i: Code=$itemCode, CodeCrypt=$itemCryptCode');
-        }
-        
-        final List<dynamic> pivotArray = [];
-        
-        // ✅ CRITIQUE: Créer une NOUVELLE liste en copiant seulement les articles NON supprimés
-        // Cela garantit une référence complètement différente
-        // NE JAMAIS mettre null ou des valeurs vides - supprimer complètement l'article
-        int removedCount = 0;
-        for (var item in originalPivotArray) {
-          // ✅ Vérifier que l'item est valide (pas null)
-          if (item == null) {
-            print('⚠️ Article null détecté et ignoré');
-            continue;
-          }
-          
-          final itemCode = item['sCodeArticle']?.toString() ?? '';
-          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-          final shouldRemove = itemCryptCode == deletedCode || itemCode == deletedCode;
-          
-          if (shouldRemove) {
-            removedCount++;
-            print('🗑️ Article trouvé et SUPPRIMÉ COMPLÈTEMENT: Code=$itemCode, CodeCrypt=$itemCryptCode');
-            print('🗑️ Code recherché: $deletedCode');
-            // ✅ NE PAS ajouter à pivotArray - l'article est complètement supprimé
-          } else {
-            // ✅ Copier seulement les articles qui ne sont PAS supprimés (et qui sont valides)
-            if (item is Map && item.isNotEmpty) {
-              pivotArray.add(Map<String, dynamic>.from(item as Map));
-              print('✅ Article conservé: Code=$itemCode, CodeCrypt=$itemCryptCode');
-            } else {
-              print('⚠️ Article invalide ignoré: $itemCode');
-            }
-          }
-        }
-        
-        print('📊 Articles supprimés: $removedCount, Articles restants: ${pivotArray.length}');
-        
-        if (removedCount > 0) {
-          // Nettoyer les notifiers IMMÉDIATEMENT
-          final keysToRemove = <String>[];
-          for (var entry in _articleNotifiers.entries) {
-            final notifValue = entry.value.value;
-            final notifCodeCrypt = notifValue['sCodeArticleCrypt']?.toString() ?? '';
-            final notifCode = notifValue['sCodeArticle']?.toString() ?? '';
-            
-            if (notifCodeCrypt == deletedCode || notifCode == deletedCode) {
-              keysToRemove.add(entry.key);
-              print('🗑️ Notifier à supprimer: ${entry.key}');
-            }
-          }
-          
-          for (var key in keysToRemove) {
-            _articleNotifiers[key]?.dispose();
-            _articleNotifiers.remove(key);
-            print('✅ Notifier supprimé: $key');
-          }
-          
-          // ✅ CRITIQUE: Créer une NOUVELLE référence COMPLÈTE pour forcer la détection du changement
-          final articleCount = pivotArray.length;
-          final newWishlistData = <String, dynamic>{};
-          
-          // Copier toutes les clés sauf pivotArray
-          for (var key in _wishlistData!.keys) {
-            if (key != 'pivotArray') {
-              if (_wishlistData![key] is Map) {
-                newWishlistData[key] = Map<String, dynamic>.from(_wishlistData![key] as Map);
-              } else {
-                newWishlistData[key] = _wishlistData![key];
-              }
-            }
-          }
-          
-          // ✅ CRITIQUE: Assigner la NOUVELLE liste pivotArray (référence complètement différente)
-          // Créer une copie finale pour garantir une référence unique
-          // ✅ S'assurer qu'il n'y a pas de null ou de valeurs vides dans la liste
-          final finalPivotArray = pivotArray.where((item) => item != null && item is Map && item.isNotEmpty).toList();
-          newWishlistData['pivotArray'] = finalPivotArray;
-          print('✅ pivotArray final créé: ${finalPivotArray.length} articles (sans null ni valeurs vides)');
-          
-          // ✅ VÉRIFICATION FINALE: S'assurer que l'article supprimé n'est PAS dans la nouvelle liste
-          final verificationCheck = newWishlistData['pivotArray'] as List<dynamic>;
-          final stillInList = verificationCheck.any((item) {
-            final itemCode = item['sCodeArticle']?.toString() ?? '';
-            final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-            return itemCryptCode == deletedCode || itemCode == deletedCode;
-          });
-          
-          if (stillInList) {
-            print('❌ ERREUR CRITIQUE: L\'article supprimé est toujours dans pivotArray après création de newWishlistData !');
-            print('❌ Suppression immédiate...');
-            final cleanedList = verificationCheck.where((item) {
-              final itemCode = item['sCodeArticle']?.toString() ?? '';
-              final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-              return !(itemCryptCode == deletedCode || itemCode == deletedCode);
-            }).toList();
-            newWishlistData['pivotArray'] = cleanedList;
-            print('✅ Article supprimé manuellement de newWishlistData');
-          } else {
-            print('✅ Vérification OK: L\'article supprimé n\'est PAS dans pivotArray');
-          }
-          
-          print('✅ _wishlistData préparé - Articles restants: $articleCount');
-          print('✅ Nouvelle référence COMPLÈTE créée pour forcer le rebuild');
-          print('✅ pivotArray avant: ${originalPivotArray.length}, après: ${pivotArray.length}');
-          print('✅ HashCode pivotArray avant: ${originalPivotArray.hashCode}, après: ${pivotArray.hashCode}');
-          
-          // ✅ CRITIQUE: Incrémenter _listVersion AVANT setState pour que la clé change immédiatement
-          // Cela garantit que les ValueKey dans _buildTopSection et _buildArticlesContent changent
-          _listVersion++;
-          print('⚡ _listVersion incrémenté AVANT setState: $_listVersion');
-          
-          // ✅ CRITIQUE: setState IMMÉDIATEMENT pour feedback instantané
-          // MODIFIER _wishlistData UNIQUEMENT dans setState pour forcer la détection
-          if (mounted) {
-            // ✅ CRITIQUE: Créer une NOUVELLE référence dans setState pour forcer la détection
-            setState(() {
-              // ✅ CRITIQUE: Créer une copie complète profonde pour forcer la détection du changement
-              final updatedWishlistData = <String, dynamic>{};
-              for (var key in newWishlistData.keys) {
-                if (newWishlistData[key] is List) {
-                  updatedWishlistData[key] = List<dynamic>.from(newWishlistData[key] as List);
-                } else if (newWishlistData[key] is Map) {
-                  updatedWishlistData[key] = Map<String, dynamic>.from(newWishlistData[key] as Map);
-                } else {
-                  updatedWishlistData[key] = newWishlistData[key];
-                }
-              }
-              // ✅ CRITIQUE: Modifier _wishlistData UNIQUEMENT dans setState
-              _wishlistData = updatedWishlistData;
-              _selectedBasketName = 'Wishlist ($articleCount Art.)';
-            });
-            print('⚡ setState() appelé IMMÉDIATEMENT - Article supprimé visuellement (version: $_listVersion)');
-            print('⚡ Nombre d\'articles après setState: ${(_wishlistData?['pivotArray'] as List?)?.length ?? 0}');
-            
-            // ✅ CRITIQUE: Forcer un rebuild immédiat avec SchedulerBinding pour garantir la mise à jour
-            SchedulerBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  // Forcer un rebuild en touchant _listVersion (déjà incrémenté)
-                  // Cela garantit que tous les widgets avec ValueKey sont reconstruits
-                });
-                print('⚡ Rebuild forcé avec addPostFrameCallback (version: $_listVersion)');
-              }
-            });
-            
-            // ✅ CRITIQUE: Appeler _refreshArticleNotifiers APRÈS setState pour nettoyer les notifiers orphelins
-            // Utiliser un délai minimal pour s'assurer que setState a pris effet
-            Future.microtask(() {
-              if (mounted) {
-                _refreshArticleNotifiers();
-                print('✅ Notifiers rafraîchis après microtask pour supprimer les orphelins');
-              }
-            });
-          } else {
-            print('⚠️ Widget non monté - setState() non appelé');
-          }
-        } else {
-          print('⚠️ Aucun article trouvé à supprimer pour le code: $deletedCode');
-          print('⚠️ Articles dans pivotArray: ${originalPivotArray.length}');
-          for (var item in originalPivotArray) {
-            final itemCode = item['sCodeArticle']?.toString() ?? '';
-            final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-            print('   - Code: $itemCode, CodeCrypt: $itemCryptCode');
-          }
-        }
-      } else {
-        print('⚠️ _wishlistData ou pivotArray est null');
-      }
-    } catch (e) {
-      print('❌ Erreur suppression optimiste: $e');
-      print('❌ Stack trace: ${StackTrace.current}');
-    }
-  }
-
-  /// Mettre à jour les métadonnées après suppression (l'article est déjà supprimé de manière optimiste)
-  Future<void> _updateDataAfterDeletion(Map<String, dynamic> response, String deletedCode) async {
-    try {
-      print('🔄 Mise à jour des métadonnées après suppression: $response');
-      print('🗑️ Code supprimé (déjà retiré de manière optimiste): $deletedCode');
-      
-      // ✅ CRITIQUE: L'article a déjà été supprimé de manière optimiste dans _updateDataAfterDeletionOptimistic
-      // On ne doit PAS le supprimer à nouveau, seulement mettre à jour les métadonnées (totaux, etc.)
-      // On ne doit JAMAIS toucher à pivotArray - il a déjà été mis à jour de manière optimiste
-      if (_wishlistData != null && _wishlistData!['pivotArray'] != null) {
-        // ✅ CRITIQUE: Lire pivotArray depuis _wishlistData qui a déjà été mis à jour de manière optimiste
-        // NE PAS modifier pivotArray - seulement le lire pour connaître le nombre d'articles
-        final currentPivotArray = _wishlistData!['pivotArray'] as List<dynamic>;
-        final articleCount = currentPivotArray.length;
-        
-        // ✅ VÉRIFICATION: S'assurer que l'article supprimé n'est PAS dans la liste
-        final deletedArticleStillPresent = currentPivotArray.any((item) {
-          final itemCode = item['sCodeArticle']?.toString() ?? '';
-          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-          return itemCryptCode == deletedCode || itemCode == deletedCode;
-        });
-        
-        if (deletedArticleStillPresent) {
-          print('⚠️ ATTENTION: L\'article supprimé est toujours présent dans pivotArray !');
-          print('⚠️ Cela ne devrait PAS arriver - l\'article devrait avoir été supprimé de manière optimiste');
-        } else {
-          print('✅ Confirmation: L\'article supprimé n\'est PAS dans pivotArray');
-        }
-        
-        print('📊 Articles actuels dans pivotArray (après suppression optimiste): $articleCount');
-        
-        // ✅ CRITIQUE: Créer une nouvelle copie de meta pour forcer la détection du changement
-        Map<String, dynamic> newMeta = {};
-        if (_wishlistData!['meta'] != null) {
-          newMeta = Map<String, dynamic>.from(_wishlistData!['meta']);
-        }
-        
-        // ✅ CORRECTION: Si le panier est vide après suppression, réinitialiser tous les totaux à 0
-        if (articleCount == 0) {
-          print('📊 Panier vide - Réinitialisation des totaux à 0');
-          newMeta['iBestResultJirig'] = 0.0;
-          newMeta['iTotalQteArticleSelected'] = 0;
-          newMeta['iTotalPriceArticleSelected'] = 0.0;
-          newMeta['iTotalQteArticle'] = 0;
-          newMeta['sResultatGainPerte'] = '0€';
-          newMeta['iResultatGainPertePercentage'] = 0.0;
-          newMeta['iTotalSelected4PaysProfile'] = 0.0;
-          newMeta['iTotalPriceSelected4PaysProfile'] = 0.0;
-          
-          // ✅ CRITIQUE: NE PAS recharger les données depuis l'API - l'article est déjà supprimé
-          // Le rechargement pourrait restaurer l'article si l'API n'est pas encore synchronisée
-          print('✅ Panier vide - Métadonnées réinitialisées (pas de rechargement pour éviter restauration)');
-        } else {
-          // Mettre à jour les totaux depuis parsedData (comme SNAL) seulement si le panier n'est pas vide
-          // ✅ CRITIQUE: NE JAMAIS utiliser parsedData pour restaurer pivotArray - seulement pour meta
-          if (response['parsedData'] != null && response['parsedData'] is List) {
-            final List<dynamic> parsedData = response['parsedData'];
-            if (parsedData.isNotEmpty) {
-              final Map<String, dynamic> totals = parsedData[0];
-              
-              // ✅ VÉRIFICATION: S'assurer que parsedData ne contient PAS de pivotArray qui pourrait restaurer l'article
-              if (totals.containsKey('pivotArray')) {
-                print('⚠️ ATTENTION: parsedData contient pivotArray - IGNORÉ pour éviter de restaurer l\'article');
-                print('⚠️ On utilise uniquement les métadonnées (totaux) de parsedData');
-              }
-              
-              // Mettre à jour UNIQUEMENT les clés importantes dans meta (PAS pivotArray)
-              final List<String> keysToUpdate = [
-                'iBestResultJirig',
-                'iTotalQteArticleSelected', 
-                'iTotalPriceArticleSelected',
-                'sResultatGainPerte',
-                'sWarningGeneralInfo'
-              ];
-              
-              for (final key in keysToUpdate) {
-                if (totals[key] != null) {
-                  newMeta[key] = totals[key];
-                }
-              }
-              
-              print('✅ Métadonnées mises à jour depuis parsedData (pivotArray ignoré)');
-            }
-          }
-        }
-        
-        print('📊 Articles actuels dans pivotArray (après suppression optimiste): $articleCount');
-        
-        // ✅ CRITIQUE: S'assurer que pivotArray n'est PAS modifié - il a déjà été mis à jour de manière optimiste
-        // Créer une nouvelle référence de _wishlistData en préservant le pivotArray mis à jour
-        final currentPivotArrayCopy = List<dynamic>.from(currentPivotArray); // Copie pour sécurité
-        _wishlistData = Map<String, dynamic>.from(_wishlistData!);
-        _wishlistData!['pivotArray'] = currentPivotArrayCopy; // ✅ GARANTIR que pivotArray reste celui de la suppression optimiste
-        _wishlistData!['meta'] = newMeta; // Nouvelle map meta avec les totaux mis à jour
-        
-        // Mettre à jour le nom du panier si nécessaire
-        _selectedBasketName = 'Wishlist ($articleCount Art.)';
-        
-        // ✅ CRITIQUE: Mettre à jour aussi le label du basket dans _baskets pour que le dropdown affiche le bon nombre
-        if (_selectedBasketIndex != null && 
-            _selectedBasketIndex! >= 0 && 
-            _selectedBasketIndex! < _baskets.length) {
-          // Créer une nouvelle copie du basket pour forcer la détection du changement
-          _baskets[_selectedBasketIndex!] = Map<String, dynamic>.from(_baskets[_selectedBasketIndex!]);
-          _baskets[_selectedBasketIndex!]['label'] = 'Wishlist ($articleCount Art.)';
-          print('✅ Label du basket mis à jour dans _baskets: Wishlist ($articleCount Art.)');
-        }
-        
-        // ✅ CRITIQUE: Vérifier une dernière fois que l'article supprimé n'est PAS dans pivotArray
-        final finalCheck = _wishlistData!['pivotArray'] as List<dynamic>;
-        final stillPresent = finalCheck.any((item) {
-          final itemCode = item['sCodeArticle']?.toString() ?? '';
-          final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-          return itemCryptCode == deletedCode || itemCode == deletedCode;
-        });
-        
-        if (stillPresent) {
-          print('❌ ERREUR CRITIQUE: L\'article supprimé est toujours présent après _updateDataAfterDeletion !');
-          print('❌ Suppression immédiate et COMPLÈTE de l\'article...');
-          // ✅ Supprimer complètement l'article (sans laisser null ou valeurs vides)
-          final cleanedList = finalCheck.where((item) {
-            if (item == null) return false; // Exclure les null
-            final itemCode = item['sCodeArticle']?.toString() ?? '';
-            final itemCryptCode = item['sCodeArticleCrypt']?.toString() ?? '';
-            // Exclure l'article supprimé
-            return !(itemCryptCode == deletedCode || itemCode == deletedCode);
-          }).toList();
-          _wishlistData!['pivotArray'] = cleanedList;
-          _listVersion++; // Incrémenter pour forcer la reconstruction
-          print('✅ Article supprimé COMPLÈTEMENT (sans null ni valeurs vides) - Version incrémentée: $_listVersion');
-        }
-        
-        // ✅ CRITIQUE: Incrémenter aussi _listVersion pour forcer la reconstruction
-        _listVersion++;
-        print('✅ Version de la liste incrémentée dans _updateDataAfterDeletion: $_listVersion');
-        
-        // ✅ CRITIQUE: Mettre à jour l'UI pour refléter les nouvelles métadonnées (totaux, etc.)
-        // Mais NE PAS recharger les données depuis l'API pour éviter de restaurer l'article
-        if (mounted) {
-          setState(() {
-            // _wishlistData est déjà mis à jour avec les nouvelles métadonnées
-            // pivotArray est garanti d'être sans l'article supprimé
-            // _listVersion est incrémenté pour forcer la reconstruction
-          });
-          print('✅ setState() appelé pour mettre à jour les métadonnées (totaux, etc.)');
-          
-          // ✅ Vérifier la position du scroll après la suppression
-          _checkScrollPosition();
-        }
-        
-        print('✅ Métadonnées mises à jour après suppression - Totaux synchronisés avec l\'API');
-        
-        // ✅ CRITIQUE: NE PAS retirer l'article de _articlesToDelete immédiatement
-        // Attendre un délai pour s'assurer qu'aucun rechargement ne restaure l'article
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _articlesToDelete.remove(deletedCode);
-            print('✅ Article retiré de _articlesToDelete après délai de sécurité: $deletedCode');
-          }
-        });
-      }
-    } catch (e) {
-      print('❌ Erreur lors de la mise à jour des données: $e');
-      // En cas d'erreur, retirer quand même l'article de _articlesToDelete pour éviter qu'il reste bloqué
-      _articlesToDelete.remove(deletedCode);
-      print('⚠️ Article retiré de _articlesToDelete malgré l\'erreur: $deletedCode');
-    }
-  }
+  // Méthodes obsolètes supprimées - remplacées par logique simple dans _deleteArticle
+  // _updateDataAfterDeletionOptimistic et _updateDataAfterDeletion ont été supprimées
+  // car elles ne sont plus utilisées et contenaient des références à _articlesToDelete
 
   @override
   Widget build(BuildContext context) {
@@ -4572,10 +4112,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
         ],
       ),
       bottomNavigationBar: const CustomBottomNavigationBar(currentIndex: 3),
-      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus ET que l'utilisateur n'est pas à la fin
-      floatingActionButton: _shouldShowDeleteAllButton() && !_isAtBottom
+      // ✅ Bouton flottant "Tout supprimer" - apparaît quand il y a 2 articles ou plus
+      // Si 3 articles ou moins : reste toujours flottant
+      // Si 4 articles ou plus : passe en bas quand l'utilisateur arrive à la fin
+      floatingActionButton: _shouldShowDeleteAllButton() && (_getArticleCount() <= 3 || !_isAtBottom)
           ? AnimatedOpacity(
-              opacity: _isAtBottom ? 0.0 : 1.0,
+              opacity: (_getArticleCount() <= 3 || !_isAtBottom) ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 300),
               child: FloatingActionButton.extended(
                 onPressed: _deleteAllArticles,
@@ -4602,6 +4144,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
   bool _shouldShowDeleteAllButton() {
     final articles = _wishlistData?['pivotArray'] as List? ?? [];
     return articles.length >= 2;
+  }
+  
+  /// Obtenir le nombre d'articles dans la wishlist
+  int _getArticleCount() {
+    final articles = _wishlistData?['pivotArray'] as List? ?? [];
+    return articles.length;
   }
   
   /// Détecter si l'utilisateur est à la fin de la liste
@@ -4820,20 +4368,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     
     // ✅ CRITIQUE: Filtrer les articles qui sont en cours de suppression
     // Cela évite d'afficher temporairement un article qui vient d'être supprimé
-    final articles = pivotArray != null 
-        ? List<dynamic>.from(pivotArray).where((item) {
-            if (item is! Map) return false;
-            final itemCode = item['sCodeArticleCrypt']?.toString() ?? item['sCodeArticle']?.toString() ?? '';
-            // Ne pas afficher les articles en cours de suppression
-            return !_articlesToDelete.contains(itemCode);
-          }).toList()
-        : <dynamic>[];
+    final articles = pivotArray != null ? List<dynamic>.from(pivotArray) : <dynamic>[];
     
     final isEmpty = articles.isEmpty;
     
     // ✅ DEBUG: Log pour tracer le problème
     print('🔍 _buildTopSection - Nombre d\'articles: ${articles.length}, Version: $_listVersion');
-    print('🔍 pivotArray original: ${pivotArray?.length ?? 0}, articles filtrés: ${articles.length}, _articlesToDelete: ${_articlesToDelete.length}');
     if (articles.isNotEmpty) {
       for (var i = 0; i < articles.length; i++) {
         final article = articles[i];
@@ -5021,8 +4561,8 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           else ...[
             _buildArticlesContent(translationService, articles, isMobile: isMobile, isSmallMobile: isSmallMobile, isVerySmallMobile: isVerySmallMobile),
             
-            // ✅ Bouton "Tout supprimer" en fin de liste si l'utilisateur est à la fin
-            if (_shouldShowDeleteAllButton() && _isAtBottom) ...[
+            // ✅ Bouton "Tout supprimer" en fin de liste si l'utilisateur est à la fin ET qu'il y a 4 articles ou plus
+            if (_shouldShowDeleteAllButton() && _isAtBottom && _getArticleCount() >= 4) ...[
               SizedBox(height: isMobile ? 16 : 24),
               _buildDeleteAllButton(translationService, isMobile: isMobile),
               SizedBox(height: isMobile ? 16 : 24),
@@ -6067,29 +5607,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
 
 
   Widget _buildArticlesContent(TranslationService translationService, List articles, {bool isMobile = false, bool isSmallMobile = false, bool isVerySmallMobile = false}) {
-    // ✅ CRITIQUE: Filtrer DEUX FOIS pour garantir l'exclusion
-    // Première fois au début de _buildTopSection (ligne 1949)
-    // Deuxième fois ici pour être sûr
-    final filteredArticles = articles.where((item) {
-      if (item is! Map) return false;
-      final itemCode = item['sCodeArticleCrypt']?.toString() ?? 
-                       item['sCodeArticle']?.toString() ?? '';
-      final isDeleting = _articlesToDelete.contains(itemCode);
-      
-      if (isDeleting) {
-        print('🚫 Article filtré (en cours de suppression): $itemCode');
-      }
-      
-      return !isDeleting; // ✅ Exclure si en cours de suppression
-    }).toList();
-    
-    print('📊 Articles après filtre: ${filteredArticles.length} (supprimés: ${_articlesToDelete.length})');
+    // ✅ Utiliser directement articles sans filtrage supplémentaire
+    // La liste est déjà à jour dans _wishlistData['pivotArray']
     
     // ✅ CRITIQUE: Utiliser _listVersion pour forcer la reconstruction immédiate
     // Utiliser une valeur par défaut sûre pour éviter les erreurs JS/Web
     final versionNum = _safeListVersion;
     final versionStr = versionNum.toString();
-    final articlesLength = filteredArticles.length; // ✅ Utiliser la liste filtrée
+    final articlesLength = articles.length;
     final articlesLengthStr = articlesLength.toString();
     final listKey = ValueKey('articles_' + articlesLengthStr + '_' + versionStr);
     
@@ -6107,22 +5632,43 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             key: ValueKey('listview_' + articlesLengthStr + '_' + versionStr), // ✅ Clé unique basée sur la version pour forcer la reconstruction
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredArticles.length, // ✅ Utiliser la liste filtrée
+            itemCount: articles.length,
             separatorBuilder: (context, index) => SizedBox(height: isMobile ? 8 : 12),
             itemBuilder: (context, index) {
-              final rawArticle = filteredArticles[index]; // ✅ Utiliser la liste filtrée
+              final rawArticle = articles[index];
               if (rawArticle is! Map) {
                 return const SizedBox.shrink();
               }
               final sourceArticle = rawArticle as Map<String, dynamic>;
               
-              // ✅ DEBUG: Log pour tracer quel article est affiché
-              final articleCode = sourceArticle['sCodeArticleCrypt']?.toString() ?? sourceArticle['sCodeArticle']?.toString() ?? 'unknown';
-              print('🔍 _buildArticlesContent itemBuilder - Index $index: $articleCode');
+              // ✅ CRITIQUE: Vérifier AVANT de créer/récupérer le notifier si l'article existe encore dans _wishlistData
+              final articleCode = sourceArticle['sCodeArticleCrypt']?.toString() ?? 
+                                  sourceArticle['sCodeArticle']?.toString() ?? '';
+              final pivotArray = _wishlistData?['pivotArray'] as List? ?? [];
+              final articleExists = pivotArray.any((item) {
+                if (item is! Map) return false;
+                final itemCode = item['sCodeArticleCrypt']?.toString() ?? 
+                                item['sCodeArticle']?.toString() ?? '';
+                return itemCode == articleCode && itemCode.isNotEmpty;
+              });
+              
+              // ✅ Si l'article n'existe plus dans _wishlistData, ne pas le rendre
+              if (!articleExists || articleCode.isEmpty) {
+                print('⚠️ Article supprimé détecté dans _buildArticlesContent, retour d\'un widget vide: $articleCode');
+                return const SizedBox.shrink();
+              }
               
               final notifier = _ensureArticleNotifier(sourceArticle);
               
+              // ✅ CRITIQUE WEB: Vérifier que le notifier n'est pas vide (article supprimé)
+              // Sur web, cette vérification est encore plus importante car les notifiers peuvent persister
+              if (notifier.value.isEmpty) {
+                print('⚠️ Notifier vide détecté (article supprimé), retour d\'un widget vide: $articleCode');
+                return const SizedBox.shrink();
+              }
+              
               // ✅ CRITIQUE: Le notifier est la source de vérité pour les mises à jour en temps réel
+              // pour éviter les déclarations en double de notifierCode
               // Ne PAS écraser la valeur du notifier avec sourceArticle si le notifier a une valeur plus récente
               // Vérifier si le notifier a un timestamp de mise à jour récent (moins de 2 secondes)
               final notifierLastUpdate = notifier.value['_lastUpdate'] as int?;
@@ -6189,7 +5735,14 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
                 }
               }
               
+              // ✅ CRITIQUE MOBILE/WEB: Utiliser une clé unique basée sur l'article ET la version pour forcer la reconstruction
+              // Sur mobile (Android/iOS), cette clé garantit une mise à jour immédiate et propre
+              // Sur web, cette clé garantit que le ValueListenableBuilder est complètement reconstruit
+              // Utiliser articleCode déjà déclaré plus haut (ligne 5719)
+              final articleKey = ValueKey('article_${articleCode}_${_safeListVersion}');
+              
               return ValueListenableBuilder<Map<String, dynamic>>(
+                key: articleKey, // ✅ Clé unique pour forcer la reconstruction (mobile et web)
                 valueListenable: notifier,
                 builder: (context, articleValue, _) {
                   // ✅ CRITIQUE: TOUJOURS utiliser la valeur du notifier si elle existe et contient des données valides
@@ -6285,9 +5838,13 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
     final baseArticle = sourceArticle ?? article;
     final imageUrl = article['sImage'] ?? '';
     final name = article['sname'] ?? translationService.translate('PRODUCTCODE_Msg08');
-    final code = article['scodearticle'] ?? '';
+    final code = article['scodearticle'] ?? article['sCodeArticle'] ?? '';
     final quantity = article['iqte'] ?? 1;
-    final codeCrypt = article['sCodeArticleCrypt'] ?? '';
+    final codeCrypt = baseArticle['sCodeArticleCrypt'] ?? 
+                      baseArticle['scodearticlecrypt'] ?? 
+                      baseArticle['sCodeArticle'] ?? 
+                      baseArticle['scodearticle'] ?? 
+                      '';
     final paysListe = _wishlistData?['paysListe'] as List? ?? [];
 
     final rowWidget = Container(
@@ -6317,12 +5874,16 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
           
           // Colonne droite - Prix et pays
           // ✅ CRITIQUE: Utiliser ValueListenableBuilder pour une mise à jour en temps réel
+          // ✅ IMPORTANT: Ne PAS filtrer ici car _buildTableRow gère déjà la suppression complète
+          // Si on retourne SizedBox.shrink() ici, seule la colonne droite disparaît, pas tout le container
           Expanded(
             flex: isVerySmallMobile ? 4 : (isSmallMobile ? 3 : (isMobile ? 2 : 2)),
             child: articleNotifier != null
                 ? ValueListenableBuilder<Map<String, dynamic>>(
                     valueListenable: articleNotifier,
                     builder: (context, articleValue, _) {
+                      // ✅ NE PAS vérifier isDeleting ici car _buildTableRow gère déjà la suppression complète
+                      // Si on retourne SizedBox.shrink() ici, seule la colonne droite disparaît, pas tout le container
                       return _buildRightColumn(
                         articleValue,
                         paysListe,
@@ -6348,48 +5909,12 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       ),
     );
     
-    // ✅ Vérifier si cet article est en cours de suppression
-    final articleCode = codeCrypt.isNotEmpty ? codeCrypt : code;
-    final isDeleting = _isDeletingAll && _articlesToDelete.contains(articleCode);
+    // ✅ Si on arrive ici, c'est que l'article N'EST PAS supprimé
+    // Pas besoin de vérifier à nouveau isDeleting car c'est déjà fait au début
     
     if (!_animationsInitialized) {
+      // ✅ Si les animations ne sont pas initialisées, retourner directement le widget
       return rowWidget;
-    }
-    
-    // ✅ Animation de SUPPRESSION plus rapide (300ms au lieu de 500ms)
-    if (isDeleting) {
-      final delayMs = itemIndex * 30; // ✅ Délai réduit de 50ms à 30ms
-      
-      return TweenAnimationBuilder<double>(
-        duration: const Duration(milliseconds: 300), // ✅ Réduit de 500ms à 300ms
-        tween: Tween<double>(begin: 1.0, end: 0.0),
-        curve: Curves.easeInCubic,
-        builder: (context, value, child) {
-          // Calculer avec le délai progressif
-          final totalDuration = 300.0; // ✅ Durée cohérente
-          final delayRatio = delayMs / totalDuration;
-          final animatedValue = value > (1.0 - delayRatio)
-              ? 1.0
-              : ((value - (1.0 - delayRatio)) / delayRatio).clamp(0.0, 1.0);
-          
-          // Animation accélérée: fade + scale + slide
-          final opacity = animatedValue.clamp(0.0, 1.0);
-          final scale = 0.7 + (animatedValue * 0.3); // ✅ Scale plus prononcé (0.7 au lieu de 0.5)
-          final slideOffset = 300 * (1 - animatedValue); // ✅ Slide réduit (300px au lieu de 400px)
-          
-          return Transform.scale(
-            scale: scale,
-            child: Transform.translate(
-              offset: Offset(slideOffset, 0), // Slide vers la droite
-              child: Opacity(
-                opacity: opacity, // Fade out progressif
-                child: child,
-              ),
-            ),
-          );
-        },
-        child: rowWidget,
-      );
     }
     
     // ✨ Animation Articles : Slide in séquencé depuis le bas avec bounce (entrée normale)
