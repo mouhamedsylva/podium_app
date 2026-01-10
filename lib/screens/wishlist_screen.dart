@@ -1668,17 +1668,87 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
       }
       _articleNotifiers.clear();
       
-      // Mettre à jour _wishlistData
+      // ✅ Mettre à jour _wishlistData avec métadonnées à zéro
       setState(() {
+        _wishlistData = Map<String, dynamic>.from(_wishlistData!);
         _wishlistData!['pivotArray'] = [];
+        // ✅ Mettre à jour les métadonnées immédiatement
+        if (_wishlistData!['meta'] != null) {
+          _wishlistData!['meta'] = Map<String, dynamic>.from(_wishlistData!['meta']);
+          _wishlistData!['meta']['iBestResultJirig'] = 0.0;
+          _wishlistData!['meta']['iTotalQteArticleSelected'] = 0;
+          _wishlistData!['meta']['iTotalPriceArticleSelected'] = 0.0;
+          _wishlistData!['meta']['sResultatGainPerte'] = '0€';
+        } else {
+          _wishlistData!['meta'] = {
+            'iBestResultJirig': 0.0,
+            'iTotalQteArticleSelected': 0,
+            'iTotalPriceArticleSelected': 0.0,
+            'sResultatGainPerte': '0€',
+          };
+        }
         _selectedBasketName = 'Wishlist (0 Art.)';
         _isDeletingAll = false;
+        _listVersion++; // Forcer la reconstruction
       });
+      
+      // ✅ Mettre à jour aussi le label du basket dans _baskets pour le dropdown
+      if (_selectedBasketIndex != null && 
+          _selectedBasketIndex! >= 0 && 
+          _selectedBasketIndex! < _baskets.length) {
+        setState(() {
+          _baskets[_selectedBasketIndex!] = Map<String, dynamic>.from(_baskets[_selectedBasketIndex!]);
+          _baskets[_selectedBasketIndex!]['label'] = 'Wishlist (0 Art.)';
+        });
+        print('✅ Label du basket mis à jour dans _baskets: Wishlist (0 Art.)');
+      }
 
       // API en arrière-plan + message succès
       unawaited(_apiService.deleteAllArticleBasketWishlist().then((response) {
         if (mounted) {
           if (response != null && response['success'] == true) {
+            // ✅ Mettre à jour les métadonnées depuis parsedData (comme _deleteArticle)
+            if (response['parsedData'] != null) {
+              final parsedData = response['parsedData'];
+              Map<String, dynamic>? totals;
+              
+              // Gérer le cas où parsedData est une List ou directement un Map
+              if (parsedData is List && parsedData.isNotEmpty) {
+                totals = parsedData[0] as Map<String, dynamic>?;
+              } else if (parsedData is Map) {
+                totals = Map<String, dynamic>.from(parsedData);
+              }
+              
+              if (totals != null) {
+                // ✅ Mettre à jour les métadonnées comme dans SNAL-Project
+                final keysToUpdate = [
+                  'iBestResultJirig',
+                  'iTotalQteArticleSelected',
+                  'iTotalPriceArticleSelected',
+                  'sResultatGainPerte',
+                  'sWarningGeneralInfo'
+                ];
+                
+                setState(() {
+                  if (_wishlistData != null && _wishlistData!['meta'] != null) {
+                    final meta = Map<String, dynamic>.from(_wishlistData!['meta'] as Map);
+                    for (final key in keysToUpdate) {
+                      if (totals!.containsKey(key) && totals[key] != null) {
+                        meta[key] = totals[key];
+                        print('✅ Meta mis à jour: $key = ${totals[key]}');
+                      }
+                    }
+                    _wishlistData = Map<String, dynamic>.from(_wishlistData!);
+                    _wishlistData!['meta'] = meta;
+                    _listVersion++; // Incrémenter pour forcer la reconstruction
+                  }
+                });
+              }
+            }
+            
+            // ✅ Rafraîchir les baskets comme dans SNAL-Project (appelle getMyBaskets())
+            unawaited(_loadBaskets());
+            
             _showNotiflixSuccessDialog(
               title: _translationService.translate('SUCCESS_TITTLE'),
               message: _translationService.translate('ALL_ARTICLE_DELETED_SUCCESS') ?? 'Tous les articles ont été supprimés avec succès',
@@ -3823,21 +3893,19 @@ class _WishlistScreenState extends State<WishlistScreen> with RouteTracker, Widg
             );
             
             if (articleIndex != -1) {
-              // ✅ Mettre à jour l'article avec le nouveau pays sélectionné (comme SNAL ligne 4090)
-              // Si sNewPaysSelected est -1 ou vide, désélectionner (mettre à vide)
-              final rawNewSelected = totals['sNewPaysSelected']?.toString() ?? '';
-              final newSelected = (rawNewSelected == '-1' || rawNewSelected.isEmpty) ? '' : rawNewSelected;
-              
-              // ✅ CRITIQUE: Créer une nouvelle copie de l'article pour forcer la détection du changement
               final updatedArticle = Map<String, dynamic>.from(pivotArray[articleIndex]);
-              updatedArticle['spaysSelected'] = newSelected;
-              updatedArticle['sPaysSelected'] = newSelected;
-              updatedArticle['sPays'] = newSelected;
+
+              // ✅ Mise à jour conditionnelle pour ne pas écraser l'UI optimiste
+              if (totals.containsKey('sNewPaysSelected')) {
+                final rawNewSelected = totals['sNewPaysSelected']?.toString() ?? '';
+                final newSelected = (rawNewSelected == '-1' || rawNewSelected.isEmpty) ? '' : rawNewSelected;
+                updatedArticle['spaysSelected'] = newSelected;
+                updatedArticle['sPaysSelected'] = newSelected;
+                updatedArticle['sPays'] = newSelected;
+              }
+              
               updatedArticle['sMyHomeIcon'] = totals['sMyHomeIcon'];
               updatedArticle['sPaysListe'] = totals['sPaysListe'];
-              // ✅ CRITIQUE: Ajouter un timestamp pour protéger cette mise à jour
-              updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
-              updatedArticle['_lastUpdateField'] = 'spaysSelected'; // Indiquer quel champ a été mis à jour
               // ✅ CRITIQUE: Ajouter un timestamp pour protéger cette mise à jour
               updatedArticle['_lastUpdate'] = DateTime.now().millisecondsSinceEpoch;
               updatedArticle['_lastUpdateField'] = 'spaysSelected'; // Indiquer quel champ a été mis à jour
