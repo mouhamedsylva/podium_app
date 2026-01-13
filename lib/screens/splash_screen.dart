@@ -87,9 +87,15 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     // ✅ NOUVEAU: Vérifier les mises à jour
-    await _checkForAppUpdate();
+    final shouldBlockNavigation = await _checkForAppUpdate();
 
     if (!mounted) return;
+
+    // Si une mise à jour obligatoire est détectée, bloquer la navigation
+    if (shouldBlockNavigation) {
+      print('⚠️ SPLASH_SCREEN: Navigation bloquée - mise à jour obligatoire');
+      return;
+    }
 
     _hasNavigated = true;
 
@@ -120,23 +126,30 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   /// Vérifier si une mise à jour est disponible
-  Future<void> _checkForAppUpdate() async {
+  /// 
+  /// Retourne `true` si une mise à jour obligatoire est détectée (bloque la navigation)
+  /// Retourne `false` sinon (navigation autorisée)
+  Future<bool> _checkForAppUpdate() async {
     try {
       print('🔍 SPLASH_SCREEN: Vérification des mises à jour...');
       
       final appUpdateService = AppUpdateService();
       final versionInfo = await appUpdateService.checkForUpdate();
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       // Si une mise à jour est disponible/requise, afficher le dialogue
       if (versionInfo != null) {
         print('📱 SPLASH_SCREEN: Mise à jour détectée, affichage du dialogue...');
+        print('   Update Available: ${versionInfo.updateAvailable}');
+        print('   Update Required: ${versionInfo.updateRequired}');
+        print('   Force Update: ${versionInfo.forceUpdate}');
+        print('   Needs Update: ${versionInfo.needsUpdate}');
         
         // Attendre un court délai pour que le SplashScreen soit complètement rendu
         await Future.delayed(const Duration(milliseconds: 500));
 
-        if (!mounted) return;
+        if (!mounted) return false;
 
         // Afficher le dialogue de mise à jour
         await AppUpdateDialog.show(
@@ -144,18 +157,22 @@ class _SplashScreenState extends State<SplashScreen>
           versionInfo: versionInfo,
         );
 
-        // Si la mise à jour est obligatoire, ne pas continuer
-        // (l'utilisateur ne peut pas fermer le dialogue)
+        // Si la mise à jour est obligatoire, bloquer la navigation
         if (versionInfo.needsUpdate) {
-          print('⚠️ SPLASH_SCREEN: Mise à jour obligatoire, arrêt du flux');
-          return;
+          print('⚠️ SPLASH_SCREEN: Mise à jour obligatoire détectée - navigation bloquée');
+          return true; // Bloque la navigation
+        } else {
+          print('✅ SPLASH_SCREEN: Mise à jour optionnelle - navigation autorisée');
+          return false; // Autorise la navigation
         }
       } else {
-        print('✅ SPLASH_SCREEN: Application à jour');
+        print('✅ SPLASH_SCREEN: Application à jour - navigation autorisée');
+        return false; // Pas de mise à jour, navigation autorisée
       }
     } catch (e) {
       print('❌ SPLASH_SCREEN: Erreur lors de la vérification de mise à jour: $e');
       // En cas d'erreur, continuer normalement (ne pas bloquer l'application)
+      return false; // En cas d'erreur, autoriser la navigation
     }
   }
 
