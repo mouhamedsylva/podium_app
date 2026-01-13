@@ -10,6 +10,7 @@ class LocalStorageService {
   static const String _paysFavKey = 'user_pays_fav';
   static const String _currentRouteKey = 'current_route';
   static const String _selectedCountriesKey = 'selected_countries';
+  static const String _lastUpdateCheckKey = 'last_update_check';
 
   /// Sauvegarder le profil utilisateur
   static Future<void> saveProfile(Map<String, dynamic> profile) async {
@@ -375,5 +376,44 @@ class LocalStorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_selectedCountriesKey);
     print('🗑️ Pays sélectionnés effacés');
+  }
+
+  /// ✅ Sauvegarder la date de la dernière vérification de mise à jour
+  static Future<void> saveLastUpdateCheck(DateTime dateTime) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastUpdateCheckKey, dateTime.toIso8601String());
+    print('💾 Dernière vérification de mise à jour sauvegardée: ${dateTime.toIso8601String()}');
+  }
+
+  /// ✅ Récupérer la date de la dernière vérification de mise à jour
+  static Future<DateTime?> getLastUpdateCheck() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dateString = prefs.getString(_lastUpdateCheckKey);
+    if (dateString != null && dateString.isNotEmpty) {
+      try {
+        final dateTime = DateTime.parse(dateString);
+        print('📖 Dernière vérification de mise à jour: ${dateTime.toIso8601String()}');
+        return dateTime;
+      } catch (e) {
+        print('❌ Erreur parsing date: $e');
+        return null;
+      }
+    }
+    print('📖 Aucune vérification de mise à jour trouvée');
+    return null;
+  }
+
+  /// ✅ Vérifier si on doit vérifier les mises à jour (évite trop de requêtes)
+  /// Retourne true si la dernière vérification date de plus de [hours] heures
+  static Future<bool> shouldCheckForUpdate({int hours = 24}) async {
+    final lastCheck = await getLastUpdateCheck();
+    if (lastCheck == null) {
+      return true; // Jamais vérifié, donc oui
+    }
+    final now = DateTime.now();
+    final difference = now.difference(lastCheck);
+    final shouldCheck = difference.inHours >= hours;
+    print('🔍 Dernière vérification: ${difference.inHours}h - Doit vérifier: $shouldCheck');
+    return shouldCheck;
   }
 }

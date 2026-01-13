@@ -5,6 +5,7 @@ import '../services/route_persistence_service.dart';
 import '../services/translation_service.dart';
 import '../services/app_update_service.dart';
 import '../widgets/app_update_dialog.dart';
+import '../services/local_storage_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -135,6 +136,9 @@ class _SplashScreenState extends State<SplashScreen>
       
       final appUpdateService = AppUpdateService();
       final versionInfo = await appUpdateService.checkForUpdate();
+      
+      // Sauvegarder la date de vérification (même si pas de mise à jour)
+      await LocalStorageService.saveLastUpdateCheck(DateTime.now());
 
       if (!mounted) return false;
 

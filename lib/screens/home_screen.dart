@@ -10,6 +10,9 @@ import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/premium_banner.dart';
 import '../widgets/qr_scanner_modal.dart';
+import '../services/app_update_service.dart';
+import '../widgets/app_update_dialog.dart';
+import '../services/local_storage_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -71,6 +74,9 @@ class _HomeScreenState extends State<HomeScreen>
       
       // Note: Le pays sélectionné est maintenant initialisé automatiquement dans SettingsService et CountryNotifier
       _checkOAuthCallback();
+      
+      // ✅ Vérifier les mises à jour (optionnelles) après un délai
+      _checkForAppUpdateDelayed();
     } catch (e) {
       print('Erreur lors de l\'initialisation: $e');
     }
@@ -90,6 +96,67 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) {
       _bannerController.forward();
       setState(() => _isAnimationComplete = true);
+    }
+  }
+
+  /// Vérifier les mises à jour de manière différée (pour les mises à jour optionnelles)
+  /// Cette vérification se fait uniquement si la dernière vérification date de plus de 24h
+  Future<void> _checkForAppUpdateDelayed() async {
+    // Attendre que la page soit complètement chargée
+    await Future.delayed(const Duration(seconds: 2));
+    
+    if (!mounted) return;
+    
+    try {
+      // Vérifier si on doit faire une vérification (évite trop de requêtes)
+      final shouldCheck = await LocalStorageService.shouldCheckForUpdate(hours: 24);
+      
+      if (!shouldCheck) {
+        print('⏭️ HOME_SCREEN: Vérification de mise à jour ignorée (trop récente)');
+        return;
+      }
+      
+      print('🔍 HOME_SCREEN: Vérification des mises à jour (optionnelles)...');
+      
+      final appUpdateService = AppUpdateService();
+      final versionInfo = await appUpdateService.checkForUpdate();
+      
+      // Sauvegarder la date de vérification
+      await LocalStorageService.saveLastUpdateCheck(DateTime.now());
+      
+      if (!mounted) return;
+      
+      // Afficher uniquement les mises à jour optionnelles (pas les obligatoires)
+      // Les mises à jour obligatoires sont déjà gérées dans SplashScreen
+      if (versionInfo != null && !versionInfo.needsUpdate && versionInfo.hasUpdate) {
+        print('📱 HOME_SCREEN: Mise à jour optionnelle détectée, affichage du dialogue...');
+        
+        // Attendre un court délai pour que l'utilisateur voie la page
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        if (!mounted) return;
+        
+        // Afficher le dialogue de mise à jour (optionnel)
+        await AppUpdateDialog.show(
+          context: context,
+          versionInfo: versionInfo,
+        );
+      } else if (versionInfo != null && versionInfo.needsUpdate) {
+        // Si une mise à jour obligatoire est détectée ici (normalement déjà gérée au démarrage)
+        // On l'affiche quand même pour être sûr
+        print('⚠️ HOME_SCREEN: Mise à jour obligatoire détectée (devrait être gérée au démarrage)');
+        await Future.delayed(const Duration(milliseconds: 1000));
+        if (!mounted) return;
+        await AppUpdateDialog.show(
+          context: context,
+          versionInfo: versionInfo,
+        );
+      } else {
+        print('✅ HOME_SCREEN: Application à jour');
+      }
+    } catch (e) {
+      print('❌ HOME_SCREEN: Erreur lors de la vérification de mise à jour: $e');
+      // En cas d'erreur, ne pas bloquer l'application
     }
   }
 
