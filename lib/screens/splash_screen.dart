@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../services/route_persistence_service.dart';
 import '../services/translation_service.dart';
+import '../services/app_update_service.dart';
+import '../widgets/app_update_dialog.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -84,6 +86,11 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
+    // ✅ NOUVEAU: Vérifier les mises à jour
+    await _checkForAppUpdate();
+
+    if (!mounted) return;
+
     _hasNavigated = true;
 
     try {
@@ -109,6 +116,46 @@ class _SplashScreenState extends State<SplashScreen>
         _progressController.stop();
         context.go('/country-selection');
       }
+    }
+  }
+
+  /// Vérifier si une mise à jour est disponible
+  Future<void> _checkForAppUpdate() async {
+    try {
+      print('🔍 SPLASH_SCREEN: Vérification des mises à jour...');
+      
+      final appUpdateService = AppUpdateService();
+      final versionInfo = await appUpdateService.checkForUpdate();
+
+      if (!mounted) return;
+
+      // Si une mise à jour est disponible/requise, afficher le dialogue
+      if (versionInfo != null) {
+        print('📱 SPLASH_SCREEN: Mise à jour détectée, affichage du dialogue...');
+        
+        // Attendre un court délai pour que le SplashScreen soit complètement rendu
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (!mounted) return;
+
+        // Afficher le dialogue de mise à jour
+        await AppUpdateDialog.show(
+          context: context,
+          versionInfo: versionInfo,
+        );
+
+        // Si la mise à jour est obligatoire, ne pas continuer
+        // (l'utilisateur ne peut pas fermer le dialogue)
+        if (versionInfo.needsUpdate) {
+          print('⚠️ SPLASH_SCREEN: Mise à jour obligatoire, arrêt du flux');
+          return;
+        }
+      } else {
+        print('✅ SPLASH_SCREEN: Application à jour');
+      }
+    } catch (e) {
+      print('❌ SPLASH_SCREEN: Erreur lors de la vérification de mise à jour: $e');
+      // En cas d'erreur, continuer normalement (ne pas bloquer l'application)
     }
   }
 

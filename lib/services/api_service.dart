@@ -8,6 +8,7 @@ import 'dart:convert';
 // Import conditionnel pour le web uniquement - géré dans WebUtils
 import '../utils/web_utils.dart';
 import '../models/country.dart';
+import '../models/app_version_info.dart';
 import '../config/api_config.dart';
 import 'profile_service.dart';
 import 'local_storage_service.dart';
@@ -1149,6 +1150,76 @@ class ApiService {
         'success': false,
         'error': e.toString(),
       };
+    }
+  }
+
+  /// Récupérer les informations de version de l'application
+  /// 
+  /// [version] : Version actuelle de l'application (ex: "1.5.0")
+  /// [platform] : Plateforme ("android" ou "ios")
+  /// 
+  /// Retourne [AppVersionInfo] si succès, `null` en cas d'erreur
+  Future<AppVersionInfo?> getAppVersionInfo({
+    required String version,
+    required String platform,
+  }) async {
+    try {
+      // S'assurer que l'API est initialisée
+      if (_dio == null) {
+        await initialize();
+      }
+
+      print('🔍 Vérification de version:');
+      print('   Version actuelle: $version');
+      print('   Plateforme: $platform');
+
+      // Appel à l'API
+      final response = await _dio!.get(
+        '/get-app-mobile-infos-versions',
+        queryParameters: {
+          'version': version,
+          'platform': platform.toLowerCase(),
+        },
+      );
+
+      print('📡 Réponse API version: ${response.statusCode}');
+      print('📡 Données: ${response.data}');
+
+      // Vérifier le statut de la réponse
+      if (response.statusCode == 200) {
+        final data = response.data;
+        
+        // Vérifier la structure de la réponse
+        if (data is Map<String, dynamic>) {
+          // Si la réponse contient 'success: false'
+          if (data['success'] == false) {
+            print('❌ Erreur backend: ${data['message']}');
+            return null;
+          }
+          
+          // Si la réponse contient 'success: true' avec 'data'
+          if (data['success'] == true && data['data'] != null) {
+            final versionData = data['data'] as Map<String, dynamic>;
+            final versionInfo = AppVersionInfo.fromJson(versionData);
+            print('✅ Informations de version récupérées:');
+            print('   Update Available: ${versionInfo.updateAvailable}');
+            print('   Update Required: ${versionInfo.updateRequired}');
+            print('   Force Update: ${versionInfo.forceUpdate}');
+            return versionInfo;
+          }
+        }
+      }
+
+      print('❌ Réponse invalide: ${response.data}');
+      return null;
+    } catch (e) {
+      print('❌ Erreur lors de la vérification de version: $e');
+      if (e is DioException) {
+        print('   Type: ${e.type}');
+        print('   Message: ${e.message}');
+        print('   Response: ${e.response?.data}');
+      }
+      return null;
     }
   }
 

@@ -74,6 +74,7 @@ dependencies:
   url_launcher: ^6.2.5
   share_plus: ^10.0.2
   html: ^0.15.4
+  package_info_plus: ^8.0.0  # Pour récupérer la version de l'app
   
   # Terms Viewer
   flutter_terms_viewer: ^1.0.0
