@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/app_version_info.dart';
 import '../services/app_update_service.dart';
+import '../services/local_storage_service.dart';
 
 /// Dialogue professionnel pour afficher les informations de mise à jour
 class AppUpdateDialog extends StatelessWidget {
@@ -27,7 +28,10 @@ class AppUpdateDialog extends StatelessWidget {
         ),
         elevation: 8,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 400),
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(context).size.height * 0.9,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -109,6 +113,7 @@ class AppUpdateDialog extends StatelessWidget {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       // Message principal avec icône
                       Row(
@@ -181,12 +186,14 @@ class AppUpdateDialog extends StatelessWidget {
                               size: 18,
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              'Nouveautés de cette version',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF21252F),
+                            Expanded(
+                              child: Text(
+                                'Nouveautés de cette version',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF21252F),
+                                ),
                               ),
                             ),
                           ],
@@ -350,14 +357,18 @@ class AppUpdateDialog extends StatelessWidget {
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.download, size: 20),
                             const SizedBox(width: 8),
-                            Text(
-                              isRequired ? 'Mettre à jour maintenant' : 'Mettre à jour',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                isRequired ? 'Mettre à jour maintenant' : 'Mettre à jour',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -367,7 +378,8 @@ class AppUpdateDialog extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -411,13 +423,17 @@ class AppUpdateDialog extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    version,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: color,
+                  Flexible(
+                    child: Text(
+                      version,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (isNew) ...[
@@ -456,6 +472,12 @@ class AppUpdateDialog extends StatelessWidget {
     required AppVersionInfo versionInfo,
   }) async {
     final isRequired = versionInfo.needsUpdate;
+
+    // ✅ Si c'est une mise à jour forcée, sauvegarder les infos pour la prochaine fois
+    if (isRequired) {
+      print('💾 Sauvegarde des informations de mise à jour forcée...');
+      await LocalStorageService.savePendingForceUpdate(versionInfo.toJson());
+    }
 
     await showDialog(
       context: context,

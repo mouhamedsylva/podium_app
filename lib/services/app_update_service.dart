@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/api_service.dart';
 import '../models/app_version_info.dart';
+import '../services/local_storage_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // package_info_plus est utilisé uniquement sur Android/iOS
@@ -44,6 +45,41 @@ class AppUpdateService {
       final buildNumber = packageInfo.buildNumber; // ex: "1"
 
       print('📱 Version actuelle: $currentVersion (build: $buildNumber)');
+
+      // ✅ Vérifier d'abord s'il y a une mise à jour forcée en attente
+      final pendingUpdate = await LocalStorageService.getPendingForceUpdate();
+      if (pendingUpdate != null) {
+        final pendingMinVersion = pendingUpdate['minVersion']?.toString() ?? '';
+        final pendingLatestVersion = pendingUpdate['latestVersion']?.toString() ?? '';
+        
+        print('🔍 Mise à jour forcée en attente détectée: min=$pendingMinVersion, latest=$pendingLatestVersion');
+        
+        // Comparer les versions (simple comparaison de strings pour l'instant)
+        // Si la version actuelle est inférieure à la version minimale requise, la mise à jour est toujours nécessaire
+        if (_compareVersions(currentVersion, pendingMinVersion) < 0) {
+          print('⚠️ Version actuelle ($currentVersion) < version minimale requise ($pendingMinVersion)');
+          // Créer un AppVersionInfo depuis les données sauvegardées
+          final versionInfo = AppVersionInfo.fromJson(pendingUpdate);
+          // Mettre à jour currentVersion avec la vraie version actuelle
+          return AppVersionInfo(
+            minVersion: versionInfo.minVersion,
+            latestVersion: versionInfo.latestVersion,
+            currentVersion: currentVersion, // Version actuelle réelle
+            updateAvailable: true,
+            updateRequired: true,
+            updateUrl: versionInfo.updateUrl,
+            forceUpdate: true,
+            title: versionInfo.title,
+            message: versionInfo.message,
+            releaseNotes: versionInfo.releaseNotes,
+            active: true,
+          );
+        } else {
+          // La version actuelle est >= à la version minimale, on peut nettoyer
+          print('✅ Version actuelle ($currentVersion) >= version minimale ($pendingMinVersion) - nettoyage');
+          await LocalStorageService.clearPendingForceUpdate();
+        }
+      }
 
       // Déterminer la plateforme
       final platform = Platform.isAndroid ? 'android' : 'ios';
@@ -114,6 +150,28 @@ class AppUpdateService {
     } catch (e) {
       print('❌ Erreur lors de l\'ouverture du store: $e');
       return false;
+    }
+  }
+
+  /// Comparer deux versions (format: "1.2.3")
+  /// Retourne -1 si version1 < version2, 0 si égales, 1 si version1 > version2
+  int _compareVersions(String version1, String version2) {
+    try {
+      final v1Parts = version1.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final v2Parts = version2.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      
+      // Normaliser les longueurs
+      while (v1Parts.length < v2Parts.length) v1Parts.add(0);
+      while (v2Parts.length < v1Parts.length) v2Parts.add(0);
+      
+      for (int i = 0; i < v1Parts.length; i++) {
+        if (v1Parts[i] < v2Parts[i]) return -1;
+        if (v1Parts[i] > v2Parts[i]) return 1;
+      }
+      return 0;
+    } catch (e) {
+      print('❌ Erreur comparaison versions: $e');
+      return 0; // En cas d'erreur, considérer comme égales
     }
   }
 }

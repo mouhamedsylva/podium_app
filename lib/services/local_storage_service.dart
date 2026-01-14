@@ -11,6 +11,7 @@ class LocalStorageService {
   static const String _currentRouteKey = 'current_route';
   static const String _selectedCountriesKey = 'selected_countries';
   static const String _lastUpdateCheckKey = 'last_update_check';
+  static const String _pendingForceUpdateKey = 'pending_force_update';
 
   /// Sauvegarder le profil utilisateur
   static Future<void> saveProfile(Map<String, dynamic> profile) async {
@@ -415,5 +416,68 @@ class LocalStorageService {
     final shouldCheck = difference.inHours >= hours;
     print('🔍 Dernière vérification: ${difference.inHours}h - Doit vérifier: $shouldCheck');
     return shouldCheck;
+  }
+
+  /// ✅ Sauvegarder les informations de mise à jour forcée en attente
+  static Future<void> savePendingForceUpdate(Map<String, dynamic> versionInfo) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Convertir en JSON string pour sauvegarder
+    final jsonString = versionInfo.toString(); // Simple pour l'instant
+    // Sauvegarder les champs essentiels
+    await prefs.setString('${_pendingForceUpdateKey}_latestVersion', versionInfo['latestVersion']?.toString() ?? '');
+    await prefs.setString('${_pendingForceUpdateKey}_minVersion', versionInfo['minVersion']?.toString() ?? '');
+    await prefs.setString('${_pendingForceUpdateKey}_updateUrl', versionInfo['updateUrl']?.toString() ?? '');
+    await prefs.setString('${_pendingForceUpdateKey}_title', versionInfo['title']?.toString() ?? '');
+    await prefs.setString('${_pendingForceUpdateKey}_message', versionInfo['message']?.toString() ?? '');
+    await prefs.setString('${_pendingForceUpdateKey}_releaseNotes', versionInfo['releaseNotes']?.toString() ?? '');
+    await prefs.setBool(_pendingForceUpdateKey, true);
+    print('💾 Mise à jour forcée en attente sauvegardée: ${versionInfo['latestVersion']}');
+  }
+
+  /// ✅ Récupérer les informations de mise à jour forcée en attente
+  static Future<Map<String, dynamic>?> getPendingForceUpdate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasPending = prefs.getBool(_pendingForceUpdateKey) ?? false;
+    
+    if (!hasPending) {
+      return null;
+    }
+    
+    final versionInfo = {
+      'latestVersion': prefs.getString('${_pendingForceUpdateKey}_latestVersion') ?? '',
+      'minVersion': prefs.getString('${_pendingForceUpdateKey}_minVersion') ?? '',
+      'updateUrl': prefs.getString('${_pendingForceUpdateKey}_updateUrl') ?? '',
+      'title': prefs.getString('${_pendingForceUpdateKey}_title') ?? 'Mise à jour obligatoire',
+      'message': prefs.getString('${_pendingForceUpdateKey}_message') ?? 'Une mise à jour est requise.',
+      'releaseNotes': prefs.getString('${_pendingForceUpdateKey}_releaseNotes') ?? '',
+      'updateRequired': true,
+      'forceUpdate': true,
+      'updateAvailable': true,
+      'active': true,
+    };
+    
+    print('📖 Mise à jour forcée en attente récupérée: ${versionInfo['latestVersion']}');
+    return versionInfo;
+  }
+
+  /// ✅ Vérifier si une mise à jour forcée est en attente
+  static Future<bool> hasPendingForceUpdate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasPending = prefs.getBool(_pendingForceUpdateKey) ?? false;
+    print('🔍 Mise à jour forcée en attente: $hasPending');
+    return hasPending;
+  }
+
+  /// ✅ Nettoyer la mise à jour forcée en attente (quand la mise à jour est faite)
+  static Future<void> clearPendingForceUpdate() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_pendingForceUpdateKey);
+    await prefs.remove('${_pendingForceUpdateKey}_latestVersion');
+    await prefs.remove('${_pendingForceUpdateKey}_minVersion');
+    await prefs.remove('${_pendingForceUpdateKey}_updateUrl');
+    await prefs.remove('${_pendingForceUpdateKey}_title');
+    await prefs.remove('${_pendingForceUpdateKey}_message');
+    await prefs.remove('${_pendingForceUpdateKey}_releaseNotes');
+    print('🗑️ Mise à jour forcée en attente effacée');
   }
 }
