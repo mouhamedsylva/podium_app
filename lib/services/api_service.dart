@@ -2244,6 +2244,7 @@ class ApiService {
       );
       
       print('✅ Réponse apple-mobile: ${response.data}');
+      print('📋 Toutes les clés de la réponse: ${(response.data as Map?)?.keys.toList() ?? 'null'}');
       
       final data = response.data ?? {};
       
@@ -2257,11 +2258,29 @@ class ApiService {
         final email = data['email']?.toString();
         
         print('🔍 Identifiants récupérés depuis la réponse:');
-        print('   iProfile: $iProfile');
-        print('   iBasket: $iBasket');
+        print('   iProfile: $iProfile (type: ${iProfile.runtimeType})');
+        print('   iBasket: $iBasket (type: ${iBasket.runtimeType})');
         print('   email: $email');
+        print('   Réponse complète: $data');
         
-        if (iProfile != null && iBasket != null) {
+        // ✅ Vérifier aussi si les identifiants sont dans les cookies (Set-Cookie)
+        final setCookieHeaders = response.headers['set-cookie'];
+        if (setCookieHeaders != null) {
+          print('🍪 Cookies reçus: $setCookieHeaders');
+          // Essayer d'extraire iProfile et iBasket des cookies si présents
+          for (final cookie in setCookieHeaders) {
+            if (cookie.contains('iProfile=')) {
+              final iProfileFromCookie = cookie.split('iProfile=')[1].split(';')[0];
+              print('   iProfile depuis cookie: $iProfileFromCookie');
+            }
+            if (cookie.contains('iBasket=')) {
+              final iBasketFromCookie = cookie.split('iBasket=')[1].split(';')[0];
+              print('   iBasket depuis cookie: $iBasketFromCookie');
+            }
+          }
+        }
+        
+        if (iProfile != null && iBasket != null && iProfile.isNotEmpty && iBasket.isNotEmpty) {
           // Récupérer le profil actuel pour conserver sPaysLangue et sPaysFav
           final currentProfile = await LocalStorageService.getProfile();
           final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
@@ -2290,7 +2309,54 @@ class ApiService {
           print('✅ Connexion Apple réussie - identifiants mis à jour');
         } else {
           print('❌ Identifiants manquants dans la réponse');
-          throw Exception('Identifiants manquants dans la réponse Apple Mobile');
+          print('   iProfile présent: ${iProfile != null}');
+          print('   iProfile vide: ${iProfile?.isEmpty ?? true}');
+          print('   iBasket présent: ${iBasket != null}');
+          print('   iBasket vide: ${iBasket?.isEmpty ?? true}');
+          print('   Réponse complète: $data');
+          print('   Status code: ${response.statusCode}');
+          print('   Headers: ${response.headers}');
+          
+          // ✅ Essayer de récupérer depuis les cookies si disponibles
+          final setCookieHeaders = response.headers['set-cookie'];
+          String? iProfileFromCookie;
+          String? iBasketFromCookie;
+          
+          if (setCookieHeaders != null) {
+            for (final cookie in setCookieHeaders) {
+              if (cookie.contains('iProfile=')) {
+                iProfileFromCookie = cookie.split('iProfile=')[1].split(';')[0].trim();
+                print('   ✅ iProfile trouvé dans cookie: $iProfileFromCookie');
+              }
+              if (cookie.contains('iBasket=')) {
+                iBasketFromCookie = cookie.split('iBasket=')[1].split(';')[0].trim();
+                print('   ✅ iBasket trouvé dans cookie: $iBasketFromCookie');
+              }
+            }
+          }
+          
+          // Si on a les identifiants dans les cookies, les utiliser
+          if (iProfileFromCookie != null && iBasketFromCookie != null) {
+            print('✅ Utilisation des identifiants depuis les cookies');
+            final currentProfile = await LocalStorageService.getProfile();
+            final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+            final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+            
+            final updatedProfile = {
+              ...?currentProfile,
+              'iProfile': iProfileFromCookie,
+              'iBasket': iBasketFromCookie,
+              if (email != null && email.isNotEmpty) 'sEmail': email,
+              if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
+              if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
+            };
+            
+            await LocalStorageService.saveProfile(updatedProfile);
+            await _updateCookiesWithNewIdentifiers(iProfileFromCookie, iBasketFromCookie);
+            print('✅ Profil sauvegardé avec identifiants depuis cookies');
+          } else {
+            throw Exception('Identifiants manquants dans la réponse Apple Mobile. iProfile: ${iProfile ?? 'null'}, iBasket: ${iBasket ?? 'null'}. Vérifiez la réponse du backend.');
+          }
         }
       } else {
         print('❌ Échec de la connexion Apple: ${data['message'] ?? data['error']}');
