@@ -647,20 +647,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('📱 === ÉTAPE 1: Configuration Google Sign-In (iOS) ===');
           
           // ✅ Configuration Google Sign-In pour iOS
-          // Utiliser l'iOS Client ID spécifique (NUXT_OAUTH_IOS_CLIENT_ID)
-          const iosClientId = '116497000948-rqah223nds6mkli2p74i7s713ccd8crd.apps.googleusercontent.com';
+          // IMPORTANT: Sur iOS, serverClientId doit être le WEB Client ID (comme Android)
+          // L'iOS Client ID est utilisé uniquement pour l'URL scheme dans Info.plist
+          const webClientId = '116497000948-90d84akvtp9g4favfmi63ciktp5rbgfu.apps.googleusercontent.com';
           
-          // ✅ VÉRIFICATION CRITIQUE: S'assurer que l'iosClientId est valide
-          if (iosClientId.isEmpty || !iosClientId.endsWith('.apps.googleusercontent.com')) {
-            print('❌ ERREUR: iOS Client ID invalide');
-            throw Exception('iOS Client ID invalide. Le iOS Client ID doit se terminer par .apps.googleusercontent.com');
+          // ✅ VÉRIFICATION CRITIQUE: S'assurer que le webClientId est valide
+          if (webClientId.isEmpty || !webClientId.endsWith('.apps.googleusercontent.com')) {
+            print('❌ ERREUR: Web Client ID invalide');
+            throw Exception('Web Client ID invalide. Le Web Client ID doit se terminer par .apps.googleusercontent.com');
           }
           
-          print('🔑 Configuration Google Sign-In avec iOS Client ID: ${iosClientId.substring(0, 30)}...');
+          print('🔑 Configuration Google Sign-In avec Web Client ID: ${webClientId.substring(0, 30)}...');
+          print('ℹ️ Note: L\'iOS Client ID est configuré dans Info.plist pour l\'URL scheme');
           
           final GoogleSignIn googleSignIn = GoogleSignIn(
             scopes: ['email', 'profile'],
-            serverClientId: iosClientId, // iOS Client ID spécifique
+            serverClientId: webClientId, // ✅ Web Client ID (comme Android)
           );
 
           // ✅ Étape 1: Récupérer l'idToken via Google Sign-In
@@ -668,7 +670,27 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('🔑 Demande de connexion Google Sign-In...');
           print('⏳ En attente de la sélection du compte Google par l\'utilisateur...');
           
-          final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+          // ✅ Gérer les erreurs potentielles de Google Sign-In
+          GoogleSignInAccount? googleUser;
+          try {
+            googleUser = await googleSignIn.signIn();
+          } catch (signInError, signInStackTrace) {
+            print('❌ ERREUR lors de l\'appel à googleSignIn.signIn():');
+            print('   Exception: $signInError');
+            print('   Type: ${signInError.runtimeType}');
+            print('   StackTrace:');
+            print(signInStackTrace);
+            
+            // Vérifier si c'est une erreur de configuration
+            if (signInError.toString().contains('configuration') || 
+                signInError.toString().contains('GoogleService-Info.plist') ||
+                signInError.toString().contains('REVERSED_CLIENT_ID')) {
+              throw Exception('Configuration Google Sign-In manquante. Vérifiez que GoogleService-Info.plist est présent dans ios/Runner/');
+            }
+            
+            // Relancer l'exception pour qu'elle soit gérée par le catch principal
+            rethrow;
+          }
           
           if (googleUser == null) {
             // L'utilisateur a annulé la connexion
@@ -759,6 +781,16 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           print('   StackTrace:');
           print(stackTrace);
           print('ℹ️ ATTENTION: Cette erreur ne devrait PAS causer de redirection vers jirig.be');
+          
+          // ✅ Vérifier les erreurs spécifiques iOS qui peuvent causer un crash
+          if (e.toString().contains('GoogleService-Info.plist') || 
+              e.toString().contains('REVERSED_CLIENT_ID') ||
+              e.toString().contains('configuration') ||
+              e.toString().contains('GIDSignIn')) {
+            print('⚠️ ERREUR DE CONFIGURATION iOS DÉTECTÉE');
+            print('   Le fichier GoogleService-Info.plist est probablement manquant');
+            print('   Vérifiez que le fichier est présent dans ios/Runner/');
+          }
           
           // ✅ Vérifier si c'est une DioException avec erreur 500
           // Si la connexion réussit quand même, ne pas afficher l'erreur technique
