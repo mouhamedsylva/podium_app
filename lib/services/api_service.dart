@@ -2375,6 +2375,10 @@ class ApiService {
   Future<Map<String, dynamic>> loginWithFacebookMobile(String accessToken) async {
     try {
       print('🔐 Connexion avec Facebook Mobile - Token: ${accessToken.substring(0, 10)}...');
+      print('📱 === STEP 3: Appel API /api/auth/facebook-mobile-token ===');
+      print('📡 URL complète: ${ApiConfig.baseUrl}/auth/facebook-mobile-token');
+      print('📡 Méthode: POST');
+      print('📡 Body: { access_token: ... }');
       
       final response = await _dio!.post(
         '/auth/facebook-mobile-token',
@@ -2383,12 +2387,15 @@ class ApiService {
         },
       );
       
-      print('✅ Réponse facebook-mobile: ${response.data}');
+      print('✅ Réponse facebook-mobile reçue:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Response Data: ${response.data}');
+      print('   Toutes les clés: ${(response.data as Map?)?.keys.toList() ?? 'null'}');
       
       final data = response.data ?? {};
       
       if (data['status'] == 'success') {
-        print('✅ Connexion Facebook réussie');
+        print('✅ Connexion Facebook réussie - STEP 4: Traitement de la réponse');
         
         // Note: Le backend renvoie 'token' pour iProfileEncrypted
         final iProfile = data['token']?.toString() ?? data['iProfile']?.toString();
@@ -2397,7 +2404,34 @@ class ApiService {
         final nom = data['nom']?.toString();
         final prenom = data['prenom']?.toString();
         
-        if (iProfile != null && iBasket != null && email != null) {
+        print('🔍 Identifiants récupérés depuis la réponse:');
+        print('   token/iProfile: $iProfile (type: ${iProfile.runtimeType})');
+        print('   iBasket: $iBasket (type: ${iBasket.runtimeType})');
+        print('   email: $email (type: ${email.runtimeType})');
+        print('   nom: $nom');
+        print('   prenom: $prenom');
+        print('   Réponse complète: $data');
+        
+        // ✅ Vérifier aussi si les identifiants sont dans les cookies (Set-Cookie)
+        final setCookieHeaders = response.headers['set-cookie'];
+        if (setCookieHeaders != null) {
+          print('🍪 Cookies reçus: $setCookieHeaders');
+          // Essayer d'extraire iProfile et iBasket des cookies si présents
+          for (final cookie in setCookieHeaders) {
+            if (cookie.contains('iProfile=')) {
+              final iProfileFromCookie = cookie.split('iProfile=')[1].split(';')[0];
+              print('   iProfile depuis cookie: $iProfileFromCookie');
+            }
+            if (cookie.contains('iBasket=')) {
+              final iBasketFromCookie = cookie.split('iBasket=')[1].split(';')[0];
+              print('   iBasket depuis cookie: $iBasketFromCookie');
+            }
+          }
+        }
+        
+        // ✅ MODIFICATION: Email peut être null pour Facebook (certains utilisateurs n'ont pas d'email)
+        // Le backend retourne un email par défaut: ${profile.id}@facebook.com
+        if (iProfile != null && iBasket != null && iProfile.isNotEmpty && iBasket.isNotEmpty) {
           // Récupérer le profil actuel pour ne pas perdre sPaysLangue/sPaysFav
           final currentProfile = await LocalStorageService.getProfile();
           
@@ -2412,16 +2446,72 @@ class ApiService {
           };
           
           await LocalStorageService.saveProfile(updatedProfile);
-          print('💾 Profil sauvegardé avec succès');
+          print('💾 Profil sauvegardé avec succès - STEP 5: Sauvegarde terminée');
           
           // ✅ SYNCHRONISATION DES COOKIES (Crucial pour la persistance)
           await _updateCookiesWithNewIdentifiers(iProfile, iBasket);
           
           // Attendre un peu que les cookies soient bien pris en compte
           await Future.delayed(const Duration(seconds: 1));
+          
+          print('✅ Connexion Facebook réussie - identifiants mis à jour');
+        } else {
+          print('❌ Identifiants manquants dans la réponse Facebook');
+          print('   iProfile présent: ${iProfile != null}');
+          print('   iProfile vide: ${iProfile?.isEmpty ?? true}');
+          print('   iBasket présent: ${iBasket != null}');
+          print('   iBasket vide: ${iBasket?.isEmpty ?? true}');
+          print('   email présent: ${email != null}');
+          print('   Réponse complète: $data');
+          print('   Status code: ${response.statusCode}');
+          print('   Headers: ${response.headers}');
+          
+          // ✅ Essayer de récupérer depuis les cookies si disponibles
+          final setCookieHeaders = response.headers['set-cookie'];
+          String? iProfileFromCookie;
+          String? iBasketFromCookie;
+          
+          if (setCookieHeaders != null) {
+            for (final cookie in setCookieHeaders) {
+              if (cookie.contains('iProfile=')) {
+                iProfileFromCookie = cookie.split('iProfile=')[1].split(';')[0].trim();
+                print('   ✅ iProfile trouvé dans cookie: $iProfileFromCookie');
+              }
+              if (cookie.contains('iBasket=')) {
+                iBasketFromCookie = cookie.split('iBasket=')[1].split(';')[0].trim();
+                print('   ✅ iBasket trouvé dans cookie: $iBasketFromCookie');
+              }
+            }
+          }
+          
+          // Si on a les identifiants dans les cookies, les utiliser
+          if (iProfileFromCookie != null && iBasketFromCookie != null) {
+            print('✅ Utilisation des identifiants depuis les cookies');
+            final currentProfile = await LocalStorageService.getProfile();
+            final sPaysLangue = currentProfile?['sPaysLangue']?.toString() ?? '';
+            final sPaysFav = currentProfile?['sPaysFav']?.toString() ?? '';
+            
+            final updatedProfile = {
+              ...?currentProfile,
+              'iProfile': iProfileFromCookie,
+              'iBasket': iBasketFromCookie,
+              if (email != null && email.isNotEmpty) 'sEmail': email,
+              if (nom != null && nom.isNotEmpty) 'sNom': nom,
+              if (prenom != null && prenom.isNotEmpty) 'sPrenom': prenom,
+              if (sPaysLangue.isNotEmpty) 'sPaysLangue': sPaysLangue,
+              if (sPaysFav.isNotEmpty) 'sPaysFav': sPaysFav,
+            };
+            
+            await LocalStorageService.saveProfile(updatedProfile);
+            await _updateCookiesWithNewIdentifiers(iProfileFromCookie, iBasketFromCookie);
+            print('✅ Profil sauvegardé avec identifiants depuis cookies');
+          } else {
+            throw Exception('Identifiants manquants dans la réponse Facebook Mobile. iProfile: ${iProfile ?? 'null'}, iBasket: ${iBasket ?? 'null'}. Vérifiez la réponse du backend.');
+          }
         }
       } else {
-        throw Exception(data['message']?.toString() ?? 'Erreur lors de la connexion Facebook');
+        print('❌ Échec de la connexion Facebook: ${data['message'] ?? data['error']}');
+        throw Exception(data['message']?.toString() ?? data['error']?.toString() ?? 'Erreur lors de la connexion Facebook');
       }
       
       return data;
