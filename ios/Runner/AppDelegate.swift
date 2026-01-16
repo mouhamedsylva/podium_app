@@ -12,7 +12,7 @@ import GoogleSignIn
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
-  // ✅ Gérer les URL callbacks de Google Sign-In
+  // ✅ Gérer les URL callbacks de Google Sign-In et Facebook
   override func application(
     _ app: UIApplication,
     open url: URL,
@@ -22,6 +22,9 @@ import GoogleSignIn
     if GIDSignIn.sharedInstance.handle(url) {
       return true
     }
+    
+    // Gérer les callbacks Facebook (le SDK flutter_facebook_auth gère automatiquement via GeneratedPluginRegistrant)
+    // Mais on peut aussi le gérer explicitement si nécessaire
     
     // Gérer les autres URL schemes si nécessaire
     return super.application(app, open: url, options: options)
